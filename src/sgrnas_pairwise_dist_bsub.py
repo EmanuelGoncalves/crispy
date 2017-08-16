@@ -12,8 +12,8 @@ sgrna_lib = pd.read_csv('data/gdsc/crispr/KY_Library_v1.0.csv')
 memory, queque, cores = 32000, 'normal', 12
 
 # Submit a single job per chromossome per sample
-# sample, sample_chr = 'AU565', '17'
-for sample in ['AU565']:
+# sample, sample_chr = 'HT-29', '17'
+for sample in ['HT-29', 'AU565']:
 	for sample_chr in set(sgrna_lib['CHRM']):
 		jname = 'crispy_%s_%s' % (sample, sample_chr)
 

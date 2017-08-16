@@ -9,7 +9,6 @@ import matplotlib.pyplot as plt
 from datetime import datetime as dt
 from scipy.stats.stats import rankdata
 from sklearn.metrics.ranking import auc
-from benchmark import MidpointNormalize
 from matplotlib.gridspec import GridSpec
 
 
@@ -49,59 +48,33 @@ df = pd.concat([pd.read_csv(f, index_col=0) for f in sample_files if f.startswit
 
 # - Evaluate
 sns.set(style='ticks', context='paper', font_scale=0.75, palette='PuBu_r', rc={'axes.linewidth': .3, 'xtick.major.width': .3, 'ytick.major.width': .3, 'xtick.major.size': 2.5, 'ytick.major.size': 2.5, 'xtick.direction': 'in', 'ytick.direction': 'in'})
-gs, pos = GridSpec(1, 2, hspace=.3, wspace=.3), 0
-for t in ['essential', 'cnv']:
-    ax = plt.subplot(gs[pos])
+for f in ['logfc', 'logfc_norm']:
+    # Build data-frame
+    plot_df = df.sort_values(f).copy()
 
-    pass_flag = 0
+    # Rank fold-changes
+    x = rankdata(plot_df[f]) / plot_df.shape[0]
 
-    for f in ['logfc', 'logfc_norm']:
-        # Build data-frame
-        plot_df = df.sort_values(f).copy()
+    # Observed cumsum
+    y = plot_df['essential'].cumsum() / plot_df['essential'].sum()
 
-        if t == 'cnv':
-            plot_df[t] = plot_df[t].apply(lambda x: 1 if x >= 4 else 0)
+    # Plot
+    plt.plot(x, y, label='%s: %.2f' % (f, auc(x, y)), lw=1.)
 
-        # Check if enough events are present
-        if plot_df[t].sum() <= 1:
-            pass_flag += 1
-            continue
+    # Random
+    plt.plot((0, 1), (0, 1), 'k--', lw=.3, alpha=.5)
 
-        # Rank fold-changes
-        x = rankdata(plot_df[f]) / plot_df.shape[0]
+    # Misc
+    plt.xlim(0, 1)
+    plt.ylim(0, 1)
 
-        # Observed cumsum
-        y = plot_df[t].cumsum() / plot_df[t].sum()
+    plt.title('Essential: %s' % f.replace('_', ' '))
+    plt.xlabel('Ranked %s' % f)
+    plt.ylabel('Cumulative sum Essential')
 
-        # Plot
-        ax.plot(x, y, label='%s: %.2f' % (f, auc(x, y)), lw=1.)
+    plt.legend(loc=4)
 
-    # Check if this is any plot
-    if pass_flag != 2:
-        # Random
-        r = np.array([plot_df[t].sample(frac=1.).cumsum() for i in range(101)]) / plot_df[t].sum()
-        r_auc = [auc(x, i) for i in r]
-
-        y_r_min, y_r_max, y_r_median = r[np.argmin(r_auc)], r[np.argmax(r_auc)], r[np.where(r_auc == np.median(r_auc))[0][0]]
-
-        ax.plot(x, y_r_min, lw=.3, c='#969696')
-        ax.plot(x, y_r_median, lw=.5, c='#969696', ls='-', label='Random')
-        ax.plot(x, y_r_max, lw=.3, c='#969696')
-        ax.fill_between(x, y_r_min, y_r_max, facecolor='#f7f7f7', alpha=0.5)
-
-        # Misc
-        ax.set_xlim(0, 1)
-        ax.set_ylim(0, 1)
-
-        ax.set_title('%s: %s' % (t.capitalize(), f.replace('_', ' ')))
-        ax.set_xlabel('Ranked %s' % f)
-        ax.set_ylabel('Cumulative sum %s' % t)
-
-        ax.legend(loc=4)
-
-    pos += 1
-
-plt.gcf().set_size_inches(4.5, 2)
+plt.gcf().set_size_inches(2, 2)
 plt.savefig('reports/%s_eval_plot.png' % sample, bbox_inches='tight', dpi=600)
 plt.close('all')
 print('[%s] AROCs done.' % dt.now().strftime('%Y-%m-%d %H:%M:%S'))
@@ -112,7 +85,7 @@ cmap = plt.cm.get_cmap('viridis')
 
 sns.set(style='ticks', context='paper', font_scale=0.5, rc={'axes.linewidth': .3, 'xtick.major.width': .3, 'ytick.major.width': .3, 'xtick.major.size': 2.5, 'ytick.major.size': 2.5, 'xtick.direction': 'in', 'ytick.direction': 'in'})
 
-plt.scatter(df['logfc'], df['logfc_norm'], s=(df['cnv'] + 1), alpha=.3, edgecolor='w', lw=.1, c=df['cnv'], cmap=cmap, norm=MidpointNormalize(vmin=0, midpoint=2))
+plt.scatter(df['logfc'], df['logfc_norm'], s=3, alpha=.2, edgecolor='w', lw=0.05, c=df['cnv'], cmap=cmap)
 
 xlim, ylim = plt.xlim(), plt.ylim()
 xlim, ylim = np.min([xlim[0], ylim[0]]), np.max([xlim[1], ylim[1]])
@@ -120,8 +93,8 @@ plt.plot((xlim, ylim), (xlim, ylim), 'k--', lw=.3, alpha=.5)
 plt.xlim((xlim, ylim))
 plt.ylim((xlim, ylim))
 
-plt.axhline(0, lw=.3, c='black', alpha=.5)
-plt.axvline(0, lw=.3, c='black', alpha=.5)
+plt.axhline(0, lw=.1, c='black', alpha=.5)
+plt.axvline(0, lw=.1, c='black', alpha=.5)
 
 plt.xlabel('Original FCs')
 plt.ylabel('Corrected FCs')
@@ -165,30 +138,12 @@ plt.close('all')
 
 # - Chromossome plot
 sns.set(style='ticks', context='paper', font_scale=0.75, rc={'axes.linewidth': .3, 'xtick.major.width': .3, 'ytick.major.width': .3, 'xtick.major.size': 2.5, 'ytick.major.size': 2.5, 'xtick.direction': 'in', 'ytick.direction': 'in'})
-gs, pos = GridSpec(2, 1, hspace=.6, wspace=.6), 0
+gs, pos = GridSpec(len(set(df['CHRM'])), 1, hspace=.4, wspace=.1), 0
 
-for feature in ['logfc', 'logfc_norm']:
+for sample_chr in set(df['CHRM']):
+    # Define plot data-frame
     ax = plt.subplot(gs[pos])
-
-    # Plot guides
-    ax.scatter(df['STARTpos'], df[feature], s=2, marker='.', lw=0, c='#b1b1b1', alpha=.5)
-
-    # Plot sgRNAs mean
-    ax.scatter(df['STARTpos'], df['logfc_mean'], s=4, marker='.', lw=0, c='#2ecc71', alpha=.5)
-
-    # # Plot sgRNAs of highlighted genes
-    # for g, c in zip(*(['ERBB2'], sns.color_palette('OrRd_r', 2))):
-    #     xs, ys = zip(*df.loc[df['GENES'] == g, ['STARTpos', feature]].values)
-    #     ax.scatter(xs, ys, s=2, marker='x', lw=0.5, c=c, alpha=.9, label=g)
-
-    # Plot CRISPR segments
-    if pos == 0:
-        for s, e, fc in crispr_seg.loc[(crispr_seg['sample'] == sample) & (crispr_seg['chrom'] == sample_chr), ['loc.start', 'loc.end', 'seg.mean']].values:
-            ax.plot([s, e], [fc, fc], lw=.3, c='#ff511d', alpha=.5)
-
-    # Plot CNV segments
-    for s, e, c in cnv_seg.loc[(cnv_seg['cellLine'] == sample) & (cnv_seg['chr'] == sample_chr), ['startpos', 'endpos', 'totalCN']].values:
-        ax.plot([s, e], [c, c], lw=.3, c='#3498db', alpha=.5)
+    plot_df = df[df['CHRM'] == sample_chr]
 
     # Cytobads
     for i in cytobands[cytobands['chr'] == 'chr%s' % sample_chr].index:
@@ -201,23 +156,33 @@ for feature in ['logfc', 'logfc_norm']:
         elif not i % 2:
             ax.axvspan(s, e, alpha=0.2, facecolor='#b1b1b1')
 
+    # Plot guides
+    ax.scatter(plot_df['STARTpos'], plot_df['logfc'], s=2, marker='.', lw=0, c='#b1b1b1', alpha=.5)
+
+    # Plot CRISPR segments
+    for s, e, fc in crispr_seg.loc[(crispr_seg['sample'] == sample) & (crispr_seg['chrom'] == str(sample_chr)), ['loc.start', 'loc.end', 'seg.mean']].values:
+        ax.plot([s, e], [fc, fc], lw=.3, c='#ff511d', alpha=.9)
+
+    # Plot CNV segments
+    for s, e, c in cnv_seg.loc[(cnv_seg['cellLine'] == sample) & (cnv_seg['chr'] == str(sample_chr)), ['startpos', 'endpos', 'totalCN']].values:
+        ax.plot([s, e], [c, c], lw=.3, c='#3498db', alpha=.9)
+
+    # Plot sgRNAs mean
+    ax.scatter(plot_df['STARTpos'], plot_df['logfc_mean'], s=4, marker='.', lw=0, c='#2ecc71', alpha=.9)
+
     # Misc
     ax.axhline(0, lw=.3, ls='-', color='black')
 
-    ax.set_xlim(df['STARTpos'].min(), df['STARTpos'].max())
+    # Labels and dim
+    ax.set_ylabel('chr%s' % sample_chr)
+    ax.set_xlim(0, plot_df['STARTpos'].max())
 
-    ax.set_xlabel('Chromosome position (chr %s)' % sample_chr)
-    ax.set_ylabel('sgRNA (%s)' % feature)
-
-    plt.suptitle('%s' % gp.kernel_)
-    # plt.suptitle('Variance explained: %s\nPath length:%.4E; Scale:%.4E' % (re.sub(' +', '=', cov_var.to_string(float_format='%.2f')).replace('\n', '; '), cov_dist.length, cov_dist.scale))
+    if pos == 0:
+        ax.set_title(sample)
 
     pos += 1
 
-plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
-# plt.legend(loc=3)
-
-plt.gcf().set_size_inches(4, 2.5)
-plt.savefig('reports/%s_%s_chromosome_plot.png' % (sample, sample_chr), bbox_inches='tight', dpi=600)
+plt.gcf().set_size_inches(3, 20)
+plt.savefig('reports/%s_chromosome_plot.png' % sample, bbox_inches='tight', dpi=600)
 plt.close('all')
 print('[%s] Chromossome plot done.' % dt.now().strftime('%Y-%m-%d %H:%M:%S'))
