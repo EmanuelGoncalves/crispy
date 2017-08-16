@@ -1,18 +1,14 @@
 #!/usr/bin/env python
 # Copyright (C) 2017 Emanuel Goncalves
 
-import re
 import sys
 import numpy as np
 import pandas as pd
-from limix_core.gp import GP
 from datetime import datetime as dt
 from sklearn.externals import joblib
-from limix_core.mean import MeanBase
-from limix_core.covar import FixedCov, SQExpCov, SumCov
-from limix_core.util.preprocess import covar_rescaling_factor_efficient
 from sklearn.gaussian_process.gpr import GaussianProcessRegressor
-from sklearn.gaussian_process.kernels import RBF, WhiteKernel, Sum, ConstantKernel
+from sklearn.gaussian_process.kernels import RBF, WhiteKernel, ConstantKernel
+from sklearn.metrics.regression import explained_variance_score
 
 
 # -- Imports
@@ -45,13 +41,10 @@ cnv_seg['chr'] = cnv_seg['chr'].replace(23, 'X').replace(24, 'Y').astype(str)
 print('[%s] Copy-number data imported' % dt.now().strftime('%Y-%m-%d %H:%M:%S'))
 
 
-# -- Read arguments: sample and sample_chr
+# - Read arguments: sample and sample_chr
 # sample, sample_chr = 'HT-29', '17'
 sample, sample_chr = sys.argv[1:]
-print('[%s] Sample: %s; Chr: %s' % (dt.now().strftime('%Y-%m-%d %H:%M:%S'), sample, sample_chr))
 
-
-# -- Define sample data-frame
 # sgRNA of the sample chromossome
 sample_sgrnas = list(sgrna_lib[sgrna_lib['CHRM'] == sample_chr].index)
 
@@ -68,9 +61,10 @@ df['loh'] = [cnv_loh.loc[g, sample] if g in cnv_loh.index else np.nan for g in d
 # Check if gene is essential
 df['essential'] = [int(i in essential) for i in df['GENES']]
 # df = df[(df['STARTpos'] > 35000000) & (df['ENDpos'] < 42000000)]
+print('[%s] Sample: %s; Chr: %s' % (dt.now().strftime('%Y-%m-%d %H:%M:%S'), sample, sample_chr))
 
 
-# -- Variance decomposition
+# - Variance decomposition
 print('[%s] GP for variance decomposition started' % dt.now().strftime('%Y-%m-%d %H:%M:%S'))
 
 # Define variables
@@ -80,7 +74,7 @@ y, X = df[['logfc']].values, df[['STARTpos']]
 X /= 1e8
 
 # Instanciate the covariance functions
-K = ConstantKernel(.5, (1e-2, 1.)) * RBF(X.mean(), (1e-2, 10)) + WhiteKernel()
+K = ConstantKernel(.5, (1e-2, 1.)) * RBF(X.mean(), (1e-1, 10)) + WhiteKernel()
 
 # Instanciate a Gaussian Process model
 gp = GaussianProcessRegressor(K, n_restarts_optimizer=3, normalize_y=False)

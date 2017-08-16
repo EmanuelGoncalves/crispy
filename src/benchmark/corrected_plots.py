@@ -10,6 +10,7 @@ from datetime import datetime as dt
 from scipy.stats.stats import rankdata
 from sklearn.metrics.ranking import auc
 from matplotlib.gridspec import GridSpec
+from benchmark import MidpointNormalize
 
 
 # - Imports
@@ -38,10 +39,11 @@ cnv_seg = pd.read_csv('data/gdsc/copynumber/Summary_segmentation_data_994_lines_
 cnv_seg['chr'] = cnv_seg['chr'].replace(23, 'X').replace(24, 'Y').astype(str)
 print('[%s] Copy-number data imported' % dt.now().strftime('%Y-%m-%d %H:%M:%S'))
 
-
-# -
+# Normalisation sample files
 sample_files = [os.path.join('data/crispy/', f) for f in os.listdir('data/crispy/')]
 
+
+# - Import sample normalisation output
 sample = 'AU565'
 df = pd.concat([pd.read_csv(f, index_col=0) for f in sample_files if f.startswith('data/crispy/%s_' % sample)])
 
@@ -168,7 +170,7 @@ for sample_chr in set(df['CHRM']):
         ax.plot([s, e], [c, c], lw=.3, c='#3498db', alpha=.9)
 
     # Plot sgRNAs mean
-    ax.scatter(plot_df['STARTpos'], plot_df['logfc_mean'], s=4, marker='.', lw=0, c='#2ecc71', alpha=.9)
+    ax.scatter(plot_df['STARTpos'], plot_df['logfc_mean'], s=4, marker='.', lw=0, alpha=.9, c=plot_df['cnv'], cmap='viridis', vmin=0, vmax=14)
 
     # Misc
     ax.axhline(0, lw=.3, ls='-', color='black')
@@ -182,7 +184,10 @@ for sample_chr in set(df['CHRM']):
 
     pos += 1
 
-plt.gcf().set_size_inches(3, 20)
+plt.gcf().set_size_inches(3, 25)
 plt.savefig('reports/%s_chromosome_plot.png' % sample, bbox_inches='tight', dpi=600)
 plt.close('all')
 print('[%s] Chromossome plot done.' % dt.now().strftime('%Y-%m-%d %H:%M:%S'))
+
+
+df
