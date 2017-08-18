@@ -7,7 +7,7 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 from datetime import datetime as dt
-from scipy.stats.stats import rankdata
+from scipy.stats.stats import rankdata, gmean
 from sklearn.metrics.ranking import auc
 from matplotlib.gridspec import GridSpec
 from benchmark import MidpointNormalize
@@ -40,31 +40,35 @@ cnv_seg['chr'] = cnv_seg['chr'].replace(23, 'X').replace(24, 'Y').astype(str)
 print('[%s] Copy-number data imported' % dt.now().strftime('%Y-%m-%d %H:%M:%S'))
 
 # CrisprCleanR corrected
-cc_crispr = pd.read_csv('data/gdsc/crispr/crispr_bagel_gene_level_normalised.csv', index_col=0)
+cc_crispr = pd.read_csv('data/gdsc/crispr/all_GLCFC.csv', index_col=0)
 
 
-# - Import sample normalisation output
+# - Plot
+sample_files = [os.path.join('data/crispy/', f) for f in os.listdir('data/crispy/')]
+
 # sample = 'AU565'
 # sample = 'HT-29'
 for sample in ['AU565', 'HT-29']:
-    sample_files = [os.path.join('data/crispy/', f) for f in os.listdir('data/crispy/')]
+    # - Import sample normalisation output
+    # Optimisation params
+    df_params = pd.DataFrame({'%s_chr%s' % (sample, f.split('_')[1]): pd.Series.from_csv(f) for f in sample_files if f.startswith('data/crispy/%s_' % sample) and f.endswith('_optimised_params.csv')}).T
+    print(df_params)
 
     # sgRNA level fc
-    df = pd.concat([pd.read_csv(f, index_col=0) for f in sample_files if f.startswith('data/crispy/%s_' % sample) and f.endswith('.csv')])
+    df = pd.concat([pd.read_csv(f, index_col=0) for f in sample_files if f.startswith('data/crispy/%s_' % sample) and f.endswith('_corrected.csv')])
     print('sgRNAs: ', df.shape)
 
     # Gene level fc
     f = {'logfc': np.mean, 'cnv': 'first', 'loh': 'first', 'essential': 'first', 'logfc_mean': np.mean, 'logfc_norm': np.mean}
     df_genes = df[['GENES', 'logfc', 'cnv', 'loh', 'essential', 'logfc_mean', 'logfc_norm']].groupby('GENES').agg(f)
-    df_genes['ccleanr'] = -cc_crispr.loc[df_genes.index, sample]
+    df_genes['ccleanr'] = cc_crispr.loc[df_genes.index, sample]
     print('Genes: ', df_genes.shape)
-
 
     # - Evaluate
     plot_df = df_genes.dropna(subset=['logfc', 'logfc_norm', 'ccleanr'])
 
     sns.set(style='ticks', context='paper', font_scale=0.75, palette='PuBu_r', rc={'axes.linewidth': .3, 'xtick.major.width': .3, 'ytick.major.width': .3, 'xtick.major.size': 2.5, 'ytick.major.size': 2.5, 'xtick.direction': 'in', 'ytick.direction': 'in'})
-    for c, f in zip(sns.color_palette('viridis', 3).as_hex(), ['logfc', 'logfc_norm', 'ccleanr']):
+    for c, f in zip(sns.color_palette('viridis', 3).as_hex(), ['logfc', 'ccleanr', 'logfc_norm']):
         # Build data-frame
         plot_df_f = plot_df.sort_values(f).copy()
 
@@ -94,7 +98,6 @@ for sample in ['AU565', 'HT-29']:
     plt.close('all')
     print('[%s] AROCs done.' % dt.now().strftime('%Y-%m-%d %H:%M:%S'))
 
-
     # - Boxplot
     plot_df = df_genes.dropna(subset=['cnv', 'logfc', 'logfc_norm', 'ccleanr'])
     plot_df = plot_df[plot_df['cnv'] != -1]
@@ -108,7 +111,11 @@ for sample in ['AU565', 'HT-29']:
     sns.set(style='ticks', context='paper', font_scale=0.5, rc={'axes.linewidth': .3, 'xtick.major.width': .3, 'ytick.major.width': .3, 'xtick.major.size': 2.5, 'ytick.major.size': 2.5, 'xtick.direction': 'out', 'ytick.direction': 'out'})
     (f, axs), pos = plt.subplots(3), 0
     for i in ['logfc_ranked', 'logfc_norm_ranked', 'ccleanr_ranked']:
-        sns.boxplot('cnv', i, data=plot_df, linewidth=.3, notch=True, fliersize=1, orient='v', palette='viridis', ax=axs[pos])
+        sns.boxplot('cnv', i, data=plot_df, linewidth=.3, notch=True, fliersize=1, orient='v', palette='viridis', ax=axs[pos], sym='')
+        sns.stripplot('cnv', i, data=plot_df, orient='v', palette='viridis', ax=axs[pos], size=0.75, linewidth=.1, edgecolor='white', jitter=.15, alpha=.75)
+
+        axs[pos].axhline(.5, lw=.1, c='black', alpha=.5)
+
         axs[pos].set_xlabel('')
         axs[pos].set_ylabel(i)
         pos += 1
@@ -122,7 +129,6 @@ for sample in ['AU565', 'HT-29']:
     plt.savefig('reports/%s_crispy_norm_boxplots.png' % sample, bbox_inches='tight', dpi=600)
     plt.close('all')
     print('[%s] Boxplot done.' % dt.now().strftime('%Y-%m-%d %H:%M:%S'))
-
 
     # - Scatter plot
     plot_df = df_genes.dropna(subset=['cnv'])
@@ -153,7 +159,6 @@ for sample in ['AU565', 'HT-29']:
     plt.savefig('reports/%s_crispy_norm_scatter.png' % sample, bbox_inches='tight', dpi=600)
     plt.close('all')
     print('[%s] Scatter plot done.' % dt.now().strftime('%Y-%m-%d %H:%M:%S'))
-
 
     # - Chromossome plot
     sns.set(style='ticks', context='paper', font_scale=0.75, rc={'axes.linewidth': .3, 'xtick.major.width': .3, 'ytick.major.width': .3, 'xtick.major.size': 2.5, 'ytick.major.size': 2.5, 'xtick.direction': 'in', 'ytick.direction': 'in'})

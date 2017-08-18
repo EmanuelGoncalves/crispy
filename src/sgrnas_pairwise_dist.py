@@ -75,9 +75,11 @@ y, X = df[['logfc']].values, df[['STARTpos']]
 X /= 1e9
 
 # Instanciate the covariance functions
-# K = ConstantKernel(1, (1, 10)) * RBF(X.mean(), (.1, 1)) + WhiteKernel()
-# K = Matern(length_scale=X.mean(), length_scale_bounds=(0.1, 10), nu=1.5) + WhiteKernel()
-K = ConstantKernel(1, (1e-5, 10)) * RationalQuadratic(length_scale_bounds=(1e-2, 1), alpha_bounds=(1e-5, 1)) + WhiteKernel(noise_level_bounds=(1.5, 10))
+K_c = ConstantKernel(1, (1e-5, 1))
+K_rq = RationalQuadratic(length_scale_bounds=(1e-2, 1), alpha_bounds=(1e-5, 10))
+K_w = WhiteKernel(noise_level_bounds=(.5, 2))
+
+K = K_c * K_rq + K_w
 
 # Instanciate a Gaussian Process model
 gp = GaussianProcessRegressor(K, n_restarts_optimizer=3, normalize_y=True)
@@ -94,6 +96,16 @@ df = df.assign(logfc_norm=df['logfc'] - df['logfc_mean'])
 cov_var = pd.Series({str(k): (1 / covar_rescaling_factor_efficient(k.__call__(X))) for k in [gp.kernel_.k1, gp.kernel_.k2]}, name='Variance')
 cov_var /= cov_var.sum()
 print(cov_var.sort_values())
+
+# Export configurations + hyperparameters
+pd.Series({
+    'C': gp.kernel_.k1.k1.constant_value,
+    'RQ_l': gp.kernel_.k1.k2.length_scale,
+    'RQ_a': gp.kernel_.k1.k2.alpha,
+    'W': gp.kernel_.k2.noise_level,
+    'var_RQ': cov_var[0],
+    'var_W': cov_var[1],
+}).to_csv('reports/%s_%s_optimised_params.csv' % (sample, sample_chr))
 
 # Export
 joblib.dump(gp, 'reports/%s_%s_corrected.pkl' % (sample, sample_chr))
