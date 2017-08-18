@@ -7,8 +7,8 @@ import pandas as pd
 from datetime import datetime as dt
 from sklearn.externals import joblib
 from sklearn.gaussian_process.gpr import GaussianProcessRegressor
-from sklearn.gaussian_process.kernels import RBF, WhiteKernel, ConstantKernel
-from sklearn.metrics.regression import explained_variance_score
+from limix_core.util.preprocess import covar_rescaling_factor_efficient
+from sklearn.gaussian_process.kernels import RBF, WhiteKernel, ConstantKernel, RationalQuadratic
 
 
 # -- Imports
@@ -42,7 +42,7 @@ print('[%s] Copy-number data imported' % dt.now().strftime('%Y-%m-%d %H:%M:%S'))
 
 
 # - Read arguments: sample and sample_chr
-# sample, sample_chr = 'HT-29', '17'
+# sample, sample_chr = 'AU565', '8'
 sample, sample_chr = sys.argv[1:]
 
 # sgRNA of the sample chromossome
@@ -60,7 +60,8 @@ df['loh'] = [cnv_loh.loc[g, sample] if g in cnv_loh.index else np.nan for g in d
 
 # Check if gene is essential
 df['essential'] = [int(i in essential) for i in df['GENES']]
-# df = df[(df['STARTpos'] > 35000000) & (df['ENDpos'] < 42000000)]
+# df = df[(df['STARTpos'] > 20000000) & (df['ENDpos'] < 42000000)]
+# df = df[(df['STARTpos'] > 50000000) & (df['ENDpos'] < 130000000)]
 print('[%s] Sample: %s; Chr: %s' % (dt.now().strftime('%Y-%m-%d %H:%M:%S'), sample, sample_chr))
 
 
@@ -71,69 +72,30 @@ print('[%s] GP for variance decomposition started' % dt.now().strftime('%Y-%m-%d
 y, X = df[['logfc']].values, df[['STARTpos']]
 
 # Scale distances
-X /= 1e8
+X /= 1e9
 
 # Instanciate the covariance functions
-K = ConstantKernel(.5, (1e-2, 1.)) * RBF(X.mean(), (1e-1, 10)) + WhiteKernel()
+# K = ConstantKernel(1, (1, 10)) * RBF(X.mean(), (.1, 1)) + WhiteKernel()
+# K = Matern(length_scale=X.mean(), length_scale_bounds=(0.1, 10), nu=1.5) + WhiteKernel()
+K = ConstantKernel(1, (1e-5, 10)) * RationalQuadratic(length_scale_bounds=(1e-2, 1), alpha_bounds=(1e-5, 1)) + WhiteKernel(noise_level_bounds=(1.5, 10))
 
 # Instanciate a Gaussian Process model
-gp = GaussianProcessRegressor(K, n_restarts_optimizer=3, normalize_y=False)
+gp = GaussianProcessRegressor(K, n_restarts_optimizer=3, normalize_y=True)
 
 # Fit to data using Maximum Likelihood Estimation of the parameters
 gp.fit(X, y)
+print(gp.kernel_)
 
 # Normalise data
 df = df.assign(logfc_mean=gp.predict(X))
 df = df.assign(logfc_norm=df['logfc'] - df['logfc_mean'])
 
+# Variance explained
+cov_var = pd.Series({str(k): (1 / covar_rescaling_factor_efficient(k.__call__(X))) for k in [gp.kernel_.k1, gp.kernel_.k2]}, name='Variance')
+cov_var /= cov_var.sum()
+print(cov_var.sort_values())
+
 # Export
 joblib.dump(gp, 'reports/%s_%s_corrected.pkl' % (sample, sample_chr))
 df.to_csv('reports/%s_%s_corrected.csv' % (sample, sample_chr))
 print('[%s] GP for variance decomposition finshed' % dt.now().strftime('%Y-%m-%d %H:%M:%S'))
-
-
-# # Define variables
-# Y, X = df[['logfc']].values, df[['STARTpos']]
-#
-# # Scale distances
-# X /= 1e9
-#
-# # Copy-number COV
-# # cov_cna = pd.get_dummies(df['cnv'])
-# # cov_cna = cov_cna.dot(cov_cna.transpose())
-# #
-# # cov_cna = FixedCov(cov_cna, cov_cna)
-#
-# # # LOH
-# # cov_loh = pd.get_dummies(df['loh'])
-# # cov_loh = cov_loh.dot(cov_loh.transpose())
-# #
-# # cov_loh = FixedCov(cov_loh, cov_loh)
-# # cov_loh.scale *= covar_rescaling_factor_efficient(cov_loh.K())
-# # cov_loh.scale /= 10
-#
-# # Distance COV
-# cov_dist = SQExpCov(X, X)
-# cov_dist.scale *= covar_rescaling_factor_efficient(cov_dist.K())
-# cov_dist.length = np.max(X.values) * .1
-#
-# # Noise COV
-# cov_noise = FixedCov(np.eye(X.shape[0]))
-#
-# # Sum COVs
-# # 'cna': cov_cna,
-# covs = {'distance': cov_dist, 'noise': cov_noise}
-# K = SumCov(*covs.values())
-#
-# # GP
-# gp = GP(MeanBase(Y), K)
-# gp.optimize()
-#
-# # Explained variance
-# cov_var = pd.Series({n: (1 / covar_rescaling_factor_efficient(covs[n].K())) for n in covs})
-# cov_var /= cov_var.sum()
-# print(cov_var.sort_values())
-#
-# # Normalise data
-# df = df.assign(logfc_mean=gp.predict())
-# df = df.assign(logfc_norm=df['logfc'] - df['logfc_mean'])

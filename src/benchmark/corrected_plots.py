@@ -39,155 +39,170 @@ cnv_seg = pd.read_csv('data/gdsc/copynumber/Summary_segmentation_data_994_lines_
 cnv_seg['chr'] = cnv_seg['chr'].replace(23, 'X').replace(24, 'Y').astype(str)
 print('[%s] Copy-number data imported' % dt.now().strftime('%Y-%m-%d %H:%M:%S'))
 
-# Normalisation sample files
-sample_files = [os.path.join('data/crispy/', f) for f in os.listdir('data/crispy/')]
+# CrisprCleanR corrected
+cc_crispr = pd.read_csv('data/gdsc/crispr/crispr_bagel_gene_level_normalised.csv', index_col=0)
 
 
 # - Import sample normalisation output
-sample = 'AU565'
-df = pd.concat([pd.read_csv(f, index_col=0) for f in sample_files if f.startswith('data/crispy/%s_' % sample)])
+# sample = 'AU565'
+# sample = 'HT-29'
+for sample in ['AU565', 'HT-29']:
+    sample_files = [os.path.join('data/crispy/', f) for f in os.listdir('data/crispy/')]
+
+    # sgRNA level fc
+    df = pd.concat([pd.read_csv(f, index_col=0) for f in sample_files if f.startswith('data/crispy/%s_' % sample) and f.endswith('.csv')])
+    print('sgRNAs: ', df.shape)
+
+    # Gene level fc
+    f = {'logfc': np.mean, 'cnv': 'first', 'loh': 'first', 'essential': 'first', 'logfc_mean': np.mean, 'logfc_norm': np.mean}
+    df_genes = df[['GENES', 'logfc', 'cnv', 'loh', 'essential', 'logfc_mean', 'logfc_norm']].groupby('GENES').agg(f)
+    df_genes['ccleanr'] = -cc_crispr.loc[df_genes.index, sample]
+    print('Genes: ', df_genes.shape)
 
 
-# - Evaluate
-sns.set(style='ticks', context='paper', font_scale=0.75, palette='PuBu_r', rc={'axes.linewidth': .3, 'xtick.major.width': .3, 'ytick.major.width': .3, 'xtick.major.size': 2.5, 'ytick.major.size': 2.5, 'xtick.direction': 'in', 'ytick.direction': 'in'})
-for f in ['logfc', 'logfc_norm']:
-    # Build data-frame
-    plot_df = df.sort_values(f).copy()
+    # - Evaluate
+    plot_df = df_genes.dropna(subset=['logfc', 'logfc_norm', 'ccleanr'])
 
-    # Rank fold-changes
-    x = rankdata(plot_df[f]) / plot_df.shape[0]
+    sns.set(style='ticks', context='paper', font_scale=0.75, palette='PuBu_r', rc={'axes.linewidth': .3, 'xtick.major.width': .3, 'ytick.major.width': .3, 'xtick.major.size': 2.5, 'ytick.major.size': 2.5, 'xtick.direction': 'in', 'ytick.direction': 'in'})
+    for c, f in zip(sns.color_palette('viridis', 3).as_hex(), ['logfc', 'logfc_norm', 'ccleanr']):
+        # Build data-frame
+        plot_df_f = plot_df.sort_values(f).copy()
 
-    # Observed cumsum
-    y = plot_df['essential'].cumsum() / plot_df['essential'].sum()
+        # Rank fold-changes
+        x = rankdata(plot_df_f[f]) / plot_df_f.shape[0]
 
-    # Plot
-    plt.plot(x, y, label='%s: %.2f' % (f, auc(x, y)), lw=1.)
+        # Observed cumsum
+        y = plot_df_f['essential'].cumsum() / plot_df_f['essential'].sum()
 
-    # Random
-    plt.plot((0, 1), (0, 1), 'k--', lw=.3, alpha=.5)
+        # Plot
+        plt.plot(x, y, label='%s: %.2f' % (f, auc(x, y)), lw=1., c=c)
 
-    # Misc
+        # Random
+        plt.plot((0, 1), (0, 1), 'k--', lw=.3, alpha=.5)
+
     plt.xlim(0, 1)
     plt.ylim(0, 1)
 
-    plt.title('Essential: %s' % f.replace('_', ' '))
-    plt.xlabel('Ranked %s' % f)
-    plt.ylabel('Cumulative sum Essential')
+    plt.title('Essential genes')
+    plt.xlabel('Ranked genes')
+    plt.ylabel('Cumulative sum essential')
 
     plt.legend(loc=4)
 
-plt.gcf().set_size_inches(2, 2)
-plt.savefig('reports/%s_eval_plot.png' % sample, bbox_inches='tight', dpi=600)
-plt.close('all')
-print('[%s] AROCs done.' % dt.now().strftime('%Y-%m-%d %H:%M:%S'))
+    plt.gcf().set_size_inches(1.5, 1.5)
+    plt.savefig('reports/%s_eval_plot.png' % sample, bbox_inches='tight', dpi=600)
+    plt.close('all')
+    print('[%s] AROCs done.' % dt.now().strftime('%Y-%m-%d %H:%M:%S'))
 
 
-# - Scatter plot
-cmap = plt.cm.get_cmap('viridis')
+    # - Boxplot
+    plot_df = df_genes.dropna(subset=['cnv', 'logfc', 'logfc_norm', 'ccleanr'])
+    plot_df = plot_df[plot_df['cnv'] != -1]
 
-sns.set(style='ticks', context='paper', font_scale=0.5, rc={'axes.linewidth': .3, 'xtick.major.width': .3, 'ytick.major.width': .3, 'xtick.major.size': 2.5, 'ytick.major.size': 2.5, 'xtick.direction': 'in', 'ytick.direction': 'in'})
+    plot_df['logfc_ranked'] = rankdata(plot_df['logfc']) / plot_df.shape[0]
+    plot_df['logfc_norm_ranked'] = rankdata(plot_df['logfc_norm']) / plot_df.shape[0]
+    plot_df['ccleanr_ranked'] = rankdata(plot_df['ccleanr']) / plot_df.shape[0]
 
-plt.scatter(df['logfc'], df['logfc_norm'], s=3, alpha=.2, edgecolor='w', lw=0.05, c=df['cnv'], cmap=cmap)
+    plot_df['cnv'] = plot_df['cnv'].astype(int)
 
-xlim, ylim = plt.xlim(), plt.ylim()
-xlim, ylim = np.min([xlim[0], ylim[0]]), np.max([xlim[1], ylim[1]])
-plt.plot((xlim, ylim), (xlim, ylim), 'k--', lw=.3, alpha=.5)
-plt.xlim((xlim, ylim))
-plt.ylim((xlim, ylim))
+    sns.set(style='ticks', context='paper', font_scale=0.5, rc={'axes.linewidth': .3, 'xtick.major.width': .3, 'ytick.major.width': .3, 'xtick.major.size': 2.5, 'ytick.major.size': 2.5, 'xtick.direction': 'out', 'ytick.direction': 'out'})
+    (f, axs), pos = plt.subplots(3), 0
+    for i in ['logfc_ranked', 'logfc_norm_ranked', 'ccleanr_ranked']:
+        sns.boxplot('cnv', i, data=plot_df, linewidth=.3, notch=True, fliersize=1, orient='v', palette='viridis', ax=axs[pos])
+        axs[pos].set_xlabel('')
+        axs[pos].set_ylabel(i)
+        pos += 1
 
-plt.axhline(0, lw=.1, c='black', alpha=.5)
-plt.axvline(0, lw=.1, c='black', alpha=.5)
+    plt.setp([a.get_xticklabels() for a in f.axes[:-1]], visible=False)
 
-plt.xlabel('Original FCs')
-plt.ylabel('Corrected FCs')
+    plt.suptitle(sample, y=.95)
+    plt.xlabel('Copy-number (absolute)')
 
-plt.colorbar()
-
-plt.title(sample)
-
-plt.gcf().set_size_inches(2, 1.8)
-plt.savefig('reports/%s_crispy_norm_scatter.png' % sample, bbox_inches='tight', dpi=600)
-plt.close('all')
-print('[%s] Scatter plot done.' % dt.now().strftime('%Y-%m-%d %H:%M:%S'))
-
-
-# -
-plot_df = df.dropna(subset=['cnv', 'logfc', 'logfc_norm'])
-plot_df = plot_df[plot_df['cnv'] != -1]
-
-plot_df['logfc_ranked'] = rankdata(plot_df['logfc']) / plot_df.shape[0]
-plot_df['logfc_norm_ranked'] = rankdata(plot_df['logfc_norm']) / plot_df.shape[0]
-
-plot_df['cnv'] = plot_df['cnv'].astype(int)
-
-sns.set(style='ticks', context='paper', font_scale=0.5, rc={'axes.linewidth': .3, 'xtick.major.width': .3, 'ytick.major.width': .3, 'xtick.major.size': 2.5, 'ytick.major.size': 2.5, 'xtick.direction': 'out', 'ytick.direction': 'out'})
-(f, axs), pos = plt.subplots(2), 0
-for i in ['logfc_ranked', 'logfc_norm_ranked']:
-    sns.boxplot('cnv', i, data=plot_df, linewidth=.3, notch=True, fliersize=1, orient='v', palette='viridis', ax=axs[pos])
-    axs[pos].set_xlabel('')
-    axs[pos].set_ylabel(i)
-    pos += 1
-
-plt.setp([a.get_xticklabels() for a in f.axes[:-1]], visible=False)
-
-plt.suptitle(sample)
-plt.xlabel('Copy-number (absolute)')
-
-plt.gcf().set_size_inches(2, 2)
-plt.savefig('reports/%s_crispy_norm_boxplots.png' % sample, bbox_inches='tight', dpi=600)
-plt.close('all')
+    plt.gcf().set_size_inches(2, 3)
+    plt.savefig('reports/%s_crispy_norm_boxplots.png' % sample, bbox_inches='tight', dpi=600)
+    plt.close('all')
+    print('[%s] Boxplot done.' % dt.now().strftime('%Y-%m-%d %H:%M:%S'))
 
 
-# - Chromossome plot
-sns.set(style='ticks', context='paper', font_scale=0.75, rc={'axes.linewidth': .3, 'xtick.major.width': .3, 'ytick.major.width': .3, 'xtick.major.size': 2.5, 'ytick.major.size': 2.5, 'xtick.direction': 'in', 'ytick.direction': 'in'})
-gs, pos = GridSpec(len(set(df['CHRM'])), 1, hspace=.4, wspace=.1), 0
+    # - Scatter plot
+    plot_df = df_genes.dropna(subset=['cnv'])
 
-for sample_chr in set(df['CHRM']):
-    # Define plot data-frame
-    ax = plt.subplot(gs[pos])
-    plot_df = df[df['CHRM'] == sample_chr]
+    cmap = plt.cm.get_cmap('viridis')
 
-    # Cytobads
-    for i in cytobands[cytobands['chr'] == 'chr%s' % sample_chr].index:
-        s, e, t = cytobands.loc[i, ['start', 'end', 'band']].values
+    sns.set(style='ticks', context='paper', font_scale=0.5, rc={'axes.linewidth': .3, 'xtick.major.width': .3, 'ytick.major.width': .3, 'xtick.major.size': 2.5, 'ytick.major.size': 2.5, 'xtick.direction': 'in', 'ytick.direction': 'in'})
 
-        if t == 'acen':
-            ax.axvline(s, lw=.2, ls='-', color='#b1b1b1', alpha=.3)
-            ax.axvline(e, lw=.2, ls='-', color='#b1b1b1', alpha=.3)
+    plt.scatter(plot_df['logfc'], plot_df['logfc_norm'], s=3, alpha=.2, edgecolor='w', lw=0.05, c=plot_df['cnv'], cmap=cmap)
 
-        elif not i % 2:
-            ax.axvspan(s, e, alpha=0.2, facecolor='#b1b1b1')
+    xlim, ylim = plt.xlim(), plt.ylim()
+    xlim, ylim = np.min([xlim[0], ylim[0]]), np.max([xlim[1], ylim[1]])
+    plt.plot((xlim, ylim), (xlim, ylim), 'k--', lw=.3, alpha=.5)
+    plt.xlim((xlim, ylim))
+    plt.ylim((xlim, ylim))
 
-    # Plot guides
-    ax.scatter(plot_df['STARTpos'], plot_df['logfc'], s=2, marker='.', lw=0, c='#b1b1b1', alpha=.5)
+    plt.axhline(0, lw=.1, c='black', alpha=.5)
+    plt.axvline(0, lw=.1, c='black', alpha=.5)
 
-    # Plot CRISPR segments
-    for s, e, fc in crispr_seg.loc[(crispr_seg['sample'] == sample) & (crispr_seg['chrom'] == str(sample_chr)), ['loc.start', 'loc.end', 'seg.mean']].values:
-        ax.plot([s, e], [fc, fc], lw=.3, c='#ff511d', alpha=.9)
+    plt.xlabel('Original FCs')
+    plt.ylabel('Corrected FCs')
 
-    # Plot CNV segments
-    for s, e, c in cnv_seg.loc[(cnv_seg['cellLine'] == sample) & (cnv_seg['chr'] == str(sample_chr)), ['startpos', 'endpos', 'totalCN']].values:
-        ax.plot([s, e], [c, c], lw=.3, c='#3498db', alpha=.9)
+    plt.colorbar()
 
-    # Plot sgRNAs mean
-    ax.scatter(plot_df['STARTpos'], plot_df['logfc_mean'], s=4, marker='.', lw=0, alpha=.9, c=plot_df['cnv'], cmap='viridis', vmin=0, vmax=14)
+    plt.title(sample)
 
-    # Misc
-    ax.axhline(0, lw=.3, ls='-', color='black')
-
-    # Labels and dim
-    ax.set_ylabel('chr%s' % sample_chr)
-    ax.set_xlim(0, plot_df['STARTpos'].max())
-
-    if pos == 0:
-        ax.set_title(sample)
-
-    pos += 1
-
-plt.gcf().set_size_inches(3, 25)
-plt.savefig('reports/%s_chromosome_plot.png' % sample, bbox_inches='tight', dpi=600)
-plt.close('all')
-print('[%s] Chromossome plot done.' % dt.now().strftime('%Y-%m-%d %H:%M:%S'))
+    plt.gcf().set_size_inches(2, 1.8)
+    plt.savefig('reports/%s_crispy_norm_scatter.png' % sample, bbox_inches='tight', dpi=600)
+    plt.close('all')
+    print('[%s] Scatter plot done.' % dt.now().strftime('%Y-%m-%d %H:%M:%S'))
 
 
-df
+    # - Chromossome plot
+    sns.set(style='ticks', context='paper', font_scale=0.75, rc={'axes.linewidth': .3, 'xtick.major.width': .3, 'ytick.major.width': .3, 'xtick.major.size': 2.5, 'ytick.major.size': 2.5, 'xtick.direction': 'in', 'ytick.direction': 'in'})
+    gs, pos = GridSpec(len(set(df['CHRM'])), 1, hspace=.4, wspace=.1), 0
+
+    for sample_chr in set(df['CHRM']):
+        # Define plot data-frame
+        ax = plt.subplot(gs[pos])
+        plot_df = df[df['CHRM'] == sample_chr]
+
+        # Cytobads
+        for i in cytobands[cytobands['chr'] == 'chr%s' % sample_chr].index:
+            s, e, t = cytobands.loc[i, ['start', 'end', 'band']].values
+
+            if t == 'acen':
+                ax.axvline(s, lw=.2, ls='-', color='#b1b1b1', alpha=.3)
+                ax.axvline(e, lw=.2, ls='-', color='#b1b1b1', alpha=.3)
+
+            elif not i % 2:
+                ax.axvspan(s, e, alpha=0.2, facecolor='#b1b1b1')
+
+        # Plot guides
+        for s in set(plot_df['essential']):
+            ax.scatter(plot_df.loc[plot_df['essential'] == s, 'STARTpos'], plot_df.loc[plot_df['essential'] == s, 'logfc'], s=2, marker='X' if s else '.', lw=0, c='#b1b1b1', alpha=.5)
+
+        # Plot CRISPR segments
+        for s, e, fc in crispr_seg.loc[(crispr_seg['sample'] == sample) & (crispr_seg['chrom'] == str(sample_chr)), ['loc.start', 'loc.end', 'seg.mean']].values:
+            ax.plot([s, e], [fc, fc], lw=.3, c='#ff511d', alpha=.9)
+
+        # Plot CNV segments
+        for s, e, c in cnv_seg.loc[(cnv_seg['cellLine'] == sample) & (cnv_seg['chr'] == str(sample_chr)), ['startpos', 'endpos', 'totalCN']].values:
+            ax.plot([s, e], [c, c], lw=.3, c='#3498db', alpha=.9)
+
+        # Plot sgRNAs mean
+        ax.scatter(plot_df['STARTpos'], plot_df['logfc_mean'], s=4, marker='.', lw=0, alpha=.9, c=plot_df['cnv'], cmap='viridis', vmin=0, vmax=14)
+
+        # Misc
+        ax.axhline(0, lw=.3, ls='-', color='black')
+
+        # Labels and dim
+        ax.set_ylabel('chr%s' % sample_chr)
+        ax.set_xlim(0, plot_df['STARTpos'].max())
+
+        if pos == 0:
+            ax.set_title(sample)
+
+        pos += 1
+
+    plt.gcf().set_size_inches(3, 1.5 * len(set(df['CHRM'])))
+    plt.savefig('reports/%s_chromosome_plot.png' % sample, bbox_inches='tight', dpi=600)
+    plt.close('all')
+    print('[%s] Chromossome plot done.' % dt.now().strftime('%Y-%m-%d %H:%M:%S'))
