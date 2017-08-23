@@ -8,7 +8,7 @@ from datetime import datetime as dt
 from sklearn.externals import joblib
 from sklearn.gaussian_process.gpr import GaussianProcessRegressor
 from limix_core.util.preprocess import covar_rescaling_factor_efficient
-from sklearn.gaussian_process.kernels import RBF, WhiteKernel, ConstantKernel, RationalQuadratic
+from sklearn.gaussian_process.kernels import WhiteKernel, ConstantKernel, RationalQuadratic, PairwiseKernel
 
 
 # -- Imports
@@ -65,6 +65,12 @@ df['essential'] = [int(i in essential) for i in df['GENES']]
 print('[%s] Sample: %s; Chr: %s' % (dt.now().strftime('%Y-%m-%d %H:%M:%S'), sample, sample_chr))
 
 
+# - Fill missing values with mean
+df['cnv'] = df['cnv'].replace(np.nan, df['cnv'].median())
+df['loh'] = df['loh'].replace(np.nan, 'H')
+df = df.sort_values('STARTpos')
+
+
 # - Variance decomposition
 print('[%s] GP for variance decomposition started' % dt.now().strftime('%Y-%m-%d %H:%M:%S'))
 
@@ -75,11 +81,7 @@ y, X = df[['logfc']].values, df[['STARTpos']]
 X /= 1e9
 
 # Instanciate the covariance functions
-K_c = ConstantKernel(1, (1e-5, 1))
-K_rq = RationalQuadratic(length_scale_bounds=(1e-2, 1), alpha_bounds=(1e-5, 10))
-K_w = WhiteKernel(noise_level_bounds=(.5, 2))
-
-K = K_c * K_rq + K_w
+K = ConstantKernel(1, (1e-5, 1)) * RationalQuadratic(length_scale_bounds=(1e-2, 1), alpha_bounds=(1e-5, 10)) + WhiteKernel(noise_level_bounds=(1., 2))
 
 # Instanciate a Gaussian Process model
 gp = GaussianProcessRegressor(K, n_restarts_optimizer=3, normalize_y=True)
@@ -89,23 +91,25 @@ gp.fit(X, y)
 print(gp.kernel_)
 
 # Normalise data
-df = df.assign(logfc_mean=gp.predict(X))
+logfc_mean, logfc_se = gp.predict(X, return_std=True)
+
+df = df.assign(logfc_se=logfc_se)
+df = df.assign(logfc_mean=logfc_mean)
 df = df.assign(logfc_norm=df['logfc'] - df['logfc_mean'])
 
+# Export hyperparameters
+kernels = [('RQ', gp.kernel_.k1), ('Noise', gp.kernel_.k2)]
+
 # Variance explained
-cov_var = pd.Series({str(k): (1 / covar_rescaling_factor_efficient(k.__call__(X))) for k in [gp.kernel_.k1, gp.kernel_.k2]}, name='Variance')
+cov_var = pd.Series({n: (1 / covar_rescaling_factor_efficient(k.__call__(X))) for n, k in kernels}, name='Variance')
 cov_var /= cov_var.sum()
 print(cov_var.sort_values())
 
-# Export configurations + hyperparameters
-pd.Series({
-    'C': gp.kernel_.k1.k1.constant_value,
-    'RQ_l': gp.kernel_.k1.k2.length_scale,
-    'RQ_a': gp.kernel_.k1.k2.alpha,
-    'W': gp.kernel_.k2.noise_level,
-    'var_RQ': cov_var[0],
-    'var_W': cov_var[1],
-}).to_csv('reports/%s_%s_optimised_params.csv' % (sample, sample_chr))
+df_hp = {}
+for n, k in kernels:
+    df_hp.update({'%s_%s' % (n, p.name): k.get_params()[p.name] for p in k.hyperparameters})
+pd.Series(df_hp).to_csv('reports/%s_%s_optimised_params.csv' % (sample, sample_chr))
+print(pd.Series(df_hp))
 
 # Export
 joblib.dump(gp, 'reports/%s_%s_corrected.pkl' % (sample, sample_chr))

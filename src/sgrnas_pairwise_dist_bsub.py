@@ -13,7 +13,7 @@ memory, queque, cores = 32000, 'normal', 12
 
 # Submit a single job per chromossome per sample
 # sample, sample_chr = 'HT-29', '17'
-for sample in ['HT-29', 'AU565']:
+for sample in ['HT-29', 'AU565', 'SW48']:
 	for sample_chr in set(sgrna_lib['CHRM']):
 		jname = 'crispy_%s_%s' % (sample, sample_chr)
 

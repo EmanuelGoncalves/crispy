@@ -7,10 +7,9 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 from datetime import datetime as dt
-from scipy.stats.stats import rankdata, gmean
+from scipy.stats.stats import rankdata
 from sklearn.metrics.ranking import auc
 from matplotlib.gridspec import GridSpec
-from benchmark import MidpointNormalize
 
 
 # - Imports
@@ -48,14 +47,14 @@ sample_files = [os.path.join('data/crispy/', f) for f in os.listdir('data/crispy
 
 # sample = 'AU565'
 # sample = 'HT-29'
-for sample in ['AU565', 'HT-29']:
+for sample in ['AU565', 'HT-29', 'SW48']:
     # - Import sample normalisation output
     # Optimisation params
     df_params = pd.DataFrame({'%s_chr%s' % (sample, f.split('_')[1]): pd.Series.from_csv(f) for f in sample_files if f.startswith('data/crispy/%s_' % sample) and f.endswith('_optimised_params.csv')}).T
     print(df_params)
 
     # sgRNA level fc
-    df = pd.concat([pd.read_csv(f, index_col=0) for f in sample_files if f.startswith('data/crispy/%s_' % sample) and f.endswith('_corrected.csv')])
+    df = pd.concat([pd.read_csv(f, index_col=0) for f in sample_files if f.startswith('data/crispy/%s_' % sample) and f.endswith('_corrected.csv')]).sort_values('STARTpos')
     print('sgRNAs: ', df.shape)
 
     # Gene level fc
@@ -87,7 +86,7 @@ for sample in ['AU565', 'HT-29']:
     plt.xlim(0, 1)
     plt.ylim(0, 1)
 
-    plt.title('Essential genes')
+    plt.title('%s - Essential genes' % sample)
     plt.xlabel('Ranked genes')
     plt.ylabel('Cumulative sum essential')
 
@@ -194,6 +193,7 @@ for sample in ['AU565', 'HT-29']:
 
         # Plot sgRNAs mean
         ax.scatter(plot_df['STARTpos'], plot_df['logfc_mean'], s=4, marker='.', lw=0, alpha=.9, c=plot_df['cnv'], cmap='viridis', vmin=0, vmax=14)
+        ax.fill_between(plot_df['STARTpos'], plot_df['logfc_mean'] - plot_df['logfc_se'], plot_df['logfc_mean'] + plot_df['logfc_se'], alpha=0.2, cmap='viridis')
 
         # Misc
         ax.axhline(0, lw=.3, ls='-', color='black')
