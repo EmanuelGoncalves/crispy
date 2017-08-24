@@ -193,7 +193,7 @@ for sample in ['AU565', 'HT-29', 'SW48']:
 
         # Plot sgRNAs mean
         ax.scatter(plot_df['STARTpos'], plot_df['logfc_mean'], s=4, marker='.', lw=0, alpha=.9, c=plot_df['cnv'], cmap='viridis', vmin=0, vmax=14)
-        ax.fill_between(plot_df['STARTpos'], plot_df['logfc_mean'] - plot_df['logfc_se'], plot_df['logfc_mean'] + plot_df['logfc_se'], alpha=0.2, cmap='viridis')
+        # ax.fill_between(plot_df['STARTpos'], plot_df['logfc_mean'] - plot_df['logfc_se'], plot_df['logfc_mean'] + plot_df['logfc_se'], alpha=0.2, cmap='viridis')
 
         # Misc
         ax.axhline(0, lw=.3, ls='-', color='black')

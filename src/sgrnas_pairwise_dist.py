@@ -80,8 +80,11 @@ y, X = df[['logfc']].values, df[['STARTpos']]
 # Scale distances
 X /= 1e9
 
+# Define parms bounds
+length_scale_lb, alpha_lb = 1e-3, 1e-5
+
 # Instanciate the covariance functions
-K = ConstantKernel(1, (1e-5, 1)) * RationalQuadratic(length_scale_bounds=(1e-2, 1), alpha_bounds=(1e-5, 10)) + WhiteKernel(noise_level_bounds=(1., 2))
+K = ConstantKernel() * RationalQuadratic(length_scale_bounds=(length_scale_lb, 100), alpha_bounds=(alpha_lb, 100)) + WhiteKernel()
 
 # Instanciate a Gaussian Process model
 gp = GaussianProcessRegressor(K, n_restarts_optimizer=3, normalize_y=True)
