@@ -55,16 +55,11 @@ for sample in ['AU565', 'HT-29', 'SW48']:
 
     # sgRNA level fc
     df = pd.concat([pd.read_csv(f, index_col=0) for f in sample_files if f.startswith('data/crispy/%s_' % sample) and f.endswith('_corrected.csv')]).sort_values('STARTpos')
-    print('sgRNAs: ', df.shape)
-
-    # Gene level fc
-    f = {'logfc': np.mean, 'cnv': 'first', 'loh': 'first', 'essential': 'first', 'logfc_mean': np.mean, 'logfc_norm': np.mean}
-    df_genes = df[['GENES', 'logfc', 'cnv', 'loh', 'essential', 'logfc_mean', 'logfc_norm']].groupby('GENES').agg(f)
-    df_genes['ccleanr'] = cc_crispr.loc[df_genes.index, sample]
-    print('Genes: ', df_genes.shape)
+    df['ccleanr'] = cc_crispr.loc[df.index, sample]
+    print('Genes: ', df.shape)
 
     # - Evaluate
-    plot_df = df_genes.dropna(subset=['logfc', 'logfc_norm', 'ccleanr'])
+    plot_df = df.dropna(subset=['logfc', 'logfc_norm', 'ccleanr'])
 
     sns.set(style='ticks', context='paper', font_scale=0.75, palette='PuBu_r', rc={'axes.linewidth': .3, 'xtick.major.width': .3, 'ytick.major.width': .3, 'xtick.major.size': 2.5, 'ytick.major.size': 2.5, 'xtick.direction': 'in', 'ytick.direction': 'in'})
     for c, f in zip(sns.color_palette('viridis', 3).as_hex(), ['logfc', 'ccleanr', 'logfc_norm']):
@@ -98,7 +93,7 @@ for sample in ['AU565', 'HT-29', 'SW48']:
     print('[%s] AROCs done.' % dt.now().strftime('%Y-%m-%d %H:%M:%S'))
 
     # - Boxplot
-    plot_df = df_genes.dropna(subset=['cnv', 'logfc', 'logfc_norm', 'ccleanr'])
+    plot_df = df.dropna(subset=['cnv', 'logfc', 'logfc_norm', 'ccleanr'])
     plot_df = plot_df[plot_df['cnv'] != -1]
 
     plot_df['logfc_ranked'] = rankdata(plot_df['logfc']) / plot_df.shape[0]
@@ -130,7 +125,7 @@ for sample in ['AU565', 'HT-29', 'SW48']:
     print('[%s] Boxplot done.' % dt.now().strftime('%Y-%m-%d %H:%M:%S'))
 
     # - Scatter plot
-    plot_df = df_genes.dropna(subset=['cnv'])
+    plot_df = df.dropna(subset=['cnv'])
 
     cmap = plt.cm.get_cmap('viridis')
 

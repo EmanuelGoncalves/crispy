@@ -2,6 +2,7 @@
 # Copyright (C) 2017 Emanuel Goncalves
 
 import sys
+import random
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -56,13 +57,22 @@ df = crispr[sample].dropna().rename('logfc')
 # Concat sgRNAs information
 df = pd.concat([sgrna_lib.loc[sample_sgrnas], df.loc[sample_sgrnas]], axis=1).dropna()
 
+# Average per Gene
+df = df.groupby('GENES').agg({
+    'CODE': 'first',
+    'CHRM': 'first',
+    'STARTpos': np.mean,
+    'ENDpos': np.mean,
+    'logfc': np.mean
+})
+
 # Concat copy-number
-df['cnv'] = [cnv_abs.loc[g, sample] if g in cnv_abs.index else np.nan for g in df['GENES']]
-df['loh'] = [cnv_loh.loc[g, sample] if g in cnv_loh.index else np.nan for g in df['GENES']]
+df['cnv'] = [cnv_abs.loc[g, sample] if g in cnv_abs.index else np.nan for g in df.index]
+df['loh'] = [cnv_loh.loc[g, sample] if g in cnv_loh.index else np.nan for g in df.index]
 
 # Check if gene is essential
-df['essential'] = [int(i in essential) for i in df['GENES']]
-df = df[(df['STARTpos'] > 20000000) & (df['ENDpos'] < 42000000)]
+df['essential'] = [int(i in essential) for i in df.index]
+# df = df[(df['STARTpos'] > 20000000) & (df['ENDpos'] < 42000000)]
 # df = df[(df['STARTpos'] > 50000000) & (df['ENDpos'] < 130000000)]
 print('[%s] Sample: %s; Chr: %s' % (dt.now().strftime('%Y-%m-%d %H:%M:%S'), sample, sample_chr))
 
@@ -80,17 +90,18 @@ X /= 1e9
 # Define params
 for alpha_lb in [1e-4, 1e-3, 1e-2, 1e-1, 1, 10]:
 
-    for length_scale_lb in [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1]:
+    for length_scale_lb in [0.0001, 0.001, 0.01, 0.1]:
 
         # Cross-validation
-        cv = ShuffleSplit(n_splits=10, test_size=.4)
+        cv = ShuffleSplit(n_splits=5, test_size=.4)
+
         for idx_train, idx_test in cv.split(X):
             # Subsample
             y_train, X_train = y.iloc[idx_train], X.iloc[idx_train]
             y_test, X_test = y.iloc[idx_test], X.iloc[idx_test]
 
             # Gaussian process model
-            k = ConstantKernel() * RationalQuadratic(length_scale_bounds=(length_scale_lb, 100), alpha_bounds=(alpha_lb, 100)) + WhiteKernel()
+            k = ConstantKernel() * RationalQuadratic(length_scale_bounds=(length_scale_lb, 10), alpha_bounds=(alpha_lb, 10)) + WhiteKernel()
 
             gp = GaussianProcessRegressor(k, n_restarts_optimizer=3, normalize_y=True)
 
@@ -113,8 +124,8 @@ for alpha_lb in [1e-4, 1e-3, 1e-2, 1e-1, 1, 10]:
             parms.append(df_hp)
             print('[%s] R2=%.2f: %s' % (dt.now().strftime('%Y-%m-%d %H:%M:%S'), r2, gp.kernel_))
 
-parms = pd.DataFrame(parms)
-parms.to_csv('data/sampling_params.csv', index=False)
+parms = pd.DataFrame(parms).sort_values('r2')
+parms.to_csv('data/sampling_params_custom_cv.csv', index=False)
 
 
 # -
@@ -129,19 +140,19 @@ plt.savefig('reports/gp_subsampling_heatmap.png', bbox_inches='tight', dpi=600)
 plt.close('all')
 
 
-# -
-plot_df = pd.DataFrame({'y_true': y_test['logfc'], 'y_pred': y_pred['logfc']})
-
-sns.set(style='ticks', context='paper', font_scale=.75, rc={'axes.linewidth': .3, 'xtick.major.width': .3, 'ytick.major.width': .3, 'xtick.major.size': 2.5, 'ytick.major.size': 2.5})
-g = sns.jointplot(
-    'y_true', 'y_pred', data=plot_df, kind='reg', color='#34495e', space=0,
-    marginal_kws={'hist': True, 'rug': False, 'kde': False, 'bins': 20}, annot_kws={'template': 'R={val:.2g}, pvalue={p:.1e}', 'loc': 4},
-    joint_kws={'scatter_kws': {'s': 5, 'edgecolor': 'w', 'linewidth': .3, 'alpha': .5}, 'line_kws': {'linewidth': .5}, 'truncate': True}
-)
-
-g.ax_joint.axvline(0, ls='-', lw=0.3, c='black', alpha=.2)
-g.ax_joint.axhline(0, ls='-', lw=0.3, c='black', alpha=.2)
-g.set_axis_labels('y true', 'y pred')
-plt.gcf().set_size_inches(2, 2)
-plt.savefig('reports/gp_subsampling_pred_corrplot.png', bbox_inches='tight', dpi=600)
-plt.close('all')
+# # -
+# plot_df = pd.DataFrame({'y_true': y_test['logfc'], 'y_pred': y_pred['logfc']})
+#
+# sns.set(style='ticks', context='paper', font_scale=.75, rc={'axes.linewidth': .3, 'xtick.major.width': .3, 'ytick.major.width': .3, 'xtick.major.size': 2.5, 'ytick.major.size': 2.5})
+# g = sns.jointplot(
+#     'y_true', 'y_pred', data=plot_df, kind='reg', color='#34495e', space=0,
+#     marginal_kws={'hist': True, 'rug': False, 'kde': False, 'bins': 20}, annot_kws={'template': 'R={val:.2g}, pvalue={p:.1e}', 'loc': 4},
+#     joint_kws={'scatter_kws': {'s': 5, 'edgecolor': 'w', 'linewidth': .3, 'alpha': .5}, 'line_kws': {'linewidth': .5}, 'truncate': True}
+# )
+#
+# g.ax_joint.axvline(0, ls='-', lw=0.3, c='black', alpha=.2)
+# g.ax_joint.axhline(0, ls='-', lw=0.3, c='black', alpha=.2)
+# g.set_axis_labels('y true', 'y pred')
+# plt.gcf().set_size_inches(2, 2)
+# plt.savefig('reports/gp_subsampling_pred_corrplot.png', bbox_inches='tight', dpi=600)
+# plt.close('all')

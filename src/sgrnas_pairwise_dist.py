@@ -54,12 +54,21 @@ df = crispr[sample].dropna().rename('logfc')
 # Concat sgRNAs information
 df = pd.concat([sgrna_lib.loc[sample_sgrnas], df.loc[sample_sgrnas]], axis=1).dropna()
 
+# Average per Gene
+df = df.groupby('GENES').agg({
+    'CODE': 'first',
+    'CHRM': 'first',
+    'STARTpos': np.mean,
+    'ENDpos': np.mean,
+    'logfc': np.mean
+})
+
 # Concat copy-number
-df['cnv'] = [cnv_abs.loc[g, sample] if g in cnv_abs.index else np.nan for g in df['GENES']]
-df['loh'] = [cnv_loh.loc[g, sample] if g in cnv_loh.index else np.nan for g in df['GENES']]
+df['cnv'] = [cnv_abs.loc[g, sample] if g in cnv_abs.index else np.nan for g in df.index]
+df['loh'] = [cnv_loh.loc[g, sample] if g in cnv_loh.index else np.nan for g in df.index]
 
 # Check if gene is essential
-df['essential'] = [int(i in essential) for i in df['GENES']]
+df['essential'] = [int(i in essential) for i in df.index]
 # df = df[(df['STARTpos'] > 20000000) & (df['ENDpos'] < 42000000)]
 # df = df[(df['STARTpos'] > 50000000) & (df['ENDpos'] < 130000000)]
 print('[%s] Sample: %s; Chr: %s' % (dt.now().strftime('%Y-%m-%d %H:%M:%S'), sample, sample_chr))
@@ -81,10 +90,10 @@ y, X = df[['logfc']].values, df[['STARTpos']]
 X /= 1e9
 
 # Define parms bounds
-length_scale_lb, alpha_lb = 1e-3, 1e-5
+length_scale_lb, alpha_lb = 1e-3, 1e-3
 
 # Instanciate the covariance functions
-K = ConstantKernel() * RationalQuadratic(length_scale_bounds=(length_scale_lb, 100), alpha_bounds=(alpha_lb, 100)) + WhiteKernel()
+K = ConstantKernel() * RationalQuadratic(length_scale_bounds=(length_scale_lb, 10), alpha_bounds=(alpha_lb, 10)) + WhiteKernel()
 
 # Instanciate a Gaussian Process model
 gp = GaussianProcessRegressor(K, n_restarts_optimizer=3, normalize_y=True)
