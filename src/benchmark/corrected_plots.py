@@ -2,6 +2,7 @@
 # Copyright (C) 2017 Emanuel Goncalves
 
 import os
+import pickle
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -15,6 +16,9 @@ from matplotlib.gridspec import GridSpec
 # - Imports
 # Essential genes
 essential = list(pd.read_csv('data/resources/curated_BAGEL_essential.csv', sep='\t')['gene'])
+
+# Non-expressed genes
+nexp = pickle.load(open('data/gdsc/gene_expression/non_expressed_genes.pickle', 'rb'))
 
 # Chromosome cytobands
 cytobands = pd.read_csv('data/resources/cytoBand.txt', sep='\t')
@@ -55,39 +59,47 @@ for sample in ['AU565', 'HT-29', 'SW48']:
 
     # sgRNA level fc
     df = pd.concat([pd.read_csv(f, index_col=0) for f in sample_files if f.startswith('data/crispy/%s_' % sample) and f.endswith('_corrected.csv')]).sort_values('STARTpos')
-    df['ccleanr'] = cc_crispr.loc[df.index, sample]
+    df = df.assign(ccleanr=cc_crispr.loc[df.index, sample])
+    df = df.assign(nexp=[int(i in nexp[sample]) for i in df.index])
     print('Genes: ', df.shape)
 
-    # - Evaluate
+    # - Essential AROC
     plot_df = df.dropna(subset=['logfc', 'logfc_norm', 'ccleanr'])
 
-    sns.set(style='ticks', context='paper', font_scale=0.75, palette='PuBu_r', rc={'axes.linewidth': .3, 'xtick.major.width': .3, 'ytick.major.width': .3, 'xtick.major.size': 2.5, 'ytick.major.size': 2.5, 'xtick.direction': 'in', 'ytick.direction': 'in'})
-    for c, f in zip(sns.color_palette('viridis', 3).as_hex(), ['logfc', 'ccleanr', 'logfc_norm']):
-        # Build data-frame
-        plot_df_f = plot_df.sort_values(f).copy()
+    sns.set(style='ticks', context='paper', rc={'axes.linewidth': .3, 'xtick.major.width': .3, 'ytick.major.width': .3, 'xtick.major.size': 2.5, 'ytick.major.size': 2.5, 'xtick.direction': 'in', 'ytick.direction': 'in'})
+    (f, axs), pos = plt.subplots(1, 2), 0
 
-        # Rank fold-changes
-        x = rankdata(plot_df_f[f]) / plot_df_f.shape[0]
+    for metric in ['essential', 'nexp']:
+        ax = axs[pos]
 
-        # Observed cumsum
-        y = plot_df_f['essential'].cumsum() / plot_df_f['essential'].sum()
+        for c, f in zip(sns.color_palette('viridis', 3).as_hex(), ['logfc', 'ccleanr', 'logfc_norm']):
+            # Build data-frame
+            plot_df_f = plot_df.sort_values(f).copy()
 
-        # Plot
-        plt.plot(x, y, label='%s: %.2f' % (f, auc(x, y)), lw=1., c=c)
+            # Rank fold-changes
+            x = rankdata(plot_df_f[f]) / plot_df_f.shape[0]
 
-        # Random
-        plt.plot((0, 1), (0, 1), 'k--', lw=.3, alpha=.5)
+            # Observed cumsum
+            y = plot_df_f[metric].cumsum() / plot_df_f[metric].sum()
 
-    plt.xlim(0, 1)
-    plt.ylim(0, 1)
+            # Plot
+            ax.plot(x, y, label='%s: %.2f' % (f, auc(x, y)), lw=1., c=c)
 
-    plt.title('%s - Essential genes' % sample)
-    plt.xlabel('Ranked genes')
-    plt.ylabel('Cumulative sum essential')
+            # Random
+            ax.plot((0, 1), (0, 1), 'k--', lw=.3, alpha=.5)
 
-    plt.legend(loc=4)
+        ax.set_xlim(0, 1)
+        ax.set_ylim(0, 1)
 
-    plt.gcf().set_size_inches(1.5, 1.5)
+        ax.set_title('%s - %s genes' % (sample, metric if metric != 'nexp' else 'not expressed'))
+        ax.set_xlabel('Ranked genes')
+        ax.set_ylabel('Cumulative sum %s genes' % (metric if metric != 'nexp' else 'not expressed'))
+
+        ax.legend(loc=4)
+
+        pos += 1
+
+    plt.gcf().set_size_inches(6, 3)
     plt.savefig('reports/%s_eval_plot.png' % sample, bbox_inches='tight', dpi=600)
     plt.close('all')
     print('[%s] AROCs done.' % dt.now().strftime('%Y-%m-%d %H:%M:%S'))
@@ -103,23 +115,47 @@ for sample in ['AU565', 'HT-29', 'SW48']:
     plot_df['cnv'] = plot_df['cnv'].astype(int)
 
     sns.set(style='ticks', context='paper', font_scale=0.5, rc={'axes.linewidth': .3, 'xtick.major.width': .3, 'ytick.major.width': .3, 'xtick.major.size': 2.5, 'ytick.major.size': 2.5, 'xtick.direction': 'out', 'ytick.direction': 'out'})
-    (f, axs), pos = plt.subplots(3), 0
+    (f, axs), pos = plt.subplots(3, 2), 0
+
+    boxplot_args = {'linewidth': .3, 'notch': True, 'fliersize': 1, 'orient': 'v', 'palette': 'viridis', 'sym': ''}
+    stripplot_args = {'orient': 'v', 'palette': 'viridis', 'size': 0.5, 'linewidth': .05, 'edgecolor': 'white', 'jitter': .15, 'alpha': .75}
+
     for i in ['logfc_ranked', 'logfc_norm_ranked', 'ccleanr_ranked']:
-        sns.boxplot('cnv', i, data=plot_df, linewidth=.3, notch=True, fliersize=1, orient='v', palette='viridis', ax=axs[pos], sym='')
-        sns.stripplot('cnv', i, data=plot_df, orient='v', palette='viridis', ax=axs[pos], size=0.75, linewidth=.1, edgecolor='white', jitter=.15, alpha=.75)
+        # Overall genes
+        ax = axs[pos][0]
 
-        axs[pos].axhline(.5, lw=.1, c='black', alpha=.5)
+        sns.boxplot('cnv', i, data=plot_df, ax=ax, **boxplot_args)
+        sns.stripplot('cnv', i, data=plot_df, ax=ax, **stripplot_args)
 
-        axs[pos].set_xlabel('')
-        axs[pos].set_ylabel(i)
+        ax.axhline(.5, lw=.1, c='black', alpha=.5)
+
+        ax.set_xlabel('' if pos != 2 else 'Copy-number (absolute)')
+        ax.set_ylabel(i)
+
+        ax.set_title('' if pos != 0 else '%s - all genes' % sample)
+
+        if pos != 2:
+            plt.setp(ax.get_xticklabels(), visible=False)
+
+        # Non-expressed genes
+        ax = axs[pos][1]
+
+        sns.boxplot('cnv', i, data=plot_df.query('nexp == 1'), ax=ax, **boxplot_args)
+        sns.stripplot('cnv', i, data=plot_df.query('nexp == 1'), ax=ax, **stripplot_args)
+
+        ax.axhline(.5, lw=.1, c='black', alpha=.5)
+
+        ax.set_xlabel('' if pos != 2 else 'Copy-number (absolute)')
+        ax.set_ylabel(i)
+
+        ax.set_title('' if pos != 0 else '%s - not expressed genes' % sample)
+
+        if pos != 2:
+            plt.setp(ax.get_xticklabels(), visible=False)
+
         pos += 1
 
-    plt.setp([a.get_xticklabels() for a in f.axes[:-1]], visible=False)
-
-    plt.suptitle(sample, y=.95)
-    plt.xlabel('Copy-number (absolute)')
-
-    plt.gcf().set_size_inches(2, 3)
+    plt.gcf().set_size_inches(5, 3)
     plt.savefig('reports/%s_crispy_norm_boxplots.png' % sample, bbox_inches='tight', dpi=600)
     plt.close('all')
     print('[%s] Boxplot done.' % dt.now().strftime('%Y-%m-%d %H:%M:%S'))

@@ -90,10 +90,10 @@ X /= 1e9
 # Define params
 for alpha_lb in [1e-4, 1e-3, 1e-2, 1e-1, 1, 10]:
 
-    for length_scale_lb in [0.0001, 0.001, 0.01, 0.1]:
+    for length_scale_lb in [1e-4, 1e-3, 1e-2, 1e-1]:
 
         # Cross-validation
-        cv = ShuffleSplit(n_splits=5, test_size=.4)
+        cv = ShuffleSplit(n_splits=10, test_size=.4)
 
         for idx_train, idx_test in cv.split(X):
             # Subsample
