@@ -23,7 +23,7 @@ cytobands = pd.read_csv('data/resources/cytoBand.txt', sep='\t')
 print('[%s] Misc files imported' % dt.now().strftime('%Y-%m-%d %H:%M:%S'))
 
 # CRISPR
-crispr = pd.read_csv('data/gdsc/crispr/deseq_gene_fold_changes.csv', index_col=0)
+crispr = pd.read_csv('data/gdsc/crispr/crispy_fold_change.csv', index_col=0)
 
 # CIRSPR segments
 crispr_seg = pd.read_csv('data/gdsc/crispr/segments_cbs_deseq2.csv')
