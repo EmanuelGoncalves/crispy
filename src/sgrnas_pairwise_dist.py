@@ -84,16 +84,17 @@ df = df.sort_values('STARTpos')
 print('[%s] GP for variance decomposition started' % dt.now().strftime('%Y-%m-%d %H:%M:%S'))
 
 # Define variables
-y, X = df[['logfc']].values, df[['STARTpos']]
+y, X = df[['logfc']].values, df[['cnv']]
 
-# Scale distances
-X /= 1e9
+# # Scale distances
+# X /= 1e9
 
 # Define parms bounds
 length_scale_lb, alpha_lb = 1e-3, 1e-3
 
 # Instanciate the covariance functions
-K = ConstantKernel() * RationalQuadratic(length_scale_bounds=(length_scale_lb, 10), alpha_bounds=(alpha_lb, 10)) + WhiteKernel()
+# K = ConstantKernel() * RationalQuadratic(length_scale_bounds=(length_scale_lb, 10), alpha_bounds=(alpha_lb, 10)) + WhiteKernel()
+K = ConstantKernel() * PairwiseKernel(metric='rbf') + WhiteKernel()
 
 # Instanciate a Gaussian Process model
 gp = GaussianProcessRegressor(K, n_restarts_optimizer=3, normalize_y=True)
