@@ -7,15 +7,15 @@ from setuptools import setup, find_packages
 setup(
     name='crispy',
     version='0.0.1',
-    package_dir={'': 'src'},
-    packages=find_packages('src'),
-    install_requires=['numpy', 'scipy', 'pandas', 'scikit-learn', 'limix', 'matplotlib', 'seaborn'],
-    scripts=['scripts/framed-smetana-pipeline'],  # TODO: CHANGE
+    package_dir={'': 'crispy'},
+    packages=find_packages('crispy'),
+    install_requires=['numpy', 'scipy', 'pandas', 'scikit-learn', 'matplotlib', 'seaborn'],
+    # scripts=['scripts/framed-smetana-pipeline'],  # TODO: CHANGE
     author='Emanuel Goncalves',
     author_email='eg14@sanger.ac.uk',
     description='Crispy - modelling CRISPR dropout data',
     license='BSD',
-    keywords=['CRISPR', 'loss-of-function', 'gaussian'],
+    keywords=['Crispy', 'CRISPR', 'loss-of-function', 'gaussian'],
     url='https://github.com/EmanuelGoncalves/crispy',
     long_description=open('README.rst').read(),
     classifiers=[
