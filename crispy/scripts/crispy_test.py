@@ -2,13 +2,14 @@
 # Copyright (C) 2017 Emanuel Goncalves
 
 import os
+
+import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
-import matplotlib.pyplot as plt
 from scipy.stats import pearsonr
-from sklearn.metrics.ranking import roc_curve, roc_auc_score
-from crispy.crispy_bagel import fold_changes, bagel_scores
+from sklearn.metrics.ranking import roc_auc_score
 
+from scripts.crispy_bagel import fold_changes, bagel_scores
 
 # Define data location
 data_dir = "./data/crispr_raw_counts/"

@@ -1,0 +1,23 @@
+CHANGES
+=======
+
+* Source folder renamed
+* Initial refactorisation of the package
+* readme update
+* readme update
+* structure project updated
+* shRNA comparison benchmark performed
+* Comparison between CRISPR and shRNA
+* crispy performed with linear and rbf regression
+* Crispy ran with fold-changes calculated by crispy
+* Optimisation performed with deseq fold-changes with lower bound estimated by out-of-sample prediction
+* Gaussian fitting per gene
+* Out-of-sampling prediction benchmark done
+* GP updated to export standard errors
+* Kernels hyperparameters updated
+* normalisation and benchmark plots updated
+* AROC analysis updated to consider only essential genes
+* benchmark plots updated
+* Benchmark functions separated from GP fitting
+* Existing implementations ported
+* Initial commit
