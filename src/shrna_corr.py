@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import roc_curve, auc
 from scipy.stats.stats import pearsonr, zscore
 from limix_core.util.preprocess import gaussianize
-
+from sklearn.linear_model import LinearRegression
 
 # - CCLE and GDSC overlapping
 cmap = pd.read_csv('data/ccle/CCLE_GDSC_cellLineMappoing.csv', index_col=2)

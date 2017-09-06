@@ -100,7 +100,7 @@ for alpha_lb in [1e-4, 1e-3, 1e-2, 1e-1, 1, 10]:
             y_train, X_train = y.iloc[idx_train], X.iloc[idx_train]
             y_test, X_test = y.iloc[idx_test], X.iloc[idx_test]
 
-            # Gaussian process model
+            # Gaussian preprocess model
             k = ConstantKernel() * RationalQuadratic(length_scale_bounds=(length_scale_lb, 10), alpha_bounds=(alpha_lb, 10)) + WhiteKernel()
 
             gp = GaussianProcessRegressor(k, n_restarts_optimizer=3, normalize_y=True)
