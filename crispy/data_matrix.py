@@ -1,4 +1,5 @@
-""" This module implements necessary functions to preprocess sequencing raw counts data from CRISPR dropout screens.
+"""
+This module implements necessary functions to preprocess sequencing raw counts data from CRISPR dropout screens.
 
 Copyright (C) 2017 Emanuel Goncalves
 """
@@ -70,3 +71,11 @@ class DataMatrix(DataFrame):
         """
 
         return self.add(constant)
+
+    def zscore(self):
+        """
+        Calculates a z score for each sample per column.
+
+        :return DataMatrix:
+        """
+        return DataMatrix(st.zscore(self), index=self.index, columns=self.columns)
