@@ -7,7 +7,6 @@ Copyright (C) 2017 Emanuel Goncalves
 import numpy as np
 import scipy.stats as st
 from pandas import DataFrame, Series
-from sklearn.preprocessing import normalize
 
 
 class DataMatrix(DataFrame):

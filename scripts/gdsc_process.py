@@ -7,7 +7,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 from datetime import datetime as dt
 from crispy.data_matrix import DataMatrix
-from crispy.benchmark_plot import plot_cumsum_auc, plot_cnv_rank
+from crispy.benchmark_plot import plot_cumsum_auc
 
 
 # - Imports
@@ -24,11 +24,6 @@ ss = pd.read_csv('data/gdsc/crispr/crispr_raw_counts_files_vFB.csv', sep=',', in
 ss = ss.assign(name=list(manifest.loc[[i.split('_')[0] for i in ss.index]]))
 ss = ss.assign(sample=list([i.split('_')[0] for i in ss.index]))
 ss = ss.assign(tissue=list(css.loc[ss['name'], 'GDSC1'].replace(np.nan, 'other')))
-
-# Copy-number absolute counts
-cnv = pd.read_csv('data/gdsc/copynumber/Gene_level_CN.txt', sep='\t', index_col=0)
-cnv = cnv.loc[:, cnv.columns.isin(set(ss['name']))].dropna(how='all')
-cnv_abs = cnv.applymap(lambda v: int(v.split(',')[0]))
 
 # sgRNA library
 sgrna_lib = pd.read_csv('data/gdsc/crispr/KY_Library_v1.1_annotated.csv', index_col=0).dropna(subset=['GENES'])
@@ -83,13 +78,3 @@ plt.title('Crispy GDSC gene-level fold-change')
 plt.gcf().set_size_inches(3, 3)
 plt.savefig('reports/crispy_gdsc_essential_aroc.png', bbox_inches='tight', dpi=600)
 plt.close('all')
-
-# CNV boxplot
-s = 'AU565'
-plot_df = pd.concat([
-    fold_changes_genes[s].rename('crispr'),
-    cnv_abs[s].rename('cnv')
-], axis=1).dropna().query('cnv != -1')
-
-x, y = plot_df['cnv'], plot_df['crispr']
-plot_cnv_rank(plot_df['cnv'], plot_df['crispr'])
