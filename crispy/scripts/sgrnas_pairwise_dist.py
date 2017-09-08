@@ -23,7 +23,7 @@ cytobands = pd.read_csv('data/resources/cytoBand.txt', sep='\t')
 print('[%s] Misc files imported' % dt.now().strftime('%Y-%m-%d %H:%M:%S'))
 
 # CRISPR
-crispr = pd.read_csv('data/gdsc/crispr/crispy_fold_change.csv', index_col=0)
+crispr = pd.read_csv('data/gdsc/crispr/crispy_gdsc_fold_change_sgrna.csv', index_col=0)
 
 # CIRSPR segments
 crispr_seg = pd.read_csv('data/gdsc/crispr/segments_cbs_deseq2.csv')
@@ -42,8 +42,8 @@ print('[%s] Copy-number data imported' % dt.now().strftime('%Y-%m-%d %H:%M:%S'))
 
 
 # - Read arguments: sample and sample_chr
-# sample, sample_chr = 'AU565', '8'
-sample, sample_chr = sys.argv[1:]
+sample, sample_chr = 'AU565', '8'
+# sample, sample_chr = sys.argv[1:]
 
 # sgRNA of the sample chromossome
 sample_sgrnas = list(sgrna_lib[sgrna_lib['CHRM'] == sample_chr].index)
@@ -84,17 +84,17 @@ df = df.sort_values('STARTpos')
 print('[%s] GP for variance decomposition started' % dt.now().strftime('%Y-%m-%d %H:%M:%S'))
 
 # Define variables
-y, X = df[['logfc']].values, df[['cnv']]
+y, X = df[['logfc']].values, df[['STARTpos']]
 
 # # Scale distances
-# X /= 1e9
+X /= 1e9
 
 # Define parms bounds
 length_scale_lb, alpha_lb = 1e-3, 1e-3
 
 # Instanciate the covariance functions
-# K = ConstantKernel() * RationalQuadratic(length_scale_bounds=(length_scale_lb, 10), alpha_bounds=(alpha_lb, 10)) + WhiteKernel()
-K = ConstantKernel() * PairwiseKernel(metric='rbf') + WhiteKernel()
+K = ConstantKernel() * RationalQuadratic(length_scale_bounds=(length_scale_lb, 10), alpha_bounds=(alpha_lb, 10)) + WhiteKernel()
+# K = ConstantKernel() * PairwiseKernel(metric='rbf') + WhiteKernel()
 
 # Instanciate a Gaussian Process model
 gp = GaussianProcessRegressor(K, n_restarts_optimizer=3, normalize_y=True)

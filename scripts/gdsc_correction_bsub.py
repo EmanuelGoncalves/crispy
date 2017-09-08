@@ -15,7 +15,7 @@ for sample in ['HT-29', 'AU565', 'SW48']:
     jname = 'crispy_%s' % sample
 
     # Define command
-    j_cmd = '/software/bin/python3.6.1 sgrnas_pairwise_dist.py %s' % sample
+    j_cmd = '/software/bin/python3.6.1 scripts/gdsc_correction.py %s' % sample
 
     # Create bsub
     j = bsub(

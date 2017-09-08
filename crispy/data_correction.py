@@ -12,22 +12,25 @@ import pandas as pd
 from functools import partial
 from datetime import datetime as dt
 from multiprocessing.pool import ThreadPool
-from sklearn.gaussian_process.gpr import GaussianProcessRegressor
+from sklearn.gaussian_process import GaussianProcessRegressor
+from limix_core.util.preprocess import covar_rescaling_factor_efficient
 from sklearn.gaussian_process.kernels import WhiteKernel, ConstantKernel, RationalQuadratic
 
 
 class DataCorrection(object):
 
     def __init__(self, X, Y):
-        self.X = X.values if type(X) == pd.DataFrame else X
-        self.Y = Y.values if type(X) == pd.DataFrame else Y
+        self.X = X.copy()
+        self.Y = Y.copy()
 
-    def scale_positions(self, scale_pos=1e9):
-        self.X /= scale_pos
-        return self
-
-    def _correct_position(self, c, chrm, length_scale, alpha, n_restarts_optimizer, normalize_y):
+    def _correct_position(self, c, chrm, length_scale, alpha, n_restarts_optimizer, normalize_y, scale_pos):
         print('[%s] GP for variance decomposition started: CHRM %s' % (dt.now().strftime('%Y-%m-%d %H:%M:%S'), c))
+
+        # Get data-frames
+        X_original, Y = self.X.loc[chrm[chrm == c].index].copy(), self.Y.loc[chrm[chrm == c].index].iloc[:, 0].copy()
+
+        # Scale positions
+        X = X_original / scale_pos
 
         # Instanciate the covariance functions
         K = ConstantKernel() * RationalQuadratic(length_scale_bounds=length_scale, alpha_bounds=alpha) + WhiteKernel()
@@ -36,24 +39,40 @@ class DataCorrection(object):
         gp = GaussianProcessRegressor(K, n_restarts_optimizer=n_restarts_optimizer, normalize_y=normalize_y)
 
         # Fit to data using Maximum Likelihood Estimation of the parameters
-        gp.fit(self.X[chrm == c], self.Y[chrm == c, 0])
-        print(gp.kernel_)
+        gp.fit(X, Y)
+        print('[%s] CHRM: %s; GP: %s' % (dt.now().strftime('%Y-%m-%d %H:%M:%S'), c, gp.kernel_))
 
-        # Normalise data
-        k_mean, k_se = gp.predict(self.X[chrm == c], return_std=True)
+        # Predict with fitted kernel
+        k_mean, k_se = gp.predict(X, return_std=True)
 
-        return pd.DataFrame(
-            np.array([self.Y[chrm == c, 0], k_mean, k_se, self.Y[chrm == c, 0] - k_mean]).T,
-            index=chrm[chrm == c].index, columns=['original', 'mean', 'se', 'corrected']
-        )
+        # Calculate variance explained
+        kernels = [('RQ', gp.kernel_.k1), ('Noise', gp.kernel_.k2)]
 
-    def correct_position(self, chrm, chromosomes=None, length_scale=(1e-3, 10), alpha=(1e-3, 10), n_restarts_optimizer=3, normalize_y=True):
+        cov_var = pd.Series({n: (1 / covar_rescaling_factor_efficient(k.__call__(X))) for n, k in kernels}, name='Variance')
+        cov_var /= cov_var.sum()
+
+        # Build solution data-frame
+        res = pd.concat([X_original, Y.rename('original')], axis=1)
+        res = res.assign(mean=k_mean).assign(se=k_se).assign(chrm=c)
+        res = res.assign(corrected=res['original'] - res['mean'])
+        res = res.assign(var_rq=cov_var[kernels[0][0]]).assign(var_noise=cov_var[kernels[1][0]])
+
+        return res
+
+    def correct_position(self, chrm, chromosomes=None, length_scale=(1e-3, 10), alpha=(1e-3, 10), n_restarts_optimizer=3, normalize_y=True, scale_pos=1e9):
         chromosomes = set(chrm) if chromosomes is None else chromosomes
 
         with ThreadPool() as pool:
             res = pool.map(
-                partial(self._correct_position, chrm=chrm, length_scale=length_scale, alpha=alpha, n_restarts_optimizer=n_restarts_optimizer, normalize_y=normalize_y),
-                chromosomes
+                partial(
+                    self._correct_position,
+                    chrm=chrm,
+                    length_scale=length_scale,
+                    alpha=alpha,
+                    n_restarts_optimizer=n_restarts_optimizer,
+                    normalize_y=normalize_y,
+                    scale_pos=scale_pos
+                ), chromosomes
             )
 
         return pd.concat(res)

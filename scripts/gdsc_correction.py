@@ -16,8 +16,8 @@ fc_sgrna = pd.read_csv('data/gdsc/crispr/crispy_gdsc_fold_change_sgrna.csv', ind
 
 
 # - Biases correction method
-sample = 'AU565'
-# sample = sys.argv[1:]
+# sample = 'AU565'
+sample = sys.argv[1]
 
 df = pd.concat([fc_sgrna[sample].rename('logfc'), sgrna_lib], axis=1).dropna(subset=['logfc', 'GENES'])
 df = df.groupby('GENES').agg({
@@ -26,11 +26,10 @@ df = df.groupby('GENES').agg({
     'STARTpos': np.mean,
     'ENDpos': np.mean,
     'logfc': np.mean
-}).sort_values('CHRM')
+}).sort_values('CHRM').dropna()
 
 # Correction
-df_corrected = DataCorrection(df[['STARTpos']], df[['logfc']]).scale_positions().correct_position(df['CHRM'])
-
+df_corrected = DataCorrection(df[['STARTpos']], df[['logfc']]).correct_position(df['CHRM'])
 
 # - Export
-df_corrected.round(5).to_csv('data/crispy/crispy_gdsc_fold_change_gene_unsupervised_%s.csv' % sample)
+df_corrected.to_csv('data/crispy/crispy_gdsc_fold_change_gene_unsupervised_%s.csv' % sample)

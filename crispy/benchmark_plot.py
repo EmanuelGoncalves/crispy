@@ -95,3 +95,23 @@ def plot_cnv_rank(x, y, ax=None, stripplot=True):
     ax.set_ylabel('Ranked %s' % y.name)
 
     return ax, plot_stats
+
+
+def plot_chromosome(pos, original, corrected, se=None, ax=None):
+    # TODO: add extra plotting variables
+    if ax is None:
+        ax = plt.gca()
+
+    # Plot original values
+    ax.scatter(pos, original, s=2, marker='.', lw=0, c='#b1b1b1', alpha=.5)
+
+    # Plot corrected values
+    ax.scatter(pos, corrected, s=4, marker='.', lw=0, c='#F2C500', alpha=.9)
+    # ax.fill_between(plot_df['STARTpos'], plot_df['logfc_mean'] - plot_df['logfc_se'], plot_df['logfc_mean'] + plot_df['logfc_se'], alpha=0.2, cmap='viridis')
+
+    # Misc
+    ax.axhline(0, lw=.3, ls='-', color='black')
+
+    # Labels and dim
+    ax.set_ylabel('CHRM %s' % pos.name)
+    ax.set_xlim(0, pos.max())
