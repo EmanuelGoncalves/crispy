@@ -4,7 +4,7 @@
 import sys
 import numpy as np
 import pandas as pd
-from crispy.data_correction import DataCorrectionPosition
+from crispy.data_correction import DataCorrectionCopyNumber
 
 
 # - Imports
@@ -13,6 +13,11 @@ sgrna_lib = pd.read_csv('data/gdsc/crispr/KY_Library_v1.1_annotated.csv', index_
 
 # CRISPR fold-changes
 fc_sgrna = pd.read_csv('data/gdsc/crispr/crispy_gdsc_fold_change_sgrna.csv', index_col=0)
+
+# Copy-number absolute counts
+cnv = pd.read_csv('data/gdsc/copynumber/Gene_level_CN.txt', sep='\t', index_col=0)
+cnv = cnv.loc[:, cnv.columns.isin(list(fc_sgrna))]
+cnv_abs = cnv.applymap(lambda v: int(v.split(',')[0]))
 
 
 # - Biases correction method
@@ -26,10 +31,10 @@ df = df.groupby('GENES').agg({
     'STARTpos': np.mean,
     'ENDpos': np.mean,
     'logfc': np.mean
-}).sort_values('CHRM').dropna()
+}).sort_values('CHRM')
+df = pd.concat([df, cnv_abs[sample].rename('cnv')], axis=1).dropna()
 
 # Correction
-df_corrected = DataCorrectionPosition(df[['STARTpos']], df[['logfc']]).correct(df['CHRM'])
-
-# - Export
-df_corrected.to_csv('data/crispy/crispy_gdsc_fold_change_gene_unsupervised_%s.csv' % sample)
+for metric in ['rbf', 'linear']:
+    df_corrected = DataCorrectionCopyNumber(df[['cnv']], df[['logfc']]).correct(df['CHRM'], metric=metric)
+    df_corrected.to_csv('data/crispy/crispy_gdsc_fold_change_gene_cnv_%s_%s.csv' % (metric, sample))

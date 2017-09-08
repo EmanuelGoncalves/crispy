@@ -97,8 +97,9 @@ def plot_cnv_rank(x, y, ax=None, stripplot=True):
     return ax, plot_stats
 
 
-def plot_chromosome(pos, original, corrected, se=None, ax=None):
+def plot_chromosome(pos, original, mean, se=None, ax=None):
     # TODO: add extra plotting variables
+
     if ax is None:
         ax = plt.gca()
 
@@ -106,8 +107,10 @@ def plot_chromosome(pos, original, corrected, se=None, ax=None):
     ax.scatter(pos, original, s=2, marker='.', lw=0, c='#b1b1b1', alpha=.5)
 
     # Plot corrected values
-    ax.scatter(pos, corrected, s=4, marker='.', lw=0, c='#F2C500', alpha=.9)
-    # ax.fill_between(plot_df['STARTpos'], plot_df['logfc_mean'] - plot_df['logfc_se'], plot_df['logfc_mean'] + plot_df['logfc_se'], alpha=0.2, cmap='viridis')
+    ax.scatter(pos, mean, s=4, marker='.', lw=0, c='#F2C500', alpha=.9)
+
+    if se is not None:
+        ax.fill_between(pos, mean - se, mean + se, c='#F2C500', alpha=0.2)
 
     # Misc
     ax.axhline(0, lw=.3, ls='-', color='black')

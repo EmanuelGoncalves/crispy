@@ -12,10 +12,10 @@ memory, queque, cores = 32000, 'normal', 16
 
 # Submit a single job per sample
 for sample in samples:
-    jname = 'bsub_crispy_%s' % sample
+    jname = 'bsub_crispy_cnv_%s' % sample
 
     # Define command
-    j_cmd = '/software/bin/python3.6.1 scripts/gdsc_correction.py %s' % sample
+    j_cmd = '/software/bin/python3.6.1 scripts/gdsc_correction_cnv.py %s' % sample
 
     # Create bsub
     j = bsub(
