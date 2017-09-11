@@ -62,7 +62,7 @@ def plot_cumsum_auc(X, index_set, ax=None, cmap='viridis', legend=True):
     return ax, plot_stats
 
 
-def plot_cnv_rank(x, y, ax=None, stripplot=True):
+def plot_cnv_rank(x, y, ax=None, stripplot=True, hline=0.5, order=None):
     """
     Plot copy-number versus ranked y values.
 
@@ -84,12 +84,12 @@ def plot_cnv_rank(x, y, ax=None, stripplot=True):
 
     y_ranked = pd.Series(st.rankdata(y) / y.shape[0], index=y.index).loc[x.index]
 
-    sns.boxplot(x, y_ranked, ax=ax, **boxplot_args)
+    sns.boxplot(x, y_ranked, ax=ax, order=order if order is not None else None, **boxplot_args)
 
     if stripplot:
-        sns.stripplot(x, y_ranked, ax=ax, **stripplot_args)
+        sns.stripplot(x, y_ranked, ax=ax, order=order if order is not None else None, **stripplot_args)
 
-    ax.axhline(.5, lw=.1, c='black', alpha=.5)
+    ax.axhline(hline, lw=.1, c='black', alpha=.5)
 
     ax.set_xlabel('Copy-number (absolute)')
     ax.set_ylabel('Ranked %s' % y.name)
@@ -97,7 +97,7 @@ def plot_cnv_rank(x, y, ax=None, stripplot=True):
     return ax, plot_stats
 
 
-def plot_chromosome(pos, original, mean, se=None, ax=None):
+def plot_chromosome(pos, original, mean, se=None, seg=None, ax=None):
     # TODO: add extra plotting variables
 
     if ax is None:
@@ -111,6 +111,11 @@ def plot_chromosome(pos, original, mean, se=None, ax=None):
 
     if se is not None:
         ax.fill_between(pos, mean - se, mean + se, c='#F2C500', alpha=0.2)
+
+    # Plot segments
+    if seg is not None:
+        for s, e, c in seg[['startpos', 'endpos', 'totalCN']].values:
+            ax.plot([s, e], [c, c], lw=.3, c='#3498db', alpha=.9)
 
     # Misc
     ax.axhline(0, lw=.3, ls='-', color='black')

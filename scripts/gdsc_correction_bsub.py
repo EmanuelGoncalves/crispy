@@ -12,6 +12,7 @@ memory, queque, cores = 32000, 'normal', 16
 
 # Submit a single job per sample
 for sample in samples:
+# for sample in ['C2BBe1', 'LoVo', 'MIA-PaCa-2', 'NCI-H3122']:
     jname = 'bsub_crispy_%s' % sample
 
     # Define command

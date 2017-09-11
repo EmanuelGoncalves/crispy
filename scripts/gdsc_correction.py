@@ -16,8 +16,8 @@ fc_sgrna = pd.read_csv('data/gdsc/crispr/crispy_gdsc_fold_change_sgrna.csv', ind
 
 
 # - Biases correction method
-# sample = 'AU565'
-sample = sys.argv[1]
+sample = 'LoVo'
+# sample = sys.argv[1]
 
 df = pd.concat([fc_sgrna[sample].rename('logfc'), sgrna_lib], axis=1).dropna(subset=['logfc', 'GENES'])
 df = df.groupby('GENES').agg({
