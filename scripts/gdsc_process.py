@@ -49,6 +49,9 @@ for c_sample in set(ss['sample']):
     # Build counts data-frame (discard sgRNAs with problems)
     c_counts = DataMatrix(c_counts).drop('sgPOLR2K_1', errors='ignore')
 
+    # Filter by minimum required control counts
+    c_counts = c_counts[c_counts[[c for c in c_counts if c in controls][0]] >= 30]
+
     # Build contrast matrix
     design = pd.DataFrame({manifest[c_sample]: {c: -1 if c in controls else 1 / (c_counts.shape[1] - 1) for c in c_counts}})
 
@@ -65,16 +68,3 @@ print(fold_changes.shape)
 # - Export
 # sgRNA level
 fold_changes.round(5).to_csv('data/gdsc/crispr/crispy_gdsc_fold_change_sgrna.csv')
-
-# Gene level (mean)
-fold_changes_genes = fold_changes.dropna().loc[sgrna_lib.index].groupby(sgrna_lib['GENES']).mean()
-fold_changes_genes.round(5).to_csv('data/gdsc/crispr/crispy_gdsc_fold_change_gene.csv')
-
-
-# - Benchmark
-# Essential genes AROC
-ax, ax_stats = plot_cumsum_auc(fold_changes_genes, essential, legend=False)
-plt.title('Crispy GDSC gene-level fold-change')
-plt.gcf().set_size_inches(3, 3)
-plt.savefig('reports/crispy_gdsc_essential_aroc.png', bbox_inches='tight', dpi=600)
-plt.close('all')

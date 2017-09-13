@@ -80,7 +80,7 @@ def plot_cnv_rank(x, y, ax=None, stripplot=True, hline=0.5, order=None):
     plot_stats = {}
 
     boxplot_args = {'linewidth': .3, 'notch': True, 'fliersize': 1, 'orient': 'v', 'palette': 'viridis', 'sym': '' if stripplot else '.'}
-    stripplot_args = {'orient': 'v', 'palette': 'viridis', 'size': 0.5, 'linewidth': .05, 'edgecolor': 'white', 'jitter': .15, 'alpha': .75}
+    stripplot_args = {'orient': 'v', 'palette': 'viridis', 'size': 1.5, 'linewidth': .05, 'edgecolor': 'white', 'jitter': .15, 'alpha': .75}
 
     y_ranked = pd.Series(st.rankdata(y) / y.shape[0], index=y.index).loc[x.index]
 
@@ -97,29 +97,50 @@ def plot_cnv_rank(x, y, ax=None, stripplot=True, hline=0.5, order=None):
     return ax, plot_stats
 
 
-def plot_chromosome(pos, original, mean, se=None, seg=None, ax=None):
+def plot_chromosome(pos, original, mean, se=None, seg=None, highlight=None, ax=None, legend=False, cytobands=None):
     # TODO: add extra plotting variables
 
     if ax is None:
         ax = plt.gca()
 
     # Plot original values
-    ax.scatter(pos, original, s=2, marker='.', lw=0, c='#b1b1b1', alpha=.5)
+    ax.scatter(pos, original, s=2, marker='.', lw=0, c='#37454B', alpha=.5, label=original.name)
 
     # Plot corrected values
-    ax.scatter(pos, mean, s=4, marker='.', lw=0, c='#F2C500', alpha=.9)
+    ax.scatter(pos, mean, s=4, marker='.', lw=0, c='#F2C500', alpha=.9, label=mean.name)
 
     if se is not None:
         ax.fill_between(pos, mean - se, mean + se, c='#F2C500', alpha=0.2)
 
     # Plot segments
     if seg is not None:
-        for s, e, c in seg[['startpos', 'endpos', 'totalCN']].values:
-            ax.plot([s, e], [c, c], lw=.3, c='#3498db', alpha=.9)
+        for i, (s, e, c) in enumerate(seg[['startpos', 'endpos', 'totalCN']].values):
+            ax.plot([s, e], [c, c], lw=.3, c='#37454B', alpha=.9, label='totalCN' if i == 0 else None)
 
+    # Highlight
+    if highlight is not None:
+        for i in highlight:
+            if i in pos.index:
+                ax.scatter(pos.loc[i], original.loc[i], s=3, marker='X', lw=0, c='#ff4500', alpha=.5, label=i)
     # Misc
     ax.axhline(0, lw=.3, ls='-', color='black')
 
+    # Cytobads
+    if cytobands is not None:
+        for i, (s, e, t) in enumerate(cytobands[['start', 'end', 'band']].values):
+            if t == 'acen':
+                ax.axvline(s, lw=.2, ls='-', color='#37454B', alpha=.1)
+                ax.axvline(e, lw=.2, ls='-', color='#37454B', alpha=.1)
+
+            elif not i % 2:
+                ax.axvspan(s, e, alpha=0.1, facecolor='#37454B')
+
+    # Legend
+    if legend:
+        ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+
     # Labels and dim
-    ax.set_ylabel('CHRM %s' % pos.name)
+    ax.set_xlabel('Chromosome position')
+    ax.set_ylabel('Fold-change')
+
     ax.set_xlim(0, pos.max())

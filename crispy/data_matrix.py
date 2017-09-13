@@ -7,6 +7,7 @@ Copyright (C) 2017 Emanuel Goncalves
 import numpy as np
 import scipy.stats as st
 from pandas import DataFrame, Series
+from scipy_sugar.stats import quantile_gaussianize
 
 
 class DataMatrix(DataFrame):
@@ -79,3 +80,11 @@ class DataMatrix(DataFrame):
         :return DataMatrix:
         """
         return DataMatrix(st.zscore(self), index=self.index, columns=self.columns)
+
+    def quantile_normalize(self):
+        """
+        Quantile normalises by column
+
+        :return DataMatrix:
+        """
+        return DataMatrix({c: quantile_gaussianize(self[c].values) for c in self}, index=self.index)
