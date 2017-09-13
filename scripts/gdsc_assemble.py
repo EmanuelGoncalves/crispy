@@ -3,10 +3,12 @@
 
 import os
 import pickle
+import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
+from sklearn.metrics import roc_curve, auc
 from crispy.benchmark_plot import plot_cumsum_auc, plot_chromosome, plot_cnv_rank
 
 
@@ -43,6 +45,14 @@ crispr_seg = pd.read_csv('data/gdsc/crispr/segments_cbs_deseq2.csv')
 
 # ccleanr
 ccleanr = pd.read_csv('data/gdsc/crispr/all_GLCFC.csv', index_col=0)
+
+
+# - Imports CCLE
+# Project DRIVE
+cmap = pd.read_csv('data/ccle/CCLE_GDSC_cellLineMappoing.csv', index_col=2)
+d_drive_rsa = pd.read_csv('data/ccle/DRIVE_RSA_data.txt', sep='\t')
+d_drive_rsa.columns = [c.upper() for c in d_drive_rsa]
+print('Project DRIVE: ', d_drive_rsa.shape)
 
 
 # - Crispy corrected fold-changes
@@ -148,3 +158,47 @@ plt.gcf().set_size_inches(3, 1.5)
 plt.savefig('reports/gdsc_chromossome_plot_%s_%s.png' % (s, c), bbox_inches='tight', dpi=600)
 plt.close('all')
 
+
+# - Gene essential DRIVE AROC
+samples = set([idx for idx, val in cmap['GDSC1000 name'].iteritems() if val in ccleanr.columns]).intersection(d_drive_rsa)
+genes = set(crispy_corrected.index).intersection(d_drive_rsa.index)
+print('Overlap: ', len(genes), len(samples))
+
+plot_df = pd.DataFrame({
+    'CRISPR': crispy_corrected.loc[genes, cmap.loc[samples, 'GDSC1000 name']].unstack(),
+    'shRNA': d_drive_rsa.loc[genes, samples].rename(columns=cmap.loc[samples, 'GDSC1000 name'].to_dict()).unstack()
+}).dropna()
+plot_df['shRNA_int'] = [round(i, 0) for i in plot_df['shRNA']]
+plot_df['shRNA_int'] = plot_df['shRNA_int'].clip(-6, 0).astype(int)
+
+# Plot
+f, axs = plt.subplots(1, 2)
+
+# AROCs
+ax = axs[0]
+
+thresholds = np.arange(-6, 0)
+for c, thres in zip(sns.color_palette('Reds_r', len(thresholds)), thresholds):
+    fpr, tpr, _ = roc_curve((plot_df['shRNA'] < thres).astype(int), -plot_df['CRISPR'])
+    ax.plot(fpr, tpr, label='<%d = %.2f (AUC)' % (thres, auc(fpr, tpr)), lw=1., c=c)
+
+ax.plot((0, 1), (0, 1), 'k--', lw=.3, alpha=.5)
+ax.set_xlim(0, 1)
+ax.set_ylim(0, 1)
+ax.set_xlabel('False positive rate')
+ax.set_ylabel('True positive rate')
+ax.set_title('Classify shRNA with CRISPR')
+ax.legend(loc=4, title='DRIVE')
+
+# Boxplots
+ax = axs[1]
+
+sns.boxplot('shRNA_int', 'CRISPR', data=plot_df, fliersize=1, palette='Reds_r', notch=True, linewidth=.5)
+ax.axhline(0, ls='--', lw=.3, alpha=.5, c='black')
+ax.set_xlabel('Rounded and capped shRNA RSA')
+ax.set_ylabel('Crispy log2FC')
+ax.set_title('CRISPR fold-change distributions')
+
+plt.gcf().set_size_inches(7, 3)
+plt.savefig('reports/gdsc_shrna_validation.png', bbox_inches='tight', dpi=600)
+plt.close('all')
