@@ -47,7 +47,13 @@ for c_sample in set(ss['sample']):
         c_counts.update(df)
 
     # Build counts data-frame (discard sgRNAs with problems)
-    c_counts = DataMatrix(c_counts).drop('sgPOLR2K_1', errors='ignore')
+    qc_failed_sgrnas = [
+        'DHRSX_CCDS35195.1_ex1_X:2161152-2161175:+_3-1',
+        'DHRSX_CCDS35195.1_ex6_Y:2368915-2368938:+_3-3',
+        'DHRSX_CCDS35195.1_ex4_X:2326777-2326800:+_3-2',
+        'sgPOLR2K_1'
+    ]
+    c_counts = DataMatrix(c_counts).drop(qc_failed_sgrnas, errors='ignore')
 
     # Filter by minimum required control counts
     c_counts = c_counts[c_counts[[c for c in c_counts if c in controls][0]] >= 30]

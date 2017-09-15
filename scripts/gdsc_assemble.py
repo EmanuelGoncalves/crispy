@@ -57,8 +57,8 @@ print('Project DRIVE: ', d_drive_rsa.shape)
 
 
 # - Crispy corrected fold-changes
-crispy_files = [f for f in os.listdir('data/crispy/') if f.startswith('crispy_gdsc_fold_change_gene_unsupervised_')]
-fc_crispy = {os.path.splitext(f)[0].split('_')[6]: pd.read_csv('data/crispy/%s' % f, index_col=0) for f in crispy_files}
+crispy_files = [f for f in os.listdir('data/crispy/') if f.startswith('crispy_gdsc_')]
+fc_crispy = {f.split('_')[2]: pd.read_csv('data/crispy/%s' % f, index_col=) for f in crispy_files if f.endswith('_gene.csv')}
 
 crispy_original = pd.DataFrame({i: fc_crispy[i]['original'] for i in fc_crispy})
 crispy_corrected = pd.DataFrame({i: fc_crispy[i]['corrected'] for i in fc_crispy})

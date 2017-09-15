@@ -11,8 +11,10 @@ import numpy as np
 import pandas as pd
 from sklearn import clone
 from functools import partial
+from limix.stats import qvalues
+from limix.qtl import qtl_test_lm
 from datetime import datetime as dt
-from multiprocessing.pool import ThreadPool
+from concurrent.futures import ThreadPoolExecutor
 from sklearn.gaussian_process import GaussianProcessRegressor
 from limix_core.util.preprocess import covar_rescaling_factor_efficient
 from sklearn.gaussian_process.kernels import WhiteKernel, ConstantKernel, RationalQuadratic
@@ -52,6 +54,35 @@ class CRISPRCorrection(GaussianProcessRegressor):
     def scale_x(X, factor=1e6):
         return X / factor
 
+    @staticmethod
+    def logratio_by(by, x, Y):
+        res = []
+
+        for value in set(by):
+            by_index = list(by[by == value].index)
+
+            X = pd.get_dummies(x.loc[by_index]).astype(float)
+
+            lm = qtl_test_lm(pheno=Y.loc[by_index].values, snps=X.values)
+
+            lm_res = pd.DataFrame(
+                np.concatenate([lm.getBetaSNP().T, lm.getPv().T], axis=1),
+                index=X.columns,
+                columns=['%s_%s' % (c, f) for f in ['beta', 'pvalue'] for c in Y]
+            )
+
+            lm_res[by.name] = value
+
+            res.append(lm_res)
+
+        res = pd.concat(res)
+
+        for f in res:
+            if f.endswith('_pvalue'):
+                res[f.replace('_pvalue', '_qvalue')] = qvalues(res[f])
+
+        return res
+
     def rename(self, name=''):
         self.name = name
         return self
@@ -86,20 +117,17 @@ class CRISPRCorrection(GaussianProcessRegressor):
             X = pd.DataFrame(self.X_train_, index=self.index, columns=self.x_columns)
             y = pd.Series(self.y_train_, index=self.index, name=self.y_name)
 
-        gp_mean, gp_std = self.predict(X)
-
         res = pd.concat([X, y], axis=1)\
-            .assign(k_mean=gp_mean)\
-            .assign(k_std=gp_std)\
+            .assign(k_mean=self.predict(X, return_std=False) - self.y_train_mean)\
             .assign(fit_by=self.fit_by_value) \
             .assign(mean=self.y_train_mean)
-        res = res.assign(regressed_out=res[self.y_name] - res['k_mean'])
+        res = res.assign(regressed_out=res[self.y_name] - res['k_mean'] + res['mean'])
 
         return res
 
     def fit_by(self, by, X, y):
         values = set(by)
-        with ThreadPool() as pool:
+        with ThreadPoolExecutor() as pool:
             res = pool.map(partial(self._fit_by, by=by, X=X, y=y), values)
         return dict(zip(*(values, res)))
 
@@ -117,4 +145,3 @@ class CRISPRCorrection(GaussianProcessRegressor):
         estimator.y_name = y.name
 
         return estimator.fit(X.loc[by_index], y.loc[by_index])
-
