@@ -8,6 +8,8 @@ import scipy.stats as st
 import matplotlib.pyplot as plt
 from sklearn.metrics.ranking import auc
 
+# TODO: Add documentation
+
 
 def plot_cumsum_auc(X, index_set, ax=None, cmap='viridis', legend=True):
     """
@@ -98,8 +100,6 @@ def plot_cnv_rank(x, y, ax=None, stripplot=True, hline=0.5, order=None):
 
 
 def plot_chromosome(pos, original, mean, se=None, seg=None, highlight=None, ax=None, legend=False, cytobands=None):
-    # TODO: add extra plotting variables
-
     if ax is None:
         ax = plt.gca()
 

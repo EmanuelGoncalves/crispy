@@ -7,7 +7,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 from sklearn.metrics import r2_score
 from matplotlib.gridspec import GridSpec
-from crispy.data_correction import DataCorrectionPosition
+from crispy.biases_correction import CRISPRCorrection
 from sklearn.model_selection import StratifiedShuffleSplit
 
 
@@ -44,7 +44,7 @@ for alpha_lb in [1e-7, 1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1, 10]:
             print()
 
             # Correction
-            gp = DataCorrectionPosition(
+            gp = CRISPRCorrection(
                 X=df.iloc[idx_train][['STARTpos']], Y=df.iloc[idx_train][['logfc']],
                 X_test=df.iloc[idx_test][['STARTpos']], Y_test=df.iloc[idx_test][['logfc']], chrm_test=df.iloc[idx_test]['CHRM']
             )

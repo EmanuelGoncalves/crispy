@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
+from natsort import natsorted
 from matplotlib.gridspec import GridSpec
 from sklearn.metrics import roc_curve, auc
 from crispy.benchmark_plot import plot_cumsum_auc, plot_chromosome, plot_cnv_rank
@@ -87,11 +88,20 @@ gs = GridSpec(1, 2, hspace=.6, wspace=.6)
 for i, (x, y, xn, yn) in enumerate([(x1, y, 'Original FC', 'Crispy FC'), (x2, y, 'CCleanR FC', 'Crispy FC')]):
     ax = plt.subplot(gs[i])
 
-    ax.scatter(x, y, c='#F2C500', s=3, marker='x', lw=0.5)
-    sns.rugplot(x, height=.02, axis='x', c='#F2C500', lw=.3, ax=ax)
-    sns.rugplot(y, height=.02, axis='y', c='#F2C500', lw=.3, ax=ax)
+    ax.scatter(x, y, c='#37454B', s=3, marker='.', lw=0.5)
+    sns.rugplot(x, height=.02, axis='x', c='#37454B', lw=.3, ax=ax)
+    sns.rugplot(y, height=.02, axis='y', c='#37454B', lw=.3, ax=ax)
 
-plt.suptitle('Essential genes AROC')
+    xlim, ylim = 0.82, 0.9
+    ax.plot([xlim, ylim], [xlim, ylim], ls='-', lw=.2, alpha=.8, c='#37454B')
+
+    ax.set_xlim((xlim, ylim))
+    ax.set_ylim((xlim, ylim))
+
+    ax.set_xlabel(xn)
+    ax.set_ylabel(yn)
+
+plt.suptitle('Essential genes AROC', y=1.05, fontsize=8)
 plt.gcf().set_size_inches(4, 1.5)
 plt.savefig('reports/gdsc_essential_arocs.png', bbox_inches='tight', dpi=600)
 plt.close('all')
@@ -138,9 +148,9 @@ plt.close('all')
 
 
 # - Chromossome plot
-s, c = 'AU565', '17'
+s, c = 'AU565', '8'
 
-ghighlight = {'ERBB2'}
+ghighlight = None
 
 plot_df = fc_crispy[s].query("chrm == '%s'" % c)
 plot_df = plot_df.assign(STARTpos=sgrna_lib.groupby('GENES')['STARTpos'].mean())
@@ -201,4 +211,24 @@ ax.set_title('CRISPR fold-change distributions')
 
 plt.gcf().set_size_inches(7, 3)
 plt.savefig('reports/gdsc_shrna_validation.png', bbox_inches='tight', dpi=600)
+plt.close('all')
+
+
+# -
+plot_df = pd.DataFrame({i: fc_crispy[i].groupby('chrm')['var_rq'].first() for i in fc_crispy}).round(2).unstack().rename('var').to_frame()
+plot_df = plot_df.assign(tcga=list(ss.loc[plot_df.index.get_level_values(0), 'TCGA'])).dropna().reset_index().rename(columns={'level_0': 'sample'})
+
+s_counts = plot_df.groupby(['tcga'])['sample'].agg(lambda x: len(set(x)))
+
+# t_type = set(s_counts[s_counts > 3].index)
+t_type = {'BRCA'}
+plot_df = plot_df[plot_df['tcga'].isin(t_type)]
+
+g = sns.pointplot(
+    'chrm', 'var', 'tcga', plot_df,
+    palette='Set3', ci=None, estimator=np.mean, order=natsorted(set(plot_df['chrm'])), hue_order=set(plot_df['tcga'])
+)
+
+plt.legend(loc='center left', bbox_to_anchor=(1., 0.5))
+plt.savefig('reports/gdsc_chr_var.png', bbox_inches='tight', dpi=600)
 plt.close('all')
