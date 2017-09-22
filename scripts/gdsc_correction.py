@@ -34,7 +34,7 @@ df_gene = df.groupby('GENES').agg({'logfc': np.mean, 'cnv': np.mean, 'CHRM': 'fi
 
 crispy = CRISPRCorrection().rename(sample).fit_by(by=df_gene['CHRM'], X=df_gene[['cnv']], y=df_gene['logfc'])
 df_corrected = pd.concat([
-    v.to_dataframe(df.query("CHRM == '%s'" % k)[['cnv']], df.query("CHRM == '%s'" % k)['logfc']) for k, v in crispy.items()
+    v.to_dataframe(df.query("CHRM == '%s'" % k)[['cnv']], df.query("CHRM == '%s'" % k)['logfc'], return_var_exp=True) for k, v in crispy.items()
 ])
 df_corrected = df_corrected.assign(GENES=sgrna_lib.loc[df_corrected.index, 'GENES']).assign(sample=sample)
 df_corrected.to_csv('data/crispy/crispy_gdsc_%s_sgrna.csv' % sample)

@@ -5,8 +5,6 @@ of CRISPR dropout effects.
 Copyright (C) 2017 Emanuel Goncalves
 """
 
-# TODO: Finalise docs
-
 import numpy as np
 import pandas as pd
 from sklearn import clone
@@ -112,7 +110,7 @@ class CRISPRCorrection(GaussianProcessRegressor):
 
         return cov_var
 
-    def to_dataframe(self, X=None, y=None):
+    def to_dataframe(self, X=None, y=None, return_var_exp=False):
         if X is None or y is None:
             X = pd.DataFrame(self.X_train_, index=self.index, columns=self.x_columns)
             y = pd.Series(self.y_train_, index=self.index, name=self.y_name)
@@ -122,6 +120,11 @@ class CRISPRCorrection(GaussianProcessRegressor):
             .assign(fit_by=self.fit_by_value) \
             .assign(mean=self.y_train_mean)
         res = res.assign(regressed_out=res[self.y_name] - res['k_mean'] + res['mean'])
+
+        if return_var_exp:
+            res_var_exp = self.var_explained(self.X_train_)
+            for k in res_var_exp.index:
+                res['var_exp_%s' % k] = res_var_exp[k]
 
         return res
 

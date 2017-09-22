@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
 from natsort import natsorted
 from matplotlib.gridspec import GridSpec
 from sklearn.metrics import roc_curve, auc
@@ -47,6 +48,8 @@ crispr_seg = pd.read_csv('data/gdsc/crispr/segments_cbs_deseq2.csv')
 # ccleanr
 ccleanr = pd.read_csv('data/gdsc/crispr/all_GLCFC.csv', index_col=0)
 
+# Ploidy
+ploidy = pd.read_csv('data/gdsc/ploidy.csv', index_col=0).drop(['ACF'], axis=1)
 
 # - Imports CCLE
 # Project DRIVE
@@ -58,10 +61,59 @@ print('Project DRIVE: ', d_drive_rsa.shape)
 
 # - Crispy corrected fold-changes
 crispy_files = [f for f in os.listdir('data/crispy/') if f.startswith('crispy_gdsc_')]
-fc_crispy = {f.split('_')[2]: pd.read_csv('data/crispy/%s' % f, index_col=) for f in crispy_files if f.endswith('_gene.csv')}
 
-crispy_original = pd.DataFrame({i: fc_crispy[i]['original'] for i in fc_crispy})
-crispy_corrected = pd.DataFrame({i: fc_crispy[i]['corrected'] for i in fc_crispy})
+fc_crispy = {f.split('_')[2]: pd.read_csv('data/crispy/%s' % f, index_col=0) for f in crispy_files if f.endswith('_gene.csv')}
+
+crispy_original = pd.DataFrame({i: fc_crispy[i]['logfc_beta'] for i in fc_crispy})
+crispy_corrected = pd.DataFrame({i: fc_crispy[i]['regressed_out_beta'] for i in fc_crispy})
+
+# sgrna level
+fc_crispy_sgrna = {f.split('_')[2]: pd.read_csv('data/crispy/%s' % f, index_col=0) for f in crispy_files if f.endswith('_sgrna.csv')}
+
+
+# - Copy-number effect variation
+plot_df = pd.concat([fc_crispy_sgrna[i].groupby('GENES')[['k_mean', 'cnv']].first().assign(sample=i).reset_index() for i in fc_crispy_sgrna]).query('cnv != -1')
+plot_df = plot_df.assign(Diploidy=list(plot_df.groupby('sample')['cnv'].median().loc[plot_df['sample']]))
+
+order = natsorted(set(plot_df['cnv']))
+hue_order = natsorted(set(plot_df['Diploidy']))
+
+sns.pointplot(
+    x='k_mean', y='cnv', hue='Diploidy', data=plot_df, orient='h',
+    ci='sd', order=order, hue_order=hue_order, palette='Reds_r',
+    errwidth=1., capsize=.1, scale=.5
+)
+plt.xlabel('CRISPR/Cas9 fold-change bias (mean)')
+plt.ylabel('Copy-number variation')
+plt.gcf().set_size_inches(2, 3)
+plt.savefig('reports/cnv_effects.png', bbox_inches='tight', dpi=600)
+plt.close('all')
+
+
+# - Essential genes polar
+plot_df = {}
+for i in fc_crispy:
+    plot_df[i] = round((fc_crispy[i].drop(essential, errors='ignore').query('regressed_out_qvalue < 0.05').count()['sample'] / fc_crispy[i].shape[0]) * 100, 1)
+plot_df = pd.Series(plot_df, name='Count')
+plot_df = pd.concat([plot_df, ss.loc[plot_df.index]], axis=1).dropna(subset=['TCGA']).sort_values(['TCGA', 'Count'])
+
+pal = pd.Series(dict(zip(*(set(plot_df['TCGA']), sns.color_palette('Set1', len(set(plot_df['TCGA']))).as_hex()))))
+
+ax = plt.subplot(111, projection='polar')
+
+angles = np.deg2rad(np.arange(90, 90 + 360, 360.0 / plot_df.shape[0]))
+ax.scatter(angles, plot_df['Count'], c=pal.loc[plot_df['TCGA']])
+
+ax.set_ylim(0, 7)
+ax.xaxis.set_visible(False)
+ax.set_rgrids(range(1, 8), labels=['%d%%' % i for i in range(1, 8)], angle=90)
+
+handles = [mpatches.Circle([.0, .0], .25, facecolor=c, label=t) for t, c in pal.items()]
+ax.legend(handles=handles, title='Tissue', loc='center left', bbox_to_anchor=(1.05, 0.5))
+
+plt.title('Percentage of essential genes')
+plt.savefig('reports/essential_genes_radial.png', bbox_inches='tight', dpi=600)
+plt.close('all')
 
 
 # - Essential genes AROCs
