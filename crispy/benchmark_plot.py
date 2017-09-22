@@ -11,7 +11,7 @@ from sklearn.metrics.ranking import auc
 # TODO: Add documentation
 
 
-def plot_cumsum_auc(X, index_set, ax=None, cmap='viridis', legend=True):
+def plot_cumsum_auc(X, index_set, ax=None, cmap='viridis', legend=True, plot_mean=False):
     """
     Plot cumulative sum of values X considering index_set list.
 
@@ -47,19 +47,34 @@ def plot_cumsum_auc(X, index_set, ax=None, cmap='viridis', legend=True):
         plot_stats['auc'][f] = f_auc
 
         # Plot
-        ax.plot(x, y, label='%s: %.2f' % (f, f_auc), lw=1., c=c)
+        ax.plot(x, y, label='%s: %.2f' % (f, f_auc) if (legend is True) or (f in legend) else None, lw=.5, c=c)
 
-        # Random
-        ax.plot((0, 1), (0, 1), 'k--', lw=.3, alpha=.5)
+    # Mean
+    if plot_mean is True:
+        x = X.mean(1).sort_values().dropna()
 
+        y = x.index.isin(index_set)
+        y = np.cumsum(y) / sum(y)
+
+        x = st.rankdata(x) / x.shape[0]
+
+        f_auc = auc(x, y)
+        plot_stats['auc']['mean'] = f_auc
+
+        ax.plot(x, y, label='Mean: %.2f' % f_auc, ls='--', c='#de2d26', lw=1.5, alpha=.8)
+
+    # Random
+    ax.plot((0, 1), (0, 1), 'k--', lw=.3, alpha=.5)
+
+    # Limits
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
 
+    # Labels
     ax.set_xlabel('Ranked')
     ax.set_ylabel('Cumulative sum %s' % index_set.name)
 
-    if legend:
-        ax.legend(loc=4)
+    ax.legend(loc=4)
 
     return ax, plot_stats
 
