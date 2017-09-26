@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # Copyright (C) 2017 Emanuel Goncalves
 
+import pickle
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -8,10 +9,14 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import matplotlib.lines as mlines
 from natsort import natsorted
-from scipy.stats import pearsonr
+from scipy.spatial.distance import cdist
 from matplotlib.gridspec import GridSpec
-from sklearn.decomposition.pca import PCA
+from sklearn.metrics.cluster import silhouette_score, silhouette_samples
+from tslearn.metrics import cdist_soft_dtw, cdist_dtw
+from tslearn.utils import to_time_series_dataset
 from crispy.data_matrix import DataMatrix
+from sklearn.decomposition.pca import PCA
+from tslearn.clustering import TimeSeriesKMeans
 from crispy.biases_correction import CRISPRCorrection
 from crispy.benchmark_plot import plot_cumsum_auc, plot_chromosome, plot_cnv_rank
 
@@ -23,13 +28,17 @@ sgrna_lib = pd.read_csv('data/gdsc/crispr/KY_Library_v1.1_annotated.csv', index_
 # Essential genes
 essential = pd.read_csv('data/resources/curated_BAGEL_essential.csv', sep='\t')['gene'].rename('essential genes')
 
+# Non-expressed genes
+nexp = pickle.load(open('data/gdsc/gene_expression/non_expressed_genes.pickle', 'rb'))
+
 # samplesheet
 control = 'Plasmid_v1.1'
-samplesheet = pd.read_csv('data/gdsc/crispr_drug/HT29_Dabraf_samplesheet.csv', index_col='sample').replace(np.nan, 'Initial')
+samplesheet = pd.read_csv('data/gdsc/crispr_drug/HT29_Dabraf_samplesheet.csv', index_col='sample')
+samplesheet = samplesheet.assign(id=samplesheet['medium'] + '_' + samplesheet['time'])
 
-# Copy-number absolute counts
-cnv = pd.read_csv('data/gdsc/copynumber/Gene_level_CN.txt', sep='\t', index_col=0)[['HT-29']]
-cnv_abs = cnv.applymap(lambda v: int(v.split(',')[0]))
+# # Copy-number absolute counts
+# cnv = pd.read_csv('data/gdsc/copynumber/Gene_level_CN.txt', sep='\t', index_col=0)[['HT-29']]
+# cnv_abs = cnv.applymap(lambda v: int(v.split(',')[0]))
 
 
 # - Calculate fold-changes
@@ -59,16 +68,17 @@ fold_changes = raw_counts.add_constant(1).counts_normalisation().log_transform()
 
 # Export
 fold_changes.to_csv('data/gdsc/crispr_drug/HT29_dabraf_foldchanges.csv')
+
+fold_changes_gene = fold_changes.groupby(sgrna_lib.loc[fold_changes.index, 'GENES']).mean()
+fold_changes_gene.to_csv('data/gdsc/crispr_drug/HT29_dabraf_foldchanges_gene.csv')
 print(fold_changes.shape)
 
-
+# fold_changes_gene = pd.read_csv('data/gdsc/crispr_drug/HT29_dabraf_foldchanges_gene.csv', index_col=0)
 # - Plot
 cmaps = {
     f: dict(zip(*(natsorted(set(samplesheet[f])), sns.color_palette(c, len(set(samplesheet[f]))).as_hex())))
     for f, c in [('replicate', 'Greys'), ('medium', 'Blues'), ('time', 'Reds')]
 }
-
-fold_changes_gene = fold_changes.groupby(sgrna_lib.loc[fold_changes.index, 'GENES']).mean()
 
 # Essential genes AROCs
 ax, ax_stats = plot_cumsum_auc(fold_changes_gene, essential, legend=[], plot_mean=True, cmap='GnBu')
@@ -88,7 +98,7 @@ g = sns.clustermap(
 )
 
 handles = [mpatches.Circle([.0, .0], .25, facecolor=cmaps[f][v], label=v) for f in cmaps for v in cmaps[f]]
-g.ax_heatmap.legend(handles=handles, title='Tissue', loc='center left', bbox_to_anchor=(1.05, 0.5))
+g.ax_heatmap.legend(handles=handles, loc='center left', bbox_to_anchor=(1.05, 0.5))
 plt.savefig('reports/HT29_dabraf_replicates_clustermap_gene.png', bbox_inches='tight', dpi=600)
 plt.close('all')
 
@@ -110,10 +120,11 @@ plt.close('all')
 # PCA
 n_components = 5
 fc_pca = PCA(n_components=n_components).fit(fold_changes_gene.T)
-print(fc_pca.explained_variance_ratio_)
 
 fc_pcs = pd.DataFrame(fc_pca.transform(fold_changes_gene.T), index=fold_changes_gene.columns, columns=range(n_components))
 fc_pcs = pd.concat([fc_pcs, samplesheet], axis=1)
+
+t_cmap = pd.Series(dict(zip(*(natsorted(set(samplesheet['time'])), sns.light_palette('#37454B', n_colors=len(set(samplesheet['time'])) + 1).as_hex()[1:]))))
 
 medium_markers = [('Initial', 'o'), ('DMSO', 'X'), ('Dabraf', 'P')]
 
@@ -124,37 +135,108 @@ for i, (pc_x, pc_y) in enumerate([(0, 1), (0, 2)]):
     for mdm, mrk in medium_markers:
         plot_df = fc_pcs.query("medium == '%s'" % mdm)
         ax.scatter(
-            plot_df[pc_x], plot_df[pc_y], c=plot_df['time'].replace(cmaps['time']), marker=mrk, lw=.3, edgecolor='white'
+            plot_df[pc_x], plot_df[pc_y], c=t_cmap[plot_df['time']], marker=mrk, lw=.3, edgecolor='white'
         )
 
     ax.set_xlabel('PC%d (%.1f%%)' % (pc_x + 1, fc_pca.explained_variance_ratio_[pc_x] * 100))
     ax.set_ylabel('PC%d (%.1f%%)' % (pc_y + 1, fc_pca.explained_variance_ratio_[pc_y] * 100))
 
-handles = [mlines.Line2D([], [], .25, color='k', marker=mrk, label=mdm, lw=0) for mdm, mrk in medium_markers] + \
-          [mlines.Line2D([], [], .25, color=cmaps['time'][d], marker='o', label=d.replace('D', 'Day '), lw=0) for d in natsorted(cmaps['time'])]
+    ax.axhline(0, ls='-', c='k', lw=.1, alpha=.5)
+    ax.axvline(0, ls='-', c='k', lw=.1, alpha=.5)
+
+handles = [mlines.Line2D([], [], .25, color='#37454B', marker=mrk, label=mdm, lw=0) for mdm, mrk in medium_markers] + \
+          [mlines.Line2D([], [], .25, color=t_cmap[d], marker='o', label=d.replace('D', 'Day '), lw=0) for d in natsorted(t_cmap.index)]
 plt.legend(handles=handles, loc='center left', bbox_to_anchor=(1.05, 0.5))
-plt.savefig('./reports/HT29_dabraf_replicates_pca_gene.png', bbox_inches='tight', dpi=600)
+plt.savefig('reports/HT29_dabraf_replicates_pca_gene.png', bbox_inches='tight', dpi=600)
+plt.close('all')
+
+# # Copy-number effect in non-expressed genes
+# plot_df = pd.concat([fold_changes_gene, cnv_abs['HT-29'].rename('cnv')], axis=1).dropna().query('cnv != -1')
+#
+# order = range(int(max(plot_df['cnv'])) + 1)
+# plot_cnv_rank(plot_df['cnv'], plot_df.drop('cnv', axis=1).mean(1).rename('Average'), stripplot=False, order=order)
+# ax.set_title('CNV effect non-expressed genes')
+# plt.gcf().set_size_inches(3, 2)
+# plt.savefig('reports/HT29_dabraf_cnv_effect.png', bbox_inches='tight', dpi=600)
+# plt.close('all')
+
+# - Comparison
+fc_limma = pd.read_csv('data/gdsc/crispr_drug/HT29_dabraf_foldchanges_gene_limma.csv', index_col=0)
+
+conditions = [('DMSO', '#37454B'), ('Dabraf', '#F2C500')]
+
+fig, gs = plt.figure(figsize=(14, 9)), GridSpec(3, 4, hspace=.4, wspace=.4)
+
+for i, g in enumerate(fc_limma.head(12).index):
+    ax = plt.subplot(gs[i])
+
+    plot_df = pd.concat([fold_changes_gene.loc[g], samplesheet], axis=1)
+    plot_df = pd.concat([
+        plot_df.query("medium != 'Initial'"),
+        plot_df.query("medium == 'Initial'").replace({'medium': {'Initial': 'Dabraf'}}),
+        plot_df.query("medium == 'Initial'").replace({'medium': {'Initial': 'DMSO'}}),
+    ])
+
+    for mdm, clr in conditions:
+        plot_df_mrk = plot_df.query("medium == '%s'" % mdm)
+        plot_df_mrk = plot_df_mrk.assign(time=plot_df_mrk['time'].apply(lambda x: int(x[1:])))
+        plot_df_mrk = plot_df_mrk.groupby('time')[g].agg([min, max, np.mean])
+        plot_df_mrk = plot_df_mrk.assign(time=['D%d' % i for i in plot_df_mrk.index])
+
+        ax.errorbar(
+            plot_df_mrk.index, plot_df_mrk['mean'], c=clr, fmt='--o', label=mdm, capthick=0.5, capsize=2, elinewidth=1,
+            yerr=[plot_df_mrk['mean'] - plot_df_mrk['min'], plot_df_mrk['max'] - plot_df_mrk['mean']]
+        )
+
+    ax.axhline(0, ls='-', c='k', lw=.1, alpha=.5)
+
+    ax.set_xticks(list(plot_df_mrk.index))
+
+    ax.set_xlabel('Days')
+    ax.set_ylabel('CRISPR fold-change')
+    ax.legend(title='Condition')
+    ax.set_title('%s\n(F-statistics q-value=%.1e)' % (g, fc_limma.loc[g, 'adj.P.Val']))
+
+# handles = [mlines.Line2D([], [], .25, color=c, marker='o', label=l, lw=0) for l, c in conditions]
+# plt.legend(handles=handles, loc='center left', bbox_to_anchor=(1.05, 0.5))
+
+plt.savefig('reports/HT29_dabraf_pointplot.png', bbox_inches='tight', dpi=600)
 plt.close('all')
 
 
-# - CNV correction
-corrected_fc = {}
+# - K-means
+X_cols = samplesheet.query("medium != 'DMSO'").groupby('id')['time'].first().reset_index().set_index('time')['id']
 
-for sample in fold_changes:
-    # Build data-frame
-    df = pd.concat([fold_changes[sample].rename('logfc'), sgrna_lib], axis=1).dropna(subset=['logfc', 'GENES'])
-    df = df[df['GENES'].isin(cnv_abs.index)]
-    df = df.assign(cnv=list(cnv_abs.loc[df['GENES'], samplesheet.loc[sample, 'cell']]))
+X = fold_changes_gene.loc[fc_limma[fc_limma['adj.P.Val'] < 0.05].index].rename(columns=samplesheet['id'])
+X = X.groupby(X.columns, axis=1).mean()[X_cols[natsorted(X_cols.index)].values]
 
-    # Correction
-    df_gene = df.groupby('GENES').agg({'logfc': np.mean, 'cnv': np.mean, 'CHRM': 'first'})
+# n = 8
+for n in range(2, 9):
+    Xs = to_time_series_dataset(X.values)
 
-    crispy = CRISPRCorrection().rename(sample).fit_by(by=df_gene['CHRM'], X=df_gene[['cnv']], y=df_gene['logfc'])
-    df_corrected = pd.concat([
-        v.to_dataframe(df.query("CHRM == '%s'" % k)[['cnv']], df.query("CHRM == '%s'" % k)['logfc'], return_var_exp=True) for k, v in crispy.items()
-    ])
-    corrected_fc[sample] = df_corrected.assign(GENES=sgrna_lib.loc[df_corrected.index, 'GENES']).assign(sample=sample)
+    dtw_kmeans = TimeSeriesKMeans(
+        n_clusters=n, metric='softdtw', n_init=3, metric_params={'gamma_sdtw': 0.1}, verbose=False
+    ).fit(Xs)
 
-crispy_sgrna_df = pd.DataFrame({s: corrected_fc[s]['regressed_out'] for s in fold_changes})
-crispy_sgrna_df.to_csv('data/gdsc/crispr_drug/HT29_dabraf_foldchanges_corrected.csv')
-print(crispy_sgrna_df.shape)
+    y_pred = dtw_kmeans.predict(Xs)
+
+    Xs_dist = cdist_soft_dtw(Xs, gamma=dtw_kmeans.gamma_sdtw)
+
+    sscore = silhouette_score(Xs_dist, y_pred, metric='precomputed')
+
+    print(n, sscore)
+
+# Plot
+n_clusters = dtw_kmeans.cluster_centers_.shape[0]
+
+fig, gs = plt.figure(figsize=(3 * n_clusters, 2)), GridSpec(1, n_clusters, hspace=.2, wspace=.2)
+for n in range(n_clusters):
+    ax = plt.subplot(gs[n])
+
+    for xx in dtw_kmeans.X_fit_[y_pred == n]:
+        ax.plot(xx.ravel(), 'k-', alpha=.2)
+
+    plt.plot(dtw_kmeans.cluster_centers_[n].ravel(), 'r-')
+
+plt.savefig('reports/HT29_dabraf_kmeans.png', bbox_inches='tight', dpi=600)
+plt.close('all')
