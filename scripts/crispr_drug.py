@@ -8,10 +8,16 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import matplotlib.lines as mlines
+import matplotlib.cm as cm
+import scipy.cluster.hierarchy as hac
+from dtw import dtw
 from natsort import natsorted
-from scipy.spatial.distance import cdist
+from numpy.linalg import norm
+from scipy.spatial.distance import cdist, pdist, squareform
 from matplotlib.gridspec import GridSpec
-from sklearn.metrics.cluster import silhouette_score, silhouette_samples
+from sklearn.cluster import DBSCAN, KMeans, AgglomerativeClustering
+from sklearn.metrics.cluster import silhouette_score, silhouette_samples, calinski_harabaz_score
+from sklearn.neighbors.classification import KNeighborsClassifier
 from tslearn.metrics import cdist_soft_dtw, cdist_dtw
 from tslearn.utils import to_time_series_dataset
 from crispy.data_matrix import DataMatrix
@@ -19,6 +25,13 @@ from sklearn.decomposition.pca import PCA
 from tslearn.clustering import TimeSeriesKMeans
 from crispy.biases_correction import CRISPRCorrection
 from crispy.benchmark_plot import plot_cumsum_auc, plot_chromosome, plot_cnv_rank
+from scipy.stats.distributions import hypergeom
+
+
+def read_gmt(file_path):
+    with open(file_path) as f:
+        signatures = {l.split('\t')[0]: set(l.strip().split('\t')[2:]) for l in f.readlines()}
+    return signatures
 
 
 # - Imports
@@ -74,6 +87,7 @@ fold_changes_gene.to_csv('data/gdsc/crispr_drug/HT29_dabraf_foldchanges_gene.csv
 print(fold_changes.shape)
 
 # fold_changes_gene = pd.read_csv('data/gdsc/crispr_drug/HT29_dabraf_foldchanges_gene.csv', index_col=0)
+
 # - Plot
 cmaps = {
     f: dict(zip(*(natsorted(set(samplesheet[f])), sns.color_palette(c, len(set(samplesheet[f]))).as_hex())))
@@ -204,14 +218,27 @@ plt.savefig('reports/HT29_dabraf_pointplot.png', bbox_inches='tight', dpi=600)
 plt.close('all')
 
 
-# - K-means
+# -
 X_cols = samplesheet.query("medium != 'DMSO'").groupby('id')['time'].first().reset_index().set_index('time')['id']
 
 X = fold_changes_gene.loc[fc_limma[fc_limma['adj.P.Val'] < 0.05].index].rename(columns=samplesheet['id'])
 X = X.groupby(X.columns, axis=1).mean()[X_cols[natsorted(X_cols.index)].values]
 
+plot_df = pd.DataFrame(cdist_dtw(X.values), index=X.index, columns=X.index)
+
+sns.clustermap(plot_df, xticklabels=False, yticklabels=False, cmap='viridis')
+plt.savefig('reports/HT29_dabraf_ts_clustermap.png', bbox_inches='tight', dpi=600)
+plt.close('all')
+
+
+for xx in X.loc[plot_df[plot_df['EGFR'] > 0.5].index].values:
+    plt.plot(xx, 'k-', alpha=.2)
+
+plt.savefig('reports/HT29_dabraf_tsplot.png', bbox_inches='tight', dpi=600)
+plt.close('all')
+
 # n = 8
-for n in range(2, 9):
+for n in range(2, 12):
     Xs = to_time_series_dataset(X.values)
 
     dtw_kmeans = TimeSeriesKMeans(
@@ -240,3 +267,87 @@ for n in range(n_clusters):
 
 plt.savefig('reports/HT29_dabraf_kmeans.png', bbox_inches='tight', dpi=600)
 plt.close('all')
+
+
+def f_dtw(s1, s2):
+    return dtw(s1.reshape(-1, 1), s2.reshape(-1, 1), dist=lambda x, y: norm(x - y, ord=1))[0]
+
+dist_m = squareform(pdist(X, f_dtw))
+dist_m = pd.DataFrame(dist_m, index=X.index, columns=X.index)
+
+#
+n = 5
+for n in range(2, 10):
+    # cls = KMeans(n_clusters=n).fit_predict(X)
+    cls = AgglomerativeClustering(n_clusters=n, affinity='euclidean').fit_predict(X)
+    print(n, calinski_harabaz_score(X, cls))
+
+#
+X_cls = X.assign(cls=cls)
+
+n_clusters = len(set(X_cls['cls']))
+
+fig, gs = plt.figure(figsize=(3 * n_clusters, 2)), GridSpec(1, n_clusters, hspace=.2, wspace=.2)
+for n in set(X_cls['cls']):
+    ax = plt.subplot(gs[n])
+
+    df = X_cls.query("cls == %d" % n).drop('cls', axis=1)
+
+    for yy in df.values:
+        ax.plot([8, 10, 14, 18, 21], yy, 'k-', alpha=.2)
+
+    ax.plot([8, 10, 14, 18, 21], df.mean().values, 'r-')
+
+    ax.set_title('#genes=%d (EGFR=%r)' % (df.shape[0], 'EGFR' in df.index))
+
+plt.savefig('reports/HT29_dabraf_kmeans.png', bbox_inches='tight', dpi=600)
+plt.close('all')
+
+
+# -
+signature = set(X_cls.query("cls == %d" % X_cls.loc['EGFR', 'cls']).index)
+
+go_terms = {
+    'BP': read_gmt('data/resources/msigdb/c5.bp.v6.0.symbols.gmt'),
+    'CC': read_gmt('data/resources/msigdb/c5.cc.v6.0.symbols.gmt'),
+    'MF': read_gmt('data/resources/msigdb/c5.mf.v6.0.symbols.gmt'),
+    'HL': read_gmt('data/resources/msigdb/h.all.v6.0.symbols.gmt'),
+    'KEGG': read_gmt('data/resources/msigdb/c2.cp.kegg.v6.0.symbols.gmt')
+}
+
+
+def hypergeom_test(signature, background, sublist):
+    """
+    Performs hypergeometric test
+
+    Arguements:
+            signature: {string} - Signature IDs
+            background: {string} - Background IDs
+            sublist: {string} - Sub-set IDs
+
+    # hypergeom.sf(x, M, n, N, loc=0)
+    # M: total number of objects,
+    # n: total number of type I objects
+    # N: total number of type I objects drawn without replacement
+
+    """
+    pvalue = hypergeom.sf(
+        len(sublist.intersection(signature)),
+        len(background),
+        len(background.intersection(signature)),
+        len(sublist)
+    )
+
+    intersection = len(sublist.intersection(signature).intersection(signature))
+
+    return pvalue, intersection
+
+
+henrch = pd.DataFrame([{
+    'db': db,
+    'pathway': path,
+    'hyper': hypergeom_test(signature, set(fc_limma.index), go_terms[db][path])
+} for db in go_terms for path in go_terms[db]]).dropna()
+henrch = henrch.assign(pvalue=[i[0] for i in henrch['hyper']]).assign(intersection=[i[1] for i in henrch['hyper']]).drop('hyper', axis=1)
+henrch = henrch.query("intersection >= 5").sort_values('pvalue')
+print(henrch.head(50))
