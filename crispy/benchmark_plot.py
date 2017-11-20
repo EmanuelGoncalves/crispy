@@ -47,7 +47,7 @@ def plot_cumsum_auc(X, index_set, ax=None, cmap='viridis', legend=True, plot_mea
         plot_stats['auc'][f] = f_auc
 
         # Plot
-        ax.plot(x, y, label='%s: %.2f' % (f, f_auc) if (legend is True) or (f in legend) else None, lw=.5, c=c)
+        ax.plot(x, y, label='%s: %.2f' % (f, f_auc) if (legend is True) else None, lw=.5, c=c)
 
     # Mean
     if plot_mean is True:
@@ -159,3 +159,5 @@ def plot_chromosome(pos, original, mean, se=None, seg=None, highlight=None, ax=N
     ax.set_ylabel('Fold-change')
 
     ax.set_xlim(0, pos.max())
+
+    return ax

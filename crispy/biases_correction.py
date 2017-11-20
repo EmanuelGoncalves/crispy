@@ -5,16 +5,12 @@ of CRISPR dropout effects.
 Copyright (C) 2017 Emanuel Goncalves
 """
 
-import numpy as np
 import pandas as pd
 from sklearn import clone
 from functools import partial
-from limix.stats import qvalues
-from limix.qtl import qtl_test_lm
 from datetime import datetime as dt
 from concurrent.futures import ThreadPoolExecutor
 from sklearn.gaussian_process import GaussianProcessRegressor
-from limix_core.util.preprocess import covar_rescaling_factor_efficient
 from sklearn.gaussian_process.kernels import WhiteKernel, ConstantKernel, RationalQuadratic
 
 
@@ -52,35 +48,6 @@ class CRISPRCorrection(GaussianProcessRegressor):
     def scale_x(X, factor=1e6):
         return X / factor
 
-    @staticmethod
-    def logratio_by(by, x, Y):
-        res = []
-
-        for value in set(by):
-            by_index = list(by[by == value].index)
-
-            X = pd.get_dummies(x.loc[by_index]).astype(float)
-
-            lm = qtl_test_lm(pheno=Y.loc[by_index].values, snps=X.values)
-
-            lm_res = pd.DataFrame(
-                np.concatenate([lm.getBetaSNP().T, lm.getPv().T], axis=1),
-                index=X.columns,
-                columns=['%s_%s' % (c, f) for f in ['beta', 'pvalue'] for c in Y]
-            )
-
-            lm_res[by.name] = value
-
-            res.append(lm_res)
-
-        res = pd.concat(res)
-
-        for f in res:
-            if f.endswith('_pvalue'):
-                res[f.replace('_pvalue', '_qvalue')] = qvalues(res[f])
-
-        return res
-
     def rename(self, name=''):
         self.name = name
         return self
@@ -99,18 +66,7 @@ class CRISPRCorrection(GaussianProcessRegressor):
 
         return y - y_pred
 
-    def var_explained(self, X=None):
-        X = self.X_train_ if X is None else X
-
-        kernels = [('K1', self.kernel_.k1), ('K2', self.kernel_.k2)]
-
-        cov_var = pd.Series({n: (1 / covar_rescaling_factor_efficient(k.__call__(X))) for n, k in kernels}, name='Variance')
-
-        cov_var /= cov_var.sum()
-
-        return cov_var
-
-    def to_dataframe(self, X=None, y=None, return_var_exp=False):
+    def to_dataframe(self, X=None, y=None):
         if X is None or y is None:
             X = pd.DataFrame(self.X_train_, index=self.index, columns=self.x_columns)
             y = pd.Series(self.y_train_, index=self.index, name=self.y_name)
@@ -120,11 +76,6 @@ class CRISPRCorrection(GaussianProcessRegressor):
             .assign(fit_by=self.fit_by_value) \
             .assign(mean=self.y_train_mean)
         res = res.assign(regressed_out=res[self.y_name] - res['k_mean'] + res['mean'])
-
-        if return_var_exp:
-            res_var_exp = self.var_explained(self.X_train_)
-            for k in res_var_exp.index:
-                res['var_exp_%s' % k] = res_var_exp[k]
 
         return res
 

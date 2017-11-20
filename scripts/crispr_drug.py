@@ -10,7 +10,7 @@ import matplotlib.patches as mpatches
 import matplotlib.lines as mlines
 import matplotlib.cm as cm
 import scipy.cluster.hierarchy as hac
-from dtw import dtw
+from scipy.cluster.hierarchy import dendrogram, linkage, cophenet, fcluster
 from natsort import natsorted
 from numpy.linalg import norm
 from scipy.spatial.distance import cdist, pdist, squareform
@@ -18,11 +18,8 @@ from matplotlib.gridspec import GridSpec
 from sklearn.cluster import DBSCAN, KMeans, AgglomerativeClustering
 from sklearn.metrics.cluster import silhouette_score, silhouette_samples, calinski_harabaz_score
 from sklearn.neighbors.classification import KNeighborsClassifier
-from tslearn.metrics import cdist_soft_dtw, cdist_dtw
-from tslearn.utils import to_time_series_dataset
 from crispy.data_matrix import DataMatrix
 from sklearn.decomposition.pca import PCA
-from tslearn.clustering import TimeSeriesKMeans
 from crispy.biases_correction import CRISPRCorrection
 from crispy.benchmark_plot import plot_cumsum_auc, plot_chromosome, plot_cnv_rank
 from scipy.stats.distributions import hypergeom
@@ -96,8 +93,9 @@ cmaps = {
 
 # Essential genes AROCs
 ax, ax_stats = plot_cumsum_auc(fold_changes_gene, essential, legend=[], plot_mean=True, cmap='GnBu')
-plt.title('Essential genes AROC')
+plt.title('Essential genes')
 plt.gcf().set_size_inches(2, 2)
+plt.savefig('reports/HT29_dabraf_essential_arocs.pdf', bbox_inches='tight')
 plt.savefig('reports/HT29_dabraf_essential_arocs.png', bbox_inches='tight', dpi=600)
 plt.close('all')
 
@@ -113,6 +111,7 @@ g = sns.clustermap(
 
 handles = [mpatches.Circle([.0, .0], .25, facecolor=cmaps[f][v], label=v) for f in cmaps for v in cmaps[f]]
 g.ax_heatmap.legend(handles=handles, loc='center left', bbox_to_anchor=(1.05, 0.5))
+plt.savefig('reports/HT29_dabraf_replicates_clustermap_gene.pdf', bbox_inches='tight')
 plt.savefig('reports/HT29_dabraf_replicates_clustermap_gene.png', bbox_inches='tight', dpi=600)
 plt.close('all')
 
@@ -128,6 +127,7 @@ sns.swarmplot('replicate', 'cor', data=plot_df, size=2, palette='Reds_r', linewi
 plt.xlabel('Replicate')
 plt.ylabel('Pearson\'s R')
 plt.gcf().set_size_inches(1, 3)
+plt.savefig('reports/HT29_dabraf_replicates_boxplot_gene.pdf', bbox_inches='tight')
 plt.savefig('reports/HT29_dabraf_replicates_boxplot_gene.png', bbox_inches='tight', dpi=600)
 plt.close('all')
 
@@ -143,7 +143,7 @@ t_cmap = pd.Series(dict(zip(*(natsorted(set(samplesheet['time'])), sns.light_pal
 medium_markers = [('Initial', 'o'), ('DMSO', 'X'), ('Dabraf', 'P')]
 
 fig, gs = plt.figure(figsize=(3.8, 1.5)), GridSpec(1, 2, hspace=.4, wspace=.4)
-for i, (pc_x, pc_y) in enumerate([(0, 1), (0, 2)]):
+for i, (pc_x, pc_y) in enumerate([(0, 1)]):
     ax = plt.subplot(gs[i])
 
     for mdm, mrk in medium_markers:
@@ -161,6 +161,7 @@ for i, (pc_x, pc_y) in enumerate([(0, 1), (0, 2)]):
 handles = [mlines.Line2D([], [], .25, color='#37454B', marker=mrk, label=mdm, lw=0) for mdm, mrk in medium_markers] + \
           [mlines.Line2D([], [], .25, color=t_cmap[d], marker='o', label=d.replace('D', 'Day '), lw=0) for d in natsorted(t_cmap.index)]
 plt.legend(handles=handles, loc='center left', bbox_to_anchor=(1.05, 0.5))
+plt.savefig('reports/HT29_dabraf_replicates_pca_gene.pdf', bbox_inches='tight')
 plt.savefig('reports/HT29_dabraf_replicates_pca_gene.png', bbox_inches='tight', dpi=600)
 plt.close('all')
 
@@ -179,9 +180,14 @@ fc_limma = pd.read_csv('data/gdsc/crispr_drug/HT29_dabraf_foldchanges_gene_limma
 
 conditions = [('DMSO', '#37454B'), ('Dabraf', '#F2C500')]
 
-fig, gs = plt.figure(figsize=(14, 9)), GridSpec(3, 4, hspace=.4, wspace=.4)
+# df = fc_limma.loc[X_cls.query('cls == 1').index]
+# df = fc_limma.loc[[i for i in fc_limma.index if i.startswith('TSC')]]
+df = fc_limma.head(12)
 
-for i, g in enumerate(fc_limma.head(12).index):
+nrows, ncols = int(np.ceil(df.shape[0] / 3)), np.min([df.shape[0], 3])
+fig, gs = plt.figure(figsize=(4.7 * ncols, 3 * nrows)), GridSpec(nrows, ncols, hspace=.5, wspace=.3)
+
+for i, g in enumerate(df.index):
     ax = plt.subplot(gs[i])
 
     plot_df = pd.concat([fold_changes_gene.loc[g], samplesheet], axis=1)
@@ -214,94 +220,83 @@ for i, g in enumerate(fc_limma.head(12).index):
 # handles = [mlines.Line2D([], [], .25, color=c, marker='o', label=l, lw=0) for l, c in conditions]
 # plt.legend(handles=handles, loc='center left', bbox_to_anchor=(1.05, 0.5))
 
-plt.savefig('reports/HT29_dabraf_pointplot.png', bbox_inches='tight', dpi=600)
+plt.savefig('reports/HT29_dabraf_pointplot_subset.pdf', bbox_inches='tight')
+# plt.savefig('reports/HT29_dabraf_pointplot_subset.png', bbox_inches='tight', dpi=600)
 plt.close('all')
 
 
 # -
 X_cols = samplesheet.query("medium != 'DMSO'").groupby('id')['time'].first().reset_index().set_index('time')['id']
 
-X = fold_changes_gene.loc[fc_limma[fc_limma['adj.P.Val'] < 0.05].index].rename(columns=samplesheet['id'])
+X = fold_changes_gene.loc[fc_limma[fc_limma['adj.P.Val'] < 0.1].index].rename(columns=samplesheet['id'])
 X = X.groupby(X.columns, axis=1).mean()[X_cols[natsorted(X_cols.index)].values]
+X = X.drop(['ATP6V0C', 'PSMB4'], errors='ignore')
 
-plot_df = pd.DataFrame(cdist_dtw(X.values), index=X.index, columns=X.index)
 
-sns.clustermap(plot_df, xticklabels=False, yticklabels=False, cmap='viridis')
-plt.savefig('reports/HT29_dabraf_ts_clustermap.png', bbox_inches='tight', dpi=600)
+# -
+Z = linkage(X, 'average')
+
+c, coph_dists = cophenet(Z, pdist(X))
+print(c)
+
+plt.figure(figsize=(25, 10))
+plt.title('Hierarchical Clustering Dendrogram')
+plt.xlabel('sample index')
+plt.ylabel('distance')
+
+dendrogram(
+    Z,
+    # truncate_mode='lastp',
+    p=12,
+    # show_leaf_counts=False,
+    # show_contracted=True,
+    no_labels=True,
+    leaf_rotation=90.,  # rotates the x axis labels
+    leaf_font_size=12.,  # font size for the x axis labels
+)
+plt.savefig('reports/HT29_dabraf_clustering_dendogram.png', bbox_inches='tight', dpi=600)
 plt.close('all')
 
+last = Z[-10:, 2]
+last_rev = last[::-1]
+idxs = np.arange(1, len(last) + 1)
+plt.plot(idxs, last_rev, c='#F2C500')
 
-for xx in X.loc[plot_df[plot_df['EGFR'] > 0.5].index].values:
-    plt.plot(xx, 'k-', alpha=.2)
+acceleration = np.diff(last, 2)  # 2nd derivative of the distances
+acceleration_rev = acceleration[::-1]
+plt.plot(idxs[:-2] + 1, acceleration_rev, c='#37454B')
 
-plt.savefig('reports/HT29_dabraf_tsplot.png', bbox_inches='tight', dpi=600)
+k = acceleration_rev.argmax() + 2
+plt.axvline(k, c='#37454B', lw=.3)
+plt.title('Clusters: %d' % (k))
+
+plt.savefig('reports/HT29_dabraf_clustering_elbow.png', bbox_inches='tight', dpi=600)
 plt.close('all')
-
-# n = 8
-for n in range(2, 12):
-    Xs = to_time_series_dataset(X.values)
-
-    dtw_kmeans = TimeSeriesKMeans(
-        n_clusters=n, metric='softdtw', n_init=3, metric_params={'gamma_sdtw': 0.1}, verbose=False
-    ).fit(Xs)
-
-    y_pred = dtw_kmeans.predict(Xs)
-
-    Xs_dist = cdist_soft_dtw(Xs, gamma=dtw_kmeans.gamma_sdtw)
-
-    sscore = silhouette_score(Xs_dist, y_pred, metric='precomputed')
-
-    print(n, sscore)
-
-# Plot
-n_clusters = dtw_kmeans.cluster_centers_.shape[0]
-
-fig, gs = plt.figure(figsize=(3 * n_clusters, 2)), GridSpec(1, n_clusters, hspace=.2, wspace=.2)
-for n in range(n_clusters):
-    ax = plt.subplot(gs[n])
-
-    for xx in dtw_kmeans.X_fit_[y_pred == n]:
-        ax.plot(xx.ravel(), 'k-', alpha=.2)
-
-    plt.plot(dtw_kmeans.cluster_centers_[n].ravel(), 'r-')
-
-plt.savefig('reports/HT29_dabraf_kmeans.png', bbox_inches='tight', dpi=600)
-plt.close('all')
-
-
-def f_dtw(s1, s2):
-    return dtw(s1.reshape(-1, 1), s2.reshape(-1, 1), dist=lambda x, y: norm(x - y, ord=1))[0]
-
-dist_m = squareform(pdist(X, f_dtw))
-dist_m = pd.DataFrame(dist_m, index=X.index, columns=X.index)
 
 #
-n = 5
-for n in range(2, 10):
-    # cls = KMeans(n_clusters=n).fit_predict(X)
-    cls = AgglomerativeClustering(n_clusters=n, affinity='euclidean').fit_predict(X)
-    print(n, calinski_harabaz_score(X, cls))
+clusters = fcluster(Z, k, criterion='maxclust')
 
 #
-X_cls = X.assign(cls=cls)
+X_cls = X.assign(cls=clusters)
 
 n_clusters = len(set(X_cls['cls']))
 
 fig, gs = plt.figure(figsize=(3 * n_clusters, 2)), GridSpec(1, n_clusters, hspace=.2, wspace=.2)
-for n in set(X_cls['cls']):
-    ax = plt.subplot(gs[n])
+for idx, n in enumerate(set(X_cls['cls'])):
+    ax = plt.subplot(gs[idx])
 
     df = X_cls.query("cls == %d" % n).drop('cls', axis=1)
 
     for yy in df.values:
-        ax.plot([8, 10, 14, 18, 21], yy, 'k-', alpha=.2)
+        ax.plot([8, 10, 14, 18, 21], yy, ls='-', c='#F2C500', alpha=.2)
 
-    ax.plot([8, 10, 14, 18, 21], df.mean().values, 'r-')
+    ax.plot([8, 10, 14, 18, 21], df.mean().values, ls='-', c='#37454B')
 
     ax.set_title('#genes=%d (EGFR=%r)' % (df.shape[0], 'EGFR' in df.index))
 
-plt.savefig('reports/HT29_dabraf_kmeans.png', bbox_inches='tight', dpi=600)
+plt.savefig('reports/HT29_dabraf_clustering_tsplot.png', bbox_inches='tight', dpi=600)
 plt.close('all')
+
 
 
 # -
@@ -346,8 +341,12 @@ def hypergeom_test(signature, background, sublist):
 henrch = pd.DataFrame([{
     'db': db,
     'pathway': path,
-    'hyper': hypergeom_test(signature, set(fc_limma.index), go_terms[db][path])
+    'hyper': hypergeom_test(signature, set(X.index), go_terms[db][path])
 } for db in go_terms for path in go_terms[db]]).dropna()
 henrch = henrch.assign(pvalue=[i[0] for i in henrch['hyper']]).assign(intersection=[i[1] for i in henrch['hyper']]).drop('hyper', axis=1)
 henrch = henrch.query("intersection >= 5").sort_values('pvalue')
 print(henrch.head(50))
+
+
+# -
+

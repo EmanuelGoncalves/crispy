@@ -42,6 +42,9 @@ cnv = pd.read_csv('data/gdsc/copynumber/Gene_level_CN.txt', sep='\t', index_col=
 cnv = cnv.loc[:, cnv.columns.isin(list(fc_sgrna))]
 cnv_abs = cnv.applymap(lambda v: int(v.split(',')[0]))
 
+# Gene-expression
+gexp = pd.read_csv('data/gdsc/gene_expression/merged_voom_preprocessed.csv', index_col=0)
+
 # CIRSPR segments
 crispr_seg = pd.read_csv('data/gdsc/crispr/segments_cbs_deseq2.csv')
 
@@ -52,10 +55,16 @@ ccleanr = pd.read_csv('data/gdsc/crispr/all_GLCFC.csv', index_col=0)
 ploidy = pd.read_csv('data/gdsc/ploidy.csv', index_col=0).drop(['ACF'], axis=1)
 
 # - Imports CCLE
-# Project DRIVE
 cmap = pd.read_csv('data/ccle/CCLE_GDSC_cellLineMappoing.csv', index_col=2)
+
+# CCLE: ceres
+ceres = pd.read_csv('data/ccle/crispr_ceres/ceresgeneeffects.csv', index_col=0)
+ceres = ceres.rename(columns=cmap['GDSC1000 name'])
+
+# Project DRIVE
 d_drive_rsa = pd.read_csv('data/ccle/DRIVE_RSA_data.txt', sep='\t')
 d_drive_rsa.columns = [c.upper() for c in d_drive_rsa]
+d_drive_rsa = d_drive_rsa.rename(columns=cmap['GDSC1000 name'])
 print('Project DRIVE: ', d_drive_rsa.shape)
 
 
@@ -87,6 +96,56 @@ plt.xlabel('CRISPR/Cas9 fold-change bias (mean)')
 plt.ylabel('Copy-number variation')
 plt.gcf().set_size_inches(2, 3)
 plt.savefig('reports/cnv_effects.png', bbox_inches='tight', dpi=600)
+plt.close('all')
+
+
+# - Copy-number effect variation
+genes_ov = set(crispy_original.index).intersection(d_drive_rsa.index).intersection(cnv_abs.index)
+samples_ov = set(crispy_original).intersection(d_drive_rsa).intersection(cnv_abs)
+print(len(genes_ov), len(samples_ov))
+
+plot_df = pd.concat([
+    crispy_original.loc[genes_ov, samples_ov].unstack().rename('crispr'),
+    d_drive_rsa.loc[genes_ov, samples_ov].unstack().rename('shrna'),
+    cnv_abs.loc[genes_ov, samples_ov].unstack().rename('cnv'),
+    crispy_corrected.loc[genes_ov, samples_ov].unstack().rename('crispy'),
+], axis=1).query('cnv != -1').reset_index().rename(columns={'level_0': 'sample', 'level_1': 'gene'})
+plot_df = plot_df.assign(ploidy=cnv_abs.median().astype(int).loc[plot_df['sample']].values)
+
+order = natsorted(set(plot_df['cnv']))
+hue_order = natsorted(set(plot_df['ploidy']))
+
+sns.pointplot(
+    x='crispr', y='cnv', hue='ploidy', data=plot_df, orient='h',
+    ci='sd', order=order, hue_order=hue_order, palette='Reds_r',
+    errwidth=1., capsize=.1, scale=.5, alpha=.7, aspect=.5, size=2
+)
+plt.xlabel('CRISPR/Cas9 fold-change (mean)')
+plt.ylabel('Copy-number variation')
+plt.gcf().set_size_inches(2, 3)
+plt.savefig('reports/cnv_effects_crispr.png', bbox_inches='tight', dpi=600)
+plt.close('all')
+
+sns.pointplot(
+    x='shrna', y='cnv', hue='ploidy', data=plot_df, orient='h',
+    ci='sd', order=order, hue_order=hue_order, palette='Reds_r',
+    errwidth=1., capsize=.1, scale=.5, alpha=.7
+)
+plt.xlabel('shRNA RSA (mean)')
+plt.ylabel('Copy-number variation')
+plt.gcf().set_size_inches(2, 3)
+plt.savefig('reports/cnv_effects_shrna.png', bbox_inches='tight', dpi=600)
+plt.close('all')
+
+sns.pointplot(
+    x='crispy', y='cnv', hue='ploidy', data=plot_df, orient='h',
+    ci='sd', order=order, hue_order=hue_order, palette='Reds_r',
+    errwidth=1., capsize=.1, scale=.5, alpha=.7
+)
+plt.xlabel('Crispy fold-changes (mean)')
+plt.ylabel('Copy-number variation')
+plt.gcf().set_size_inches(2, 3)
+plt.savefig('reports/cnv_effects_crispy.png', bbox_inches='tight', dpi=600)
 plt.close('all')
 
 
