@@ -119,24 +119,24 @@ def plot_chromosome(pos, original, mean, se=None, seg=None, highlight=None, ax=N
         ax = plt.gca()
 
     # Plot original values
-    ax.scatter(pos, original, s=2, marker='.', lw=0, c='#37454B', alpha=.5, label=original.name)
+    ax.scatter(pos, original, s=2, marker='.', lw=0, c='#58595B', alpha=.5, label=original.name)
 
     # Plot corrected values
-    ax.scatter(pos, mean, s=4, marker='.', lw=0, c='#F2C500', alpha=.9, label=mean.name)
+    ax.scatter(pos, mean, s=4, marker='.', lw=0, c='#FF8200', alpha=.9, label=mean.name)
 
     if se is not None:
-        ax.fill_between(pos, mean - se, mean + se, c='#F2C500', alpha=0.2)
+        ax.fill_between(pos, mean - se, mean + se, c='#FF8200', alpha=0.2)
 
     # Plot segments
     if seg is not None:
         for i, (s, e, c) in enumerate(seg[['startpos', 'endpos', 'totalCN']].values):
-            ax.plot([s, e], [c, c], lw=.3, c='#37454B', alpha=.9, label='totalCN' if i == 0 else None)
+            ax.plot([s, e], [c, c], lw=.3, c='#58595B', alpha=.9, label='totalCN' if i == 0 else None)
 
     # Highlight
     if highlight is not None:
         for i in highlight:
             if i in pos.index:
-                ax.scatter(pos.loc[i], original.loc[i], s=3, marker='X', lw=0, c='#ff4500', alpha=.5, label=i)
+                ax.scatter(pos.loc[i], original.loc[i], s=3, marker='X', lw=0, c='#FF8200', alpha=.5, label=i)
     # Misc
     ax.axhline(0, lw=.3, ls='-', color='black')
 
@@ -144,11 +144,11 @@ def plot_chromosome(pos, original, mean, se=None, seg=None, highlight=None, ax=N
     if cytobands is not None:
         for i, (s, e, t) in enumerate(cytobands[['start', 'end', 'band']].values):
             if t == 'acen':
-                ax.axvline(s, lw=.2, ls='-', color='#37454B', alpha=.1)
-                ax.axvline(e, lw=.2, ls='-', color='#37454B', alpha=.1)
+                ax.axvline(s, lw=.2, ls='-', color='#58595B', alpha=.1)
+                ax.axvline(e, lw=.2, ls='-', color='#58595B', alpha=.1)
 
             elif not i % 2:
-                ax.axvspan(s, e, alpha=0.1, facecolor='#37454B')
+                ax.axvspan(s, e, alpha=0.1, facecolor='#58595B')
 
     # Legend
     if legend:
