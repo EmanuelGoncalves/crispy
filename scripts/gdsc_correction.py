@@ -2,12 +2,16 @@
 # Copyright (C) 2017 Emanuel Goncalves
 
 import sys
+import pickle
 import numpy as np
 import pandas as pd
 from crispy.biases_correction import CRISPRCorrection
 
 
 # - Imports
+# Non-expressed genes
+nexp = pickle.load(open('data/gdsc/nexp_pickle.pickle', 'rb'))
+
 # sgRNA library
 sgrna_lib = pd.read_csv('data/gdsc/crispr/KY_Library_v1.1_annotated.csv', index_col=0).dropna(subset=['STARTpos', 'GENES'])
 

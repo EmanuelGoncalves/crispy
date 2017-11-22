@@ -47,7 +47,7 @@ def plot_cumsum_auc(X, index_set, ax=None, cmap='viridis', legend=True, plot_mea
         plot_stats['auc'][f] = f_auc
 
         # Plot
-        ax.plot(x, y, label='%s: %.2f' % (f, f_auc) if (legend is True) else None, lw=.5, c=c)
+        ax.plot(x, y, label='%s: %.2f' % (f, f_auc) if (legend is True) else None, lw=1., c=c)
 
     # Mean
     if plot_mean is True:
@@ -61,7 +61,7 @@ def plot_cumsum_auc(X, index_set, ax=None, cmap='viridis', legend=True, plot_mea
         f_auc = auc(x, y)
         plot_stats['auc']['mean'] = f_auc
 
-        ax.plot(x, y, label='Mean: %.2f' % f_auc, ls='--', c='#de2d26', lw=1.5, alpha=.8)
+        ax.plot(x, y, label='Mean: %.2f' % f_auc, ls='--', c='#de2d26', lw=2.5, alpha=.8)
 
     # Random
     ax.plot((0, 1), (0, 1), 'k--', lw=.3, alpha=.5)
@@ -79,7 +79,7 @@ def plot_cumsum_auc(X, index_set, ax=None, cmap='viridis', legend=True, plot_mea
     return ax, plot_stats
 
 
-def plot_cnv_rank(x, y, ax=None, stripplot=True, hline=0.5, order=None):
+def plot_cnv_rank(x, y, ax=None, stripplot=False, hline=0.5, order=None, color='#58595B', notch=False):
     """
     Plot copy-number versus ranked y values.
 
@@ -96,15 +96,15 @@ def plot_cnv_rank(x, y, ax=None, stripplot=True, hline=0.5, order=None):
 
     plot_stats = {}
 
-    boxplot_args = {'linewidth': .3, 'notch': True, 'fliersize': 1, 'orient': 'v', 'palette': 'viridis', 'sym': '' if stripplot else '.'}
-    stripplot_args = {'orient': 'v', 'palette': 'viridis', 'size': 1.5, 'linewidth': .05, 'edgecolor': 'white', 'jitter': .15, 'alpha': .75}
+    boxplot_args = {'linewidth': .3, 'notch': notch, 'fliersize': 1, 'orient': 'v', 'sym': '' if stripplot else '.'}
+    stripplot_args = {'orient': 'v', 'size': 1.5, 'linewidth': .05, 'edgecolor': 'white', 'jitter': .15, 'alpha': .75}
 
     y_ranked = pd.Series(st.rankdata(y) / y.shape[0], index=y.index).loc[x.index]
 
-    sns.boxplot(x, y_ranked, ax=ax, order=order if order is not None else None, **boxplot_args)
+    sns.boxplot(x, y_ranked, ax=ax, order=order if order is not None else None, color=color, **boxplot_args)
 
     if stripplot:
-        sns.stripplot(x, y_ranked, ax=ax, order=order if order is not None else None, **stripplot_args)
+        sns.stripplot(x, y_ranked, ax=ax, order=order if order is not None else None, color=color, **stripplot_args)
 
     ax.axhline(hline, lw=.1, c='black', alpha=.5)
 
