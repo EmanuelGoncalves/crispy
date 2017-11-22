@@ -29,30 +29,6 @@ cnv_abs = cnv.applymap(lambda v: int(v.split(',')[1]))
 
 
 # -
-sample = 'AU565'
-
-df = pd.concat([
-    fc[sample].rename('crispr'),
-    cnv_abs[sample].rename('cnv'),
-    sgrna_lib.groupby('GENES')['CHRM'].first().rename('chr')
-], axis=1).dropna()
-df = df.query('cnv != -1')
-df = df.assign(cnv_d=['%d' % i if i < 8 else '>=8' for i in df['cnv']])
-
-plot_df = pd.pivot_table(df, index='chr', columns='cnv_d', values='crispr', aggfunc='mean')
-plot_df = plot_df.loc[natsorted(set(df['chr'])), natsorted(set(df['cnv_d']))]
-
-sns.set(style='white', font_scale=.75)
-g = sns.heatmap(plot_df, mask=plot_df.isnull(), cmap='RdYlBu', lw=.3, center=0, square=True)
-g.set_xlabel('Copy-number')
-g.set_ylabel('Chromosome')
-plt.title(sample)
-plt.setp(g.get_yticklabels(), rotation=0)
-plt.savefig('reports/crispr_chr_effects.png', bbox_inches='tight', dpi=600)
-plt.close('all')
-
-
-# -
 genes, samples = set(cnv_abs.index).intersection(fc.index), set(cnv).intersection(fc)
 
 df = pd.concat([
@@ -63,14 +39,20 @@ df = df.assign(chr=sgrna_lib.groupby('GENES')['CHRM'].first().rename('chr').loc[
 df = df.query('cnv != -1')
 df = df.assign(cnv_d=['%d' % i if i < 8 else '>=8' for i in df['cnv']])
 
-plot_df = pd.pivot_table(df, index='chr', columns='cnv_d', values='crispr', aggfunc='mean')
-plot_df = plot_df.loc[natsorted(set(df['chr'])), natsorted(set(df['cnv_d']))]
+plot_df = pd.pivot_table(df, index='sample', columns='cnv_d', values='crispr', aggfunc='mean')
+plot_df = plot_df.loc[:, natsorted(set(df['cnv_d']))]
 
 sns.set(style='white', font_scale=.75)
-g = sns.heatmap(plot_df, mask=plot_df.isnull(), cmap='RdYlBu', lw=.3, center=0, square=True)
-g.set_xlabel('Copy-number')
-g.set_ylabel('Chromosome')
+g = sns.heatmap(plot_df.T, mask=plot_df.T.isnull(), cmap='RdYlBu', lw=.3, center=0, square=True, cbar=False)
+g.set_xlabel('')
+g.set_ylabel('Copy-number')
 plt.setp(g.get_yticklabels(), rotation=0)
+plt.gcf().set_size_inches(18, 6)
 plt.savefig('reports/crispr_chr_effects_all_samples.png', bbox_inches='tight', dpi=600)
 plt.close('all')
 
+
+sns.factorplot('cnv_d', 'crispr', 'sample', data=df)
+plt.gcf().set_size_inches(4, 2)
+plt.savefig('reports/copy_number_effect_samples.png', bbox_inches='tight', dpi=600)
+plt.close('all')
