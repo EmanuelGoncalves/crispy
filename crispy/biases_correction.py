@@ -17,7 +17,7 @@ from sklearn.gaussian_process.kernels import WhiteKernel, ConstantKernel, Ration
 # TODO: docs
 class CRISPRCorrection(GaussianProcessRegressor):
 
-    def __init__(self, kernel=None, alpha=1e-10, n_restarts_optimizer=3, optimizer='fmin_l_bfgs_b', normalize_y=True, copy_X_train=True, random_state=None):
+    def __init__(self, kernel=None, alpha=1e-10, n_restarts_optimizer=3, optimizer='fmin_l_bfgs_b', normalize_y=True, copy_x_train=True, random_state=None):
         kernel = self.get_default_kernel() if kernel is None else kernel
 
         self.name = ''
@@ -32,7 +32,7 @@ class CRISPRCorrection(GaussianProcessRegressor):
             optimizer=optimizer,
             normalize_y=normalize_y,
             random_state=random_state,
-            copy_X_train=copy_X_train,
+            copy_X_train=copy_x_train,
             n_restarts_optimizer=n_restarts_optimizer,
         )
 
@@ -73,9 +73,8 @@ class CRISPRCorrection(GaussianProcessRegressor):
 
         res = pd.concat([X, y], axis=1)\
             .assign(k_mean=self.predict(X, return_std=False) - self.y_train_mean)\
-            .assign(fit_by=self.fit_by_value) \
-            .assign(mean=self.y_train_mean)
-        res = res.assign(regressed_out=res[self.y_name] - res['k_mean'] + res['mean'])
+            .assign(fit_by=self.fit_by_value)
+        res = res.assign(regressed_out=res[self.y_name] - res['k_mean'])
 
         return res
 
