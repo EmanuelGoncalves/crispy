@@ -36,11 +36,9 @@ class DataMatrix(DataFrame):
         """
 
         # Estimate normalisation coefficients
-        m_gmean = Series(st.gmean(self, axis=1), index=self.index)
-        m_gmean = m_gmean.T.divide(m_gmean).T
-        m_gmean = m_gmean.median()
+        factors = self.divide(st.gmean(self, axis=1), axis=0).median().rename('factors')
 
-        return self.divide(m_gmean)
+        return self.divide(factors)
 
     def estimate_fold_change(self, design):
         """

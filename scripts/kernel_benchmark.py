@@ -5,9 +5,11 @@ import pickle
 import numpy as np
 import pandas as pd
 import seaborn as sns
+import scipy.stats as st
 import matplotlib.pyplot as plt
 from crispy import bipal_gray
 from matplotlib.gridspec import GridSpec
+from sklearn.preprocessing import MinMaxScaler
 from crispy.biases_correction import CRISPRCorrection
 from crispy.benchmark_plot import plot_cumsum_auc, plot_cnv_rank, plot_chromosome
 from sklearn.gaussian_process.kernels import WhiteKernel, ConstantKernel, RationalQuadratic, RBF, Matern
@@ -48,7 +50,13 @@ df = pd.concat([
     cnv_abs.rename('cnv'),
     sgrna_lib.groupby('GENES')['CHRM'].first().rename('chr'),
     sgrna_lib.groupby('GENES')['STARTpos'].min().rename('pos'),
-], axis=1).dropna().query('cnv != -1')
+], axis=1).dropna().query('cnv != -1').sort_values(['chr', 'pos'])
+
+pos_scale = []
+for c in set(df['chr']):
+    df_ = df.query("chr == '%s'" % c).copy()
+    pos_scale.append(pd.Series(dict(zip(*(df_.index, MinMaxScaler(feature_range=(1, 100)).fit_transform(df_[['pos']])[:, 0])))))
+df = df.assign(range=pd.concat(pos_scale).loc[df.index].values)
 
 
 crispy_rbf = CRISPRCorrection(
@@ -58,11 +66,10 @@ crispy_rbf_df = pd.concat([v.to_dataframe() for k, v in crispy_rbf.items()])
 crispy_rbf_df.to_csv('data/kernel_benchmark_rbf.csv')
 
 crispy_matern = CRISPRCorrection(
-    kernel=ConstantKernel() * Matern(length_scale_bounds=(1e-5, 100), nu=.5) + WhiteKernel()
-).rename(sample).fit_by(by=df['chr'], X=df[['pos']] / 1e4, y=df['logfc'])
+    kernel=ConstantKernel() * Matern(length_scale_bounds=(1, 100), nu=1) + WhiteKernel()
+).rename(sample).fit_by(by=df['chr'], X=df[['range']], y=df['logfc'])
 crispy_matern_df = pd.concat([v.to_dataframe() for k, v in crispy_matern.items()])
 crispy_matern_df.to_csv('data/kernel_benchmark_matern.csv')
-
 
 # - Plots
 plot_df = pd.concat([
@@ -94,18 +101,19 @@ plt.close('all')
 gs = GridSpec(4, 1, hspace=.3, wspace=.3)
 for i, l in enumerate(['logfc', 'Supervised', 'Unsupervised', 'CRISPRcleanR']):
     ax = plt.subplot(gs[i])
-    plot_cnv_rank(plot_df['cnv'].astype(int), plot_df[l], ax=ax, color=bipal_gray[1])
-plt.gcf().set_size_inches(4, 10)
+    ax, _ = plot_cnv_rank(plot_df['cnv'].astype(int), plot_df[l], color=bipal_gray[1], ax=ax)
+    ax.set_ylabel(l)
+plt.gcf().set_size_inches(3, 5)
 plt.savefig('reports/kernel_benchmark_cnv.png', bbox_inches='tight', dpi=600)
 plt.close('all')
 
 # Plot chromossome
-gs = GridSpec(2, 1, hspace=.3, wspace=.3)
+gs, chrm, g_highlight = GridSpec(2, 1, hspace=.3, wspace=.3), '14', ['CCNK']
 for i, l in enumerate(['Supervised_kmean', 'Unsupervised_kmean']):
     ax = plt.subplot(gs[i])
-    plot_df_ = plot_df.query("chr == '8'").sort_values('pos')
-    ax = plot_chromosome(plot_df_['pos'], plot_df_['logfc'], plot_df_[l], seg=cnv_seg.query("chr == '8'"), highlight=['MYC'], ax=ax)
+    plot_df_ = plot_df.query("chr == '%s'" % chrm).sort_values('pos')
+    ax = plot_chromosome(plot_df_['pos'], plot_df_['logfc'], plot_df_[l], seg=cnv_seg.query("chr == '%s'" % chrm), highlight=g_highlight, ax=ax)
     ax.set_ylabel('%s' % l.split('_')[0])
-plt.gcf().set_size_inches(4, 2)
+plt.gcf().set_size_inches(3, 3)
 plt.savefig('reports/kernel_benchmark_chromossome_plot.png', bbox_inches='tight', dpi=600)
 plt.close('all')

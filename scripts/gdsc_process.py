@@ -3,11 +3,8 @@
 
 import numpy as np
 import pandas as pd
-import seaborn as sns
-import matplotlib.pyplot as plt
 from datetime import datetime as dt
 from crispy.data_matrix import DataMatrix
-from crispy.benchmark_plot import plot_cumsum_auc
 
 
 # - Imports

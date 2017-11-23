@@ -11,7 +11,7 @@ from functools import partial
 from datetime import datetime as dt
 from concurrent.futures import ThreadPoolExecutor
 from sklearn.gaussian_process import GaussianProcessRegressor
-from sklearn.gaussian_process.kernels import WhiteKernel, ConstantKernel, RationalQuadratic
+from sklearn.gaussian_process.kernels import WhiteKernel, ConstantKernel, RationalQuadratic, RBF
 
 
 # TODO: docs
@@ -41,12 +41,8 @@ class CRISPRCorrection(GaussianProcessRegressor):
         return CRISPRCorrection
 
     @staticmethod
-    def get_default_kernel(length_scale=(1e-5, 10), alpha=(1e-5, 10)):
-        return ConstantKernel() * RationalQuadratic(length_scale_bounds=length_scale, alpha_bounds=alpha) + WhiteKernel()
-
-    @staticmethod
-    def scale_x(X, factor=1e6):
-        return X / factor
+    def get_default_kernel(length_scale=(1e-5, 10)):
+        return ConstantKernel() * RBF(length_scale_bounds=length_scale) + WhiteKernel()
 
     def rename(self, name=''):
         self.name = name
