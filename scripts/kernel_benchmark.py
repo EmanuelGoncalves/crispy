@@ -2,6 +2,7 @@
 # Copyright (C) 2017 Emanuel Goncalves
 
 import pickle
+import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -62,52 +63,58 @@ crispy_rbf = CRISPRCorrection(
 crispy_rbf_df = pd.concat([v.to_dataframe() for k, v in crispy_rbf.items()])
 crispy_rbf_df.to_csv('data/kernel_benchmark_rbf.csv')
 
-crispy_rbf = CRISPRCorrection(
-    kernel=ConstantKernel() * RBF(length_scale_bounds=(1e-5, 10)) + WhiteKernel()
-).rename(sample).fit_by(by=df['chr'], X=df[['cnv']], y=df['logfc'])
-crispy_rbf_df = pd.concat([v.to_dataframe() for k, v in crispy_rbf.items()])
-crispy_rbf_df.to_csv('data/kernel_benchmark_rbf.csv')
+crispy_matern = CRISPRCorrection(
+    kernel=ConstantKernel() * Matern(length_scale_bounds=(1e-5, 100), nu=.5) + WhiteKernel()
+).rename(sample).fit_by(by=df['chr'], X=df[['pos']] / 1e5, y=df['logfc'])
+crispy_matern_df = pd.concat([v.to_dataframe() for k, v in crispy_matern.items()])
+crispy_matern_df.to_csv('data/kernel_benchmark_matern.csv')
 
 
 # - Plots
 plot_df = pd.concat([
     df,
-    (crispy_rquad_df['logfc'] - crispy_rquad_df['k_mean']).rename('RQuad'), (crispy_rbf_df['logfc'] - crispy_rbf_df['k_mean']).rename('RBF'),
-    (crispy_rquad_df['k_mean']).rename('RQuad_kmean'), (crispy_rbf_df['k_mean']).rename('RBF_kmean'),
+    (crispy_rquad_df['logfc'] - crispy_rquad_df['k_mean']).rename('RQuad'),
+    (crispy_rbf_df['logfc'] - crispy_rbf_df['k_mean']).rename('RBF'),
+    (crispy_matern_df['logfc'] - crispy_matern_df['k_mean']).rename('Matern'),
+
+    (crispy_rquad_df['k_mean']).rename('RQuad_kmean'),
+    (crispy_rbf_df['k_mean']).rename('RBF_kmean'),
+    (crispy_matern_df['k_mean']).rename('Matern_kmean'),
+
     ccleanr.rename('CRISPRcleanR'),
 ], axis=1).dropna()
 
 # Correlation
-g = sns.PairGrid(plot_df[['logfc', 'RQuad', 'RBF', 'CRISPRcleanR']], despine=False)
+g = sns.PairGrid(plot_df[['logfc', 'RQuad', 'RBF', 'Matern', 'CRISPRcleanR']], despine=False)
 g = g.map_offdiag(plt.scatter, s=2, lw=.1, edgecolor='white', alpha=.4, color=bipal_gray[0])
 g = g.map_diag(plt.hist, lw=.3, color=bipal_gray[0])
-plt.gcf().set_size_inches(4, 4)
+plt.gcf().set_size_inches(5, 5)
 plt.savefig('reports/kernel_benchmark_correlation.png', bbox_inches='tight', dpi=600)
 plt.close('all')
 
 # Essential genes AUC
-plot_cumsum_auc(plot_df[['logfc', 'RQuad', 'RBF', 'CRISPRcleanR']], essential)
+plot_cumsum_auc(plot_df[['logfc', 'RQuad', 'RBF', 'Matern', 'CRISPRcleanR']], essential)
 plt.gcf().set_size_inches(2, 2)
 plt.savefig('reports/kernel_benchmark_essential_auc.png', bbox_inches='tight', dpi=600)
 plt.close('all')
 
 # Copy-number boxplot effects
-gs = GridSpec(4, 1, hspace=.3, wspace=.3)
-for i, l in enumerate(['logfc', 'RQuad', 'RBF', 'CRISPRcleanR']):
+gs = GridSpec(5, 1, hspace=.3, wspace=.3)
+for i, l in enumerate(['logfc', 'RQuad', 'RBF', 'Matern', 'CRISPRcleanR']):
     ax = plt.subplot(gs[i])
     plot_cnv_rank(plot_df['cnv'].astype(int), plot_df[l], ax=ax, color=bipal_gray[1])
-plt.gcf().set_size_inches(4, 8)
+plt.gcf().set_size_inches(4, 10)
 plt.savefig('reports/kernel_benchmark_cnv.png', bbox_inches='tight', dpi=600)
 plt.close('all')
 
 # Plot chromossome
-gs = GridSpec(2, 1, hspace=.3, wspace=.3)
-for i, l in enumerate(['RQuad_kmean', 'RBF_kmean']):
+gs = GridSpec(3, 1, hspace=.3, wspace=.3)
+for i, l in enumerate(['RQuad_kmean', 'RBF_kmean', 'Matern_kmean']):
     ax = plt.subplot(gs[i])
     plot_df_ = plot_df.query("chr == '8'").sort_values('pos')
     ax = plot_chromosome(plot_df_['pos'], plot_df_['logfc'], plot_df_[l], seg=cnv_seg.query("chr == '8'"), highlight=['MYC'], ax=ax)
     ax.set_ylabel('%s (log2 FC)' % l)
 
-plt.gcf().set_size_inches(4, 4)
+plt.gcf().set_size_inches(4, 6)
 plt.savefig('reports/kernel_benchmark_chromossome_plot.png', bbox_inches='tight', dpi=600)
 plt.close('all')
