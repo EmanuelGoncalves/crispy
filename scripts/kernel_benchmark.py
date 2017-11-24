@@ -66,7 +66,7 @@ crispy_rbf_df = pd.concat([v.to_dataframe() for k, v in crispy_rbf.items()])
 crispy_rbf_df.to_csv('data/kernel_benchmark_rbf.csv')
 
 crispy_matern = CRISPRCorrection(
-    kernel=ConstantKernel() * Matern(length_scale_bounds=(1, 100), nu=1) + WhiteKernel()
+    kernel=ConstantKernel() * Matern(length_scale_bounds=(1, 100), nu=.5) + WhiteKernel()
 ).rename(sample).fit_by(by=df['chr'], X=df[['range']], y=df['logfc'])
 crispy_matern_df = pd.concat([v.to_dataframe() for k, v in crispy_matern.items()])
 crispy_matern_df.to_csv('data/kernel_benchmark_matern.csv')
@@ -108,7 +108,7 @@ plt.savefig('reports/kernel_benchmark_cnv.png', bbox_inches='tight', dpi=600)
 plt.close('all')
 
 # Plot chromossome
-gs, chrm, g_highlight = GridSpec(2, 1, hspace=.3, wspace=.3), '14', ['CCNK']
+gs, chrm, g_highlight = GridSpec(2, 1, hspace=.3, wspace=.3), '8', ['MMP16']
 for i, l in enumerate(['Supervised_kmean', 'Unsupervised_kmean']):
     ax = plt.subplot(gs[i])
     plot_df_ = plot_df.query("chr == '%s'" % chrm).sort_values('pos')

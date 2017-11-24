@@ -4,9 +4,8 @@ This module implements necessary functions to preprocess sequencing raw counts d
 Copyright (C) 2017 Emanuel Goncalves
 """
 
-import numpy as np
 import scipy.stats as st
-from pandas import DataFrame, Series
+from pandas import DataFrame
 from scipy_sugar.stats import quantile_gaussianize
 
 
@@ -25,7 +24,7 @@ class DataMatrix(DataFrame):
     def _constructor(self):
         return DataMatrix
 
-    def counts_normalisation(self):
+    def estimate_size_factors(self):
         """
         Normalise count data per sample.
 
@@ -34,42 +33,7 @@ class DataMatrix(DataFrame):
         :returns DataMatrix: Normalised positive raw counts matrix
 
         """
-
-        # Estimate normalisation coefficients
-        factors = self.divide(st.gmean(self, axis=1), axis=0).median().rename('factors')
-
-        return self.divide(factors)
-
-    def estimate_fold_change(self, design):
-        """
-        Calculate fold-changes for conditions defined in the design matrix.
-
-        :param DataFrame design: Design matrix (samples x conditions)
-
-        :returns DataFrame: log2 fold-changes per condition (genes x conditions)
-        """
-
-        return self.dot(design)
-
-    def log_transform(self):
-        """
-        Log tansform matrix
-
-        :return DataMatrix: Log tansform
-        """
-        return np.log2(self)
-
-    def add_constant(self, constant=0.5):
-        """
-        Add constant to counts matrix
-
-        :param DataFrame matrix: Read counts matrix
-        :param float constant: Constant to add to read counts matrix
-
-        :return DataMatrix: Matrix counts
-        """
-
-        return self.add(constant)
+        return self.divide(st.gmean(self, axis=1), axis=0).median().rename('size_factors')
 
     def zscore(self):
         """
