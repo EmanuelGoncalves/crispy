@@ -6,16 +6,16 @@ from bsub import bsub
 from datetime import datetime as dt
 
 # Define variables
-samples = list(pd.read_csv('data/gdsc/crispr/crispy_gdsc_fold_change_sgrna.csv', index_col=0))
+samples = list(pd.read_csv('data/crispr_ccle_logfc.csv', index_col=0))
 
 memory, queque, cores = 32000, 'normal', 16
 
 # Submit a single job per sample
 for sample in samples:
-    jname = 'bsub_crispy_%s' % sample
+    jname = 'crispy_CCLE_%s' % sample
 
     # Define command
-    j_cmd = '/software/bin/python3.6.1 scripts/gdsc_correction.py %s' % sample
+    j_cmd = '/software/bin/python3.6.1 scripts/correct_ccle.py %s' % sample
 
     # Create bsub
     j = bsub(
@@ -25,4 +25,4 @@ for sample in samples:
 
     # Submit
     j(j_cmd)
-    print('[%s] bsub %s' % (dt.now().strftime('%Y-%m-%d %H:%M:%S'), sample))
+    print('[%s] bsub CCLE %s' % (dt.now().strftime('%Y-%m-%d %H:%M:%S'), sample))

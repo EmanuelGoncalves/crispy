@@ -11,7 +11,7 @@ from functools import partial
 from datetime import datetime as dt
 from concurrent.futures import ThreadPoolExecutor
 from sklearn.gaussian_process import GaussianProcessRegressor
-from sklearn.gaussian_process.kernels import WhiteKernel, ConstantKernel, RationalQuadratic, RBF
+from sklearn.gaussian_process.kernels import WhiteKernel, ConstantKernel, RBF
 
 
 # TODO: docs
