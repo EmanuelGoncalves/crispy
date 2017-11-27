@@ -1,9 +1,6 @@
 #!/usr/bin/env python
 # Copyright (C) 2017 Emanuel Goncalves
 
-#!/usr/bin/env python
-# Copyright (C) 2017 Emanuel Goncalves
-
 import pickle
 import numpy as np
 import pandas as pd
