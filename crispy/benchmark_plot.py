@@ -9,8 +9,6 @@ import matplotlib.pyplot as plt
 from sklearn.metrics.ranking import auc
 
 # TODO: Add documentation
-
-
 def plot_cumsum_auc(X, index_set, ax=None, cmap='viridis', legend=True, plot_mean=False):
     """
     Plot cumulative sum of values X considering index_set list.
