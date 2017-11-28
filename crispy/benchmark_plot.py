@@ -8,6 +8,7 @@ import scipy.stats as st
 import matplotlib.pyplot as plt
 from sklearn.metrics.ranking import auc
 
+
 # TODO: Add documentation
 def plot_cumsum_auc(X, index_set, ax=None, cmap='viridis', legend=True, plot_mean=False):
     """
