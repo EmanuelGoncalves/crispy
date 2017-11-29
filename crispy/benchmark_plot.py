@@ -93,8 +93,6 @@ def plot_cnv_rank(x, y, ax=None, stripplot=False, hline=0.5, order=None, color='
     if ax is None:
         ax = plt.gca()
 
-    plot_stats = {}
-
     boxplot_args = {'linewidth': .3, 'notch': notch, 'fliersize': 1, 'orient': 'v', 'sym': '' if stripplot else '.'}
     stripplot_args = {'orient': 'v', 'size': 1.5, 'linewidth': .05, 'edgecolor': 'white', 'jitter': .15, 'alpha': .75}
 
@@ -110,7 +108,7 @@ def plot_cnv_rank(x, y, ax=None, stripplot=False, hline=0.5, order=None, color='
     ax.set_xlabel('Copy-number (absolute)')
     ax.set_ylabel('Ranked %s' % y.name)
 
-    return ax, plot_stats
+    return ax
 
 
 def plot_chromosome(pos, original, mean, se=None, seg=None, highlight=None, ax=None, legend=False, cytobands=None):

@@ -1,55 +1,71 @@
 #!/usr/bin/env python
 # Copyright (C) 2017 Emanuel Goncalves
 
+import os
 import pickle
+import crispy
 import numpy as np
 import pandas as pd
 import seaborn as sns
-from natsort import natsorted
+import scipy.stats as st
 import matplotlib.pyplot as plt
+from natsort import natsorted
+from matplotlib.colors import rgb2hex
+from crispy.benchmark_plot import plot_cnv_rank
+
 
 # - Imports
+# Ploidy
+ploidy = pd.read_csv('data/gdsc/cell_lines_project_ploidy.csv', index_col=0)['Average Ploidy']
+
 # Non-expressed genes
 nexp = pickle.load(open('data/gdsc/nexp_pickle.pickle', 'rb'))
 
-# sgRNA library
-sgrna_lib = pd.read_csv('data/gdsc/crispr/KY_Library_v1.1_annotated.csv', index_col=0).dropna(subset=['STARTpos', 'GENES'])
-
-# CRISPR fold-changes
-fc = pd.read_csv('data/gdsc/crispr/crispy_gdsc_fold_change_sgrna.csv', index_col=0)
-fc = fc.groupby(sgrna_lib.loc[fc.index, 'GENES']).mean().dropna()
+# GDSC
+c_gdsc = pd.DataFrame({
+    os.path.splitext(f)[0].replace('crispr_gdsc_crispy_', ''):
+        pd.read_csv('data/crispy/' + f, index_col=0)['k_mean']
+    for f in os.listdir('data/crispy/') if f.startswith('crispr_gdsc_crispy_')
+}).dropna()
 
 # Copy-number absolute counts
 cnv = pd.read_csv('data/gdsc/copynumber/Gene_level_CN.txt', sep='\t', index_col=0)
-cnv = cnv.loc[:, cnv.columns.isin(list(fc))]
+cnv = cnv.loc[:, cnv.columns.isin(list(c_gdsc))]
 cnv_abs = cnv.applymap(lambda v: int(v.split(',')[1]))
 
 
+# - Overlap
+genes, samples = set(c_gdsc.index).intersection(cnv_abs.index), set(c_gdsc).intersection(cnv_abs)
+print(len(genes), len(samples))
+
+
 # -
-genes, samples = set(cnv_abs.index).intersection(fc.index), set(cnv).intersection(fc)
-
-df = pd.concat([
-    fc.loc[genes, samples].unstack().rename('crispr'),
+plot_df = pd.concat([
+    c_gdsc.loc[genes, samples].unstack().rename('bias'),
     cnv_abs.loc[genes, samples].unstack().rename('cnv')
-], axis=1).dropna().reset_index().rename(columns={'level_0': 'sample'})
-df = df.assign(chr=sgrna_lib.groupby('GENES')['CHRM'].first().rename('chr').loc[df['GENES']].values)
-df = df.query('cnv != -1')
-df = df.assign(cnv_d=['%d' % i if i < 8 else '>=8' for i in df['cnv']])
+], axis=1).query('cnv != -1').dropna()
+plot_df = plot_df.reset_index().rename(columns={'level_0': 'sample', 'level_1': 'gene'})
+plot_df = plot_df.assign(cnv_d=plot_df['cnv'].apply(lambda x: '11+' if x > 10 else str(x)))
+plot_df = plot_df.assign(rank=plot_df.groupby('sample')['bias'].rank(pct=True))
 
-plot_df = pd.pivot_table(df, index='sample', columns='cnv_d', values='crispr', aggfunc='mean')
-plot_df = plot_df.loc[:, natsorted(set(df['cnv_d']))]
+order = natsorted(set(plot_df['cnv_d']))
 
-sns.set(style='white', font_scale=.75)
-g = sns.heatmap(plot_df.T, mask=plot_df.T.isnull(), cmap='RdYlBu', lw=.3, center=0, square=True, cbar=False)
-g.set_xlabel('')
-g.set_ylabel('Copy-number')
-plt.setp(g.get_yticklabels(), rotation=0)
-plt.gcf().set_size_inches(18, 6)
-plt.savefig('reports/crispr_chr_effects_all_samples.png', bbox_inches='tight', dpi=600)
+# Overall copy-number bias
+ax = plot_cnv_rank(plot_df['cnv_d'], plot_df['bias'], notch=True, order=order)
+ax.set_ylabel('Ranked copy-number bias')
+plt.gcf().set_size_inches(3, 2)
+plt.savefig('reports/cnv_boxplot_bias_gdsc.png', bbox_inches='tight', dpi=600)
 plt.close('all')
 
+# Sample specific copy-number bias
+df = pd.pivot_table(plot_df, index='cnv_d', columns='sample', values='bias')
+df = df.loc[order, df.mean().sort_values().index]
 
-sns.factorplot('cnv_d', 'crispr', 'sample', data=df)
-plt.gcf().set_size_inches(4, 2)
-plt.savefig('reports/copy_number_effect_samples.png', bbox_inches='tight', dpi=600)
+sns.set(style='white', font_scale=.75)
+ax = sns.heatmap(df, mask=df.isnull(), cmap='RdYlBu', lw=.3, center=0, square=False, cbar=True)
+ax.set_xlabel('')
+ax.set_ylabel('Copy-number')
+plt.setp(ax.get_yticklabels(), rotation=0)
+plt.gcf().set_size_inches(10, 1.5)
+plt.savefig('reports/cnv_boxplot_bias_heatmap.png', bbox_inches='tight', dpi=600)
 plt.close('all')

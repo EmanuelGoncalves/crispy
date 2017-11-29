@@ -7,7 +7,7 @@ import pandas as pd
 import seaborn as sns
 from sklearn.svm import SVC
 import matplotlib.pyplot as plt
-from sklearn.mixture import GaussianMixture, BayesianGaussianMixture
+from sklearn.mixture import GaussianMixture
 
 # Utils
 cpal = {1: '#FF8200', 0: '#58595B'}
