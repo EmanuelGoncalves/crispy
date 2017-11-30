@@ -3,10 +3,12 @@
 
 import os
 import crispy
+import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 from crispy import bipal_gray
+from matplotlib.gridspec import GridSpec
 from crispy.benchmark_plot import plot_cumsum_auc, plot_cnv_rank, plot_chromosome
 
 
@@ -48,39 +50,63 @@ cnv_abs = cnv[samples].applymap(lambda v: int(v.split(',')[0]))
 
 
 # -
-ccleanr.loc[genes, samples].subtract(ccrispy.loc[genes, samples]).median(1).sort_values()
+aff_genes = ccleanr.loc[genes, samples].subtract(ccrispy.loc[genes, samples]).mean(1).sort_values(ascending=False)
 
-g = 'HSPE1'
-(ccleanr.loc[g, samples] - ccrispy.loc[g, samples]).sort_values()
+g = 'GAPDH'
 
-s = 'CL-40'
-ccleanr.loc[g, s] - ccrispy.loc[g, s]
-fc.loc[g, s]
+ccleanr.loc[genes, samples].subtract(ccrispy.loc[genes, samples]).loc[g].sort_values()
 
+s = 'OVCAR-8'
 
 plot_df = pd.concat([
     fc[s].rename('fc'),
     ccrispy[s].rename('crispy'),
     ccrispy_kmean[s].rename('kmean'),
     ccleanr[s].rename('ccleanr'),
+    cnv_abs[s].rename('cnv'),
     sgrna_lib.groupby('GENES')['CHRM'].first().rename('chr'),
     sgrna_lib.groupby('GENES')['STARTpos'].min().rename('pos')
-], axis=1).dropna()
+], axis=1).dropna().query('cnv != -1').dropna()
 
 #
-g = sns.PairGrid(plot_df[['fc', 'crispy', 'ccleanr']], despine=False)
-g = g.map_offdiag(plt.scatter, s=2, lw=.1, edgecolor='white', alpha=.4, color=bipal_gray[0])
-g = g.map_diag(plt.hist, lw=.3, color=bipal_gray[0])
-plt.gcf().set_size_inches(5, 5)
+gs = sns.PairGrid(plot_df[['fc', 'crispy', 'ccleanr']], despine=False)
+
+gs = gs.map_offdiag(plt.scatter, s=2, lw=.1, edgecolor='white', alpha=.4, color=bipal_gray[0])
+gs = gs.map_diag(plt.hist, lw=.3, color=bipal_gray[0])
+
+gs.data = plot_df.loc[aff_genes.head(20).index, ['fc', 'crispy', 'ccleanr']]
+gs = gs.map_offdiag(plt.scatter, s=3, lw=.1, edgecolor='white', alpha=.8, color=bipal_gray[1])
+
+plt.gcf().set_size_inches(3, 3)
 plt.savefig('reports/comparison_pairplot.png', bbox_inches='tight', dpi=600)
+plt.close('all')
+
+# Copy-number boxplot effects
+gs = GridSpec(3, 1, hspace=.3, wspace=.3)
+for i, l in enumerate(['fc', 'crispy', 'ccleanr']):
+    ax = plt.subplot(gs[i])
+    ax = plot_cnv_rank(plot_df['cnv'].astype(int), plot_df[l], color=bipal_gray[1], ax=ax, notch=True)
+    ax.set_ylabel(l)
+plt.gcf().set_size_inches(3, 4)
+plt.savefig('reports/comparison_cnv.png', bbox_inches='tight', dpi=600)
 plt.close('all')
 
 #
 chrm = plot_df.loc[g, 'chr']
 plot_df_ = plot_df.query("chr == '%s'" % chrm)
 
-plot_chromosome(plot_df_['pos'], plot_df_['fc'], plot_df_['kmean'], seg=cnv_seg.query("cellLine == '%s' & chr == '%s'" % (s, chrm)), highlight=[g])
+ax = plot_chromosome(plot_df_['pos'], plot_df_['fc'], plot_df_['kmean'], seg=cnv_seg.query("cellLine == '%s' & chr == '%s'" % (s, chrm)))
+
+ax.scatter(plot_df_.loc[g, 'pos'], plot_df_.loc[g, 'fc'], s=5, marker='X', lw=0, c='#8da0cb', alpha=.5, label='Orignal')
+ax.scatter(plot_df_.loc[g, 'pos'], plot_df_.loc[g, 'crispy'], s=5, marker='X', lw=0, c='#fc8d62', alpha=.5, label='Crispy')
+ax.scatter(plot_df_.loc[g, 'pos'], plot_df_.loc[g, 'ccleanr'], s=5, marker='X', lw=0, c='#ffd92f', alpha=.5, label='CCleanR')
+
+ax.set_ylabel('')
+
 plt.title('%s - chr: %s' % (s, chrm))
-plt.gcf().set_size_inches(3, 2)
+
+plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+
+plt.gcf().set_size_inches(3, 1)
 plt.savefig('reports/comparison_chromosome.png', bbox_inches='tight', dpi=600)
 plt.close('all')
