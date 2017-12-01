@@ -25,10 +25,17 @@ x = x.loc[:, x.sum() > 3]
 lm = LinearRegression().fit(x, y)
 lm_coef = pd.DataFrame(lm.coef_, index=y.columns, columns=x.columns)
 
-sns.set(font_scale=.5)
+
+# -
 sns.clustermap(lm_coef.T, cmap='RdGy', center=0)
-plt.gcf().set_size_inches(25, 4)
+plt.gcf().set_size_inches(15, 4)
 plt.savefig('reports/kinases_essentiality_clustermap.png', bbox_inches='tight', dpi=600)
 plt.close('all')
 
 
+# -
+plot_df = lm_coef.T.corr()
+sns.clustermap(plot_df, cmap='RdGy', center=0)
+plt.gcf().set_size_inches(15, 15)
+plt.savefig('reports/kinases_essentiality_clustermap_corr.png', bbox_inches='tight', dpi=600)
+plt.close('all')
