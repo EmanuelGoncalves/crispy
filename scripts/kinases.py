@@ -10,8 +10,12 @@ from scipy.stats import pearsonr
 from limix.qtl import qtl_test_lmm
 from statsmodels.stats.weightstats import ztest
 from sklearn.linear_model import LinearRegression
+from sklearn.metrics import roc_auc_score, average_precision_score, roc_curve, precision_recall_curve, auc
 
 # - Imports
+# Essential genes
+essential = pd.read_csv('data/resources/curated_BAGEL_essential.csv', sep='\t')['gene'].rename('essential')
+
 # Cancer genes
 cgenes = pd.read_csv('data/resources/cancer_genes.txt', sep='\t')
 cgenes = cgenes[cgenes['role'].isin(['Loss of function', 'Activating'])]
@@ -20,22 +24,24 @@ cgenes = cgenes.groupby('SYM')['role'].first()
 # Uniprot
 uniprot = pd.Series(pickle.load(open('data/resources/uniprot_to_genename.pickle', 'rb')))
 
-# Omnipath ptms
-ptms = pd.read_csv('data/resources/omnipath_ptms.txt', sep='\t')
-ptms = ptms[ptms['modification'].isin(['dephosphorylation', 'phosphorylation'])]
-ptms_set = {(s, t) for s, t in ptms[['enzyme', 'substrate']].values}
-
 # Omnipath
-omnipath = pd.read_csv('data/resources/omnipath_interactions.txt', sep='\t')
-omnipath = omnipath.query('is_directed == 1')
-omnipath = omnipath[omnipath['is_stimulation'] != omnipath['is_inhibition']]
-omnipath = omnipath[[(s, t) in ptms_set for s, t in omnipath[['source', 'target']].values]]
-
-omnipath = omnipath.assign(source_g=uniprot[omnipath['source']].values)
-omnipath = omnipath.assign(target_g=uniprot[omnipath['target']].values)
+omnipath = pd.read_csv('data/resources/omnipath_ptms_directed.txt', sep='\t')
+omnipath = omnipath[omnipath['modification'].isin(['phosphorylation', 'dephosphorylation'])]
+# omnipath = omnipath[omnipath['is_stimulation'] != omnipath['is_inhibition']]
+omnipath = omnipath[omnipath[['is_stimulation', 'is_inhibition']].sum(1) < 2]
+omnipath = omnipath.assign(enzyme_g=uniprot[omnipath['enzyme']].values)
+omnipath = omnipath.assign(substrate_g=uniprot[omnipath['substrate']].values)
+omnipath = omnipath[[len(set(i.split(';')).intersection({'Signor', 'PhosphoSite'})) >= 1 for i in omnipath['sources']]]
 
 #
 ccrispy = pd.read_csv('data/crispr_gdsc_crispy.csv', index_col=0)
+
+#
+phospho = pd.read_csv('data/gdsc/proteomics/phosphoproteomics_coread_processed.csv', index_col=0)
+phospho.columns = [c.split('_')[1] for c in phospho.columns]
+
+proteomics = pd.read_csv('data/gdsc/proteomics/proteomics_coread_processed.csv', index_col=0)
+proteomics.columns = [c.split('_')[1] for c in proteomics.columns]
 
 # Drug response single-agent
 d_response = pd.read_csv('data/gdsc/drug_single/drug_ic50_merged_matrix.csv', index_col=[0, 1, 2], header=[0, 1])
@@ -60,11 +66,39 @@ genes, samples = set(ccrispy.index), set(ccrispy)
 
 
 # -
-omnipath = omnipath[[s in ccrispy.index and t in ccrispy.index for s, t in omnipath[['source_g', 'target_g']].values]]
-omnipath = omnipath.assign(corr=[pearsonr(ccrispy.loc[s], ccrispy.loc[t])[0] for s, t in omnipath[['source_g', 'target_g']].values])
+std_genes = ccrispy[(ccrispy.abs() >= 1).sum(1) >= 3].copy()
+std_genes = std_genes[(std_genes < -1).sum(1) < (std_genes.shape[1] * .9)]
+std_genes = std_genes.drop(essential, axis=0, errors='ignore')
+std_genes = set(std_genes.index)
+
+omnipath = omnipath.groupby(['enzyme_g', 'substrate_g'])['is_stimulation'].first().reset_index()
+omnipath = omnipath[omnipath['enzyme_g'].isin(std_genes) & omnipath['substrate_g'].isin(std_genes)]
+omnipath = omnipath.assign(corr=[pearsonr(ccrispy.loc[s], ccrispy.loc[t])[0] for s, t in omnipath[['enzyme_g', 'substrate_g']].values])
+
+fpr, tpr, _ = roc_curve(omnipath['is_stimulation'], omnipath['corr'])
+plt.plot(fpr, tpr, label='%.2f (AUC)' % auc(fpr, tpr), lw=1.)
+plt.plot((0, 1), (0, 1), 'k--', lw=.3, alpha=.5)
+plt.xlim(0, 1)
+plt.ylim(0, 1)
+plt.legend()
+plt.show()
 
 
-sns.boxplot('is_inhibition', 'corr', data=omnipath)
+sns.boxplot('is_stimulation', 'corr', data=omnipath, notch=True)
+plt.show()
+
+plot_df = pd.concat([ccrispy.loc['MTOR'], ccrispy.loc['DNMT1'], samplesheet['Cancer Type']], axis=1).dropna()
+sns.jointplot('MTOR', 'DNMT1', data=plot_df)
+plt.show()
+
+# ['P26358_S143', 'P26358_S143_S152', 'P26358_S154', 'P26358_S714']
+plot_df = pd.concat([
+    proteomics.loc['P26358'],
+    phospho.loc['P26358_S714'],
+    ccrispy.loc['MTOR'],
+    ccrispy.loc['DNMT1'],
+], axis=1).dropna()
+sns.pairplot(plot_df)
 plt.show()
 
 
@@ -82,7 +116,6 @@ kns_ov = pd.DataFrame({
     } for k1 in kns
 })
 
-sns.jointplot(ccrispy.loc[g], ccrispy.loc['ACTR2'])
 
 # -
 y = ccrispy.loc[kfam['kinase']].T
@@ -149,5 +182,5 @@ kt_corr = kt_corr.sort_values('corr')
 sns.distplot(kt_corr['corr'])
 plt.show()
 
-sns.jointplot(ccrispy.loc['MTOR'], ccrispy.loc['RPTOR'])
+sns.jointplot(ccrispy.loc['ZAP70'], ccrispy.loc['SH2B3'])
 plt.show()
