@@ -44,7 +44,7 @@ print(len(genes), len(samples))
 
 
 #
-sample = 'COLO-205'
+sample = 'HCC1143'
 
 df = pd.concat([
     c_gdsc[sample].rename('crispr'),
@@ -61,11 +61,12 @@ thres = 4
 plot_df = df[df['cnv'] > thres]
 sns.boxplot('chr', 'crispr', data=plot_df, order=natsorted(set(plot_df['chr'])), color=bipal_dbgd[0])
 sns.stripplot('chr', 'crispr', data=plot_df, order=natsorted(set(plot_df['chr'])), edgecolor='white', jitter=.4, color=bipal_dbgd[0])
-plt.xlabel('Chromosome')
-plt.ylabel('Crispy identified bias')
-plt.title('%s (copy-number > %d)' % (sample, thres))
-plt.savefig('reports/karyotype_bias.png', bbox_inches='tight', dpi=600)
-plt.close('all')
+plt.show()
+# plt.xlabel('Chromosome')
+# plt.ylabel('Crispy identified bias')
+# plt.title('%s (copy-number > %d)' % (sample, thres))
+# plt.savefig('reports/karyotype_bias.png', bbox_inches='tight', dpi=600)
+# plt.close('all')
 
 
 # -
