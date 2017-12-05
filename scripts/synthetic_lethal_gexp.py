@@ -17,15 +17,17 @@ from sklearn.metrics.regression import explained_variance_score
 
 
 # - Import data-sets
+# Essential genes
+essential = pd.read_csv('data/resources/curated_BAGEL_essential.csv', sep='\t')['gene'].rename('essential')
+
 # Samplesheet
-ss = pd.read_csv('data/gdsc/samplesheet.csv', index_col=0).dropna(subset=['GDSC1'])
+ss = pd.read_csv('data/gdsc/samplesheet.csv', index_col=0).dropna(subset=['Cancer Type'])
 
 # sgRNA library
 sglib = pd.read_csv('data/gdsc/crispr/KY_Library_v1.1_annotated.csv', index_col=0).dropna(subset=['GENES'])
 
 # CRISPR
-crispr = pd.read_csv('data/gdsc/crispr/crispy_fold_change.csv', index_col=0)
-crispr = crispr.groupby(sglib.loc[crispr.index, 'GENES']).mean().dropna()
+crispr = pd.read_csv('data/crispr_gdsc_crispy.csv', index_col=0)
 
 # Gene-expression
 gexp = pd.read_csv('data/gdsc/gene_expression/merged_voom_preprocessed.csv', index_col=0)
@@ -38,18 +40,19 @@ print(crispr.shape, gexp.shape)
 
 # - Filter
 # CRISPR
-crispr_fc_thres = (crispr.abs() > 1.5).sum(1)
-crispr = crispr.loc[crispr_fc_thres >= 5]
+crispr = crispr[(crispr.abs() >= 1).sum(1) >= 5]
+crispr = crispr[(crispr < -1).sum(1) < (crispr.shape[1] * .9)]
+crispr = crispr.drop(essential, axis=0, errors='ignore')
 
 # Gexp
 iqr_l, iqr_u = gexp.unstack().quantile(0.1), gexp.unstack().quantile(0.9)
-gexp = gexp.loc[((gexp < iqr_l) | (gexp > iqr_u)).sum(1) >= 5]
+gexp = gexp.loc[((gexp < iqr_l) | (gexp > iqr_u)).sum(1) >= 10]
 print(crispr.shape, gexp.shape)
 
 
 # -
 # Covariates
-covars = pd.get_dummies(ss.loc[samples, ['GDSC1', 'MSI', 'medium', 'growth']])
+covars = pd.get_dummies(ss.loc[samples, ['Cancer Type', 'SCREEN MEDIUM', 'Microsatellite']])
 
 # Build matrices
 y, x, k = crispr[samples].T, gexp[samples].T, covars.dot(covars.T).astype(float)
@@ -62,7 +65,6 @@ lmm = qtl_test_lmm(pheno=y.values, snps=x.values, K=k.values)
 
 # Extract info
 c_gene, g_gene = zip(*list(it.product(y.columns, x.columns)))
-qvalue = qvalues(lmm.getPv())
 
 # Build pandas data-frame
 lmm_df = pd.DataFrame({
@@ -70,8 +72,9 @@ lmm_df = pd.DataFrame({
     'gexp': g_gene,
     'beta': lmm.getBetaSNP().ravel(),
     'pvalue': lmm.getPv().ravel(),
-    'qvalue': qvalue.ravel()
-}).sort_values('qvalue')
+})
+lmm_df = lmm_df[lmm_df['crispr'] != lmm_df['gexp']]
+lmm_df = lmm_df.assign(qvalue=qvalues(lmm_df['pvalue'].values))
 print(lmm_df.head(50))
 
 
@@ -80,7 +83,7 @@ print(lmm_df.head(50))
 def fun(x, a, b, c):
     return a + b * x + c * (x ** 2)
 
-# Plot
+
 gpairs = [(x, y) for x, y in lmm_df.head(50)[['gexp', 'crispr']].values]
 
 sns.set(style='ticks', context='paper', font_scale=0.75, rc={'axes.linewidth': .3, 'xtick.major.width': .3, 'ytick.major.width': .3, 'xtick.major.size': 2.5, 'ytick.major.size': 2.5, 'xtick.direction': 'in', 'ytick.direction': 'in'})
@@ -116,5 +119,5 @@ for gx, gy in gpairs:
     pos += 1
 
 plt.gcf().set_size_inches(2.5 * 5, 2.5 * 10)
-plt.savefig('reports/nlfit_scatters.png', bbox_inches='tight', dpi=600)
+plt.savefig('reports/nlfit_scatter.png', bbox_inches='tight', dpi=600)
 plt.close('all')
