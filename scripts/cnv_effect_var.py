@@ -9,6 +9,7 @@ import pandas as pd
 import seaborn as sns
 import scipy.stats as st
 import matplotlib.pyplot as plt
+from crispy import bipal_dbgd
 from natsort import natsorted
 from matplotlib.colors import rgb2hex
 from crispy.benchmark_plot import plot_cnv_rank
@@ -17,6 +18,9 @@ from crispy.benchmark_plot import plot_cnv_rank
 # - Imports
 # Ploidy
 ploidy = pd.read_csv('data/gdsc/cell_lines_project_ploidy.csv', index_col=0)['Average Ploidy']
+
+# sgRNA library
+sgrna_lib = pd.read_csv('data/gdsc/crispr/KY_Library_v1.1_annotated.csv', index_col=0).dropna(subset=['STARTpos', 'GENES'])
 
 # Non-expressed genes
 nexp = pickle.load(open('data/gdsc/nexp_pickle.pickle', 'rb'))
@@ -37,6 +41,31 @@ cnv_abs = cnv.applymap(lambda v: int(v.split(',')[1]))
 # - Overlap
 genes, samples = set(c_gdsc.index).intersection(cnv_abs.index), set(c_gdsc).intersection(cnv_abs)
 print(len(genes), len(samples))
+
+
+#
+sample = 'COLO-205'
+
+df = pd.concat([
+    c_gdsc[sample].rename('crispr'),
+    cnv_abs[sample].rename('cnv'),
+    sgrna_lib.groupby('GENES')['CHRM'].first().rename('chr'),
+    sgrna_lib.groupby('GENES')['STARTpos'].first().rename('start')
+], axis=1).dropna().sort_values(['chr', 'start'])
+df = df.query('cnv != -1')
+df = df.assign(cnv_d=['%d' % i if i < 8 else '>=8' for i in df['cnv']])
+
+
+# -
+thres = 4
+plot_df = df[df['cnv'] > thres]
+sns.boxplot('chr', 'crispr', data=plot_df, order=natsorted(set(plot_df['chr'])), color=bipal_dbgd[0])
+sns.stripplot('chr', 'crispr', data=plot_df, order=natsorted(set(plot_df['chr'])), edgecolor='white', jitter=.4, color=bipal_dbgd[0])
+plt.xlabel('Chromosome')
+plt.ylabel('Crispy identified bias')
+plt.title('%s (copy-number > %d)' % (sample, thres))
+plt.savefig('reports/karyotype_bias.png', bbox_inches='tight', dpi=600)
+plt.close('all')
 
 
 # -
