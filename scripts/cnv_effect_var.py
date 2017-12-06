@@ -37,6 +37,9 @@ cnv = pd.read_csv('data/gdsc/copynumber/Gene_level_CN.txt', sep='\t', index_col=
 cnv = cnv.loc[:, cnv.columns.isin(list(c_gdsc))]
 cnv_abs = cnv.applymap(lambda v: int(v.split(',')[1]))
 
+# Copy-number segments
+cnv_seg = pd.read_csv('data/gdsc/copynumber/Summary_segmentation_data_994_lines_picnic.txt', sep='\t')
+
 
 # - Overlap
 genes, samples = set(c_gdsc.index).intersection(cnv_abs.index), set(c_gdsc).intersection(cnv_abs)
@@ -54,14 +57,32 @@ df = df.assign(chr=sgrna_lib.groupby('GENES')['CHRM'].first()[df['gene']].values
 chr_cnv = df.groupby(['sample', 'chr'])['cnv'].median()
 df = df.assign(chr_cnv=chr_cnv.loc[[(s, c) for s, c in df[['sample', 'chr']].values]].values)
 
+df = df.assign(ploidy=ploidy[df['sample']].values)
+
 #
-plot_df = df.groupby(['sample', 'chr', 'cnv'])[['crispr', 'chr_cnv']].agg({'crispr': np.mean, 'chr_cnv': 'first'}).reset_index()
+plot_df = df.groupby(['sample', 'chr', 'cnv'])[['crispr', 'chr_cnv', 'ploidy']].agg({'crispr': np.mean, 'chr_cnv': 'first', 'ploidy': 'first'}).reset_index()
 plot_df = plot_df[~plot_df['chr'].isin(['Y', 'X'])]
 plot_df = plot_df.assign(ratio=plot_df['cnv'] / plot_df['chr_cnv'])
 
-sns.jointplot('ratio', 'crispr', data=plot_df)
+sns.jointplot('ratio', 'crispr', data=plot_df, kind='reg', color=bipal_dbgd[0], joint_kws={'line_kws': {'color': bipal_dbgd[1]}})
 plt.show()
+
+plt.gcf().set_size_inches(3, 3)
 plt.savefig('reports/ratio_bias.png', bbox_inches='tight', dpi=600)
+plt.close('all')
+
+plot_df_ = pd.concat([
+    plot_df[(plot_df['ratio'] == 1) & (plot_df['cnv'] >= 4)].assign(type='duplication'),
+    plot_df[(plot_df['ratio'] >= 4) & (plot_df['cnv'] >= 4)].assign(type='elongation')
+])
+
+sns.boxplot('crispr', 'type', data=plot_df_, orient='h', notch=True, color=bipal_dbgd[0], fliersize=1)
+plt.show()
+
+plt.xlabel('Crispr mean bias')
+plt.ylabel('Chromosome')
+plt.gcf().set_size_inches(3, 1)
+plt.savefig('reports/ratio_bias_boxplot.png', bbox_inches='tight', dpi=600)
 plt.close('all')
 
 # -
