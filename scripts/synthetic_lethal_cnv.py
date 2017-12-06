@@ -10,11 +10,11 @@ import seaborn as sns
 import itertools as it
 import matplotlib.pyplot as plt
 from crispy import bipal_gray
-from limix.stats import qvalues
 from limix.qtl import qtl_test_lmm
 from scipy.optimize import curve_fit
 from matplotlib.gridspec import GridSpec
 from sklearn.preprocessing import Imputer
+from limix.stats import qvalues, linear_kinship
 from limix_core.util.preprocess import gaussianize
 from sklearn.metrics import roc_curve, roc_auc_score
 from sklearn.metrics.regression import explained_variance_score
@@ -49,7 +49,7 @@ mobems = pd.read_csv('data/gdsc/mobems/PANCAN_simple_MOBEM.rdata.annotated.csv',
 
 
 # - Overlap
-samples = list(set(crispr).intersection(cnv))
+samples = list(set(crispr).intersection(cnv).intersection(gexp))
 crispr, cnv = crispr[samples], cnv[samples]
 print(crispr.shape, cnv.shape)
 
@@ -68,7 +68,7 @@ cnv_abs = cnv.loc[genes, samples].applymap(lambda v: int(v.split(',')[0]))
 cnv_abs = cnv_abs.replace(-1, np.nan)
 cnv_abs = pd.DataFrame(Imputer(strategy='most_frequent').fit_transform(cnv_abs), index=cnv_abs.index, columns=cnv_abs.columns)
 
-cnv_abs = cnv_abs.loc[(cnv_abs < 2).sum(1) >= 3]
+cnv_abs = cnv_abs.loc[(cnv_abs < 1).sum(1) >= 3]
 print(crispr.shape, cnv_abs.shape)
 
 
@@ -77,7 +77,10 @@ print(crispr.shape, cnv_abs.shape)
 covars = pd.get_dummies(ss.loc[samples, ['Cancer Type', 'Microsatellite']])
 
 # Build matrices
-y, x, k = crispr[samples].T, cnv_abs[samples].T, covars.dot(covars.T).astype(float)
+y, x = crispr[samples].T, cnv_abs[samples].T
+
+# Covars
+k = pd.DataFrame(linear_kinship(gexp[samples].T.values), index=samples, columns=samples)
 
 # Cap copy-number
 x = x.clip(0, 3)
@@ -101,7 +104,7 @@ print(lmm_df.head(30))
 
 
 # - Plot
-g_crispr, g_cnv = 'TRA2B', 'STK31'
+g_crispr, g_cnv = 'ARHGEF33', 'TUSC1'
 
 plot_df = pd.concat([
     crispr.loc[g_crispr, samples].rename('crispr'),

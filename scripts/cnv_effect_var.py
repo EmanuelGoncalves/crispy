@@ -44,7 +44,28 @@ print(len(genes), len(samples))
 
 
 #
-sample = 'HCC1143'
+df = pd.concat([
+    c_gdsc.loc[genes, samples].unstack().rename('crispr'),
+    cnv_abs.loc[genes, samples].unstack().rename('cnv')
+], axis=1).dropna().query('cnv != -1')
+df = df.reset_index().rename(columns={'level_0': 'sample', 'level_1': 'gene'})
+df = df.assign(chr=sgrna_lib.groupby('GENES')['CHRM'].first()[df['gene']].values)
+
+chr_cnv = df.groupby(['sample', 'chr'])['cnv'].median()
+df = df.assign(chr_cnv=chr_cnv.loc[[(s, c) for s, c in df[['sample', 'chr']].values]].values)
+
+#
+plot_df = df.groupby(['sample', 'chr', 'cnv'])[['crispr', 'chr_cnv']].agg({'crispr': np.mean, 'chr_cnv': 'first'}).reset_index()
+plot_df = plot_df[~plot_df['chr'].isin(['Y', 'X'])]
+plot_df = plot_df.assign(ratio=plot_df['cnv'] / plot_df['chr_cnv'])
+
+sns.jointplot('ratio', 'crispr', data=plot_df)
+plt.show()
+plt.savefig('reports/ratio_bias.png', bbox_inches='tight', dpi=600)
+plt.close('all')
+
+# -
+sample = 'MDA-MB-415'
 
 df = pd.concat([
     c_gdsc[sample].rename('crispr'),
@@ -53,10 +74,9 @@ df = pd.concat([
     sgrna_lib.groupby('GENES')['STARTpos'].first().rename('start')
 ], axis=1).dropna().sort_values(['chr', 'start'])
 df = df.query('cnv != -1')
+df = df[~df['chr'].isin(['Y', 'X'])]
 df = df.assign(cnv_d=['%d' % i if i < 8 else '>=8' for i in df['cnv']])
 
-
-# -
 thres = 4
 plot_df = df[df['cnv'] > thres]
 sns.boxplot('chr', 'crispr', data=plot_df, order=natsorted(set(plot_df['chr'])), color=bipal_dbgd[0])
