@@ -2,17 +2,16 @@
 # Copyright (C) 2017 Emanuel Goncalves
 
 import os
-import pickle
 import crispy
+import pickle
 import numpy as np
 import pandas as pd
 import seaborn as sns
 import scipy.stats as st
 import matplotlib.pyplot as plt
+from scipy.stats import mode
 from crispy import bipal_dbgd
 from natsort import natsorted
-from scipy.stats import mode
-from matplotlib.colors import rgb2hex
 from crispy.benchmark_plot import plot_cnv_rank
 
 
@@ -42,13 +41,6 @@ cnv_abs = cnv.applymap(lambda v: int(v.split(',')[1]))
 cnv_seg = pd.read_csv('data/gdsc/copynumber/Summary_segmentation_data_994_lines_picnic.txt', sep='\t')
 cnv_seg['chr'] = cnv_seg['chr'].replace(23, 'X').replace(24, 'Y').astype(str)
 cnv_seg = cnv_seg[cnv_seg['cellLine'].isin(set(c_gdsc))]
-
-seg = cnv_seg[(cnv_seg['cellLine'] == '697') & (cnv_seg['chr'] == 1)]
-
-ax = plt.gca()
-for i, (s, e, c) in enumerate(seg[['startpos', 'endpos', 'totalCN']].values):
-    ax.plot([s, e], [c, c], lw=1., c='#58595B', alpha=.9, label='totalCN' if i == 0 else None)
-plt.show()
 
 cnv_seg_c = []
 for s in set(cnv_seg['cellLine']):
@@ -109,61 +101,4 @@ plt.xlabel('Crispr mean bias')
 plt.ylabel('Chromosome')
 plt.gcf().set_size_inches(3, 1)
 plt.savefig('reports/ratio_bias_boxplot.png', bbox_inches='tight', dpi=600)
-plt.close('all')
-
-
-# -
-sample = 'MDA-MB-415'
-
-df = pd.concat([
-    c_gdsc[sample].rename('crispr'),
-    cnv_abs[sample].rename('cnv'),
-    sgrna_lib.groupby('GENES')['CHRM'].first().rename('chr'),
-    sgrna_lib.groupby('GENES')['STARTpos'].first().rename('start')
-], axis=1).dropna().sort_values(['chr', 'start'])
-df = df.query('cnv != -1')
-df = df[~df['chr'].isin(['Y', 'X'])]
-df = df.assign(cnv_d=['%d' % i if i < 8 else '>=8' for i in df['cnv']])
-
-thres = 4
-plot_df = df[df['cnv'] > thres]
-sns.boxplot('chr', 'crispr', data=plot_df, order=natsorted(set(plot_df['chr'])), color=bipal_dbgd[0])
-sns.stripplot('chr', 'crispr', data=plot_df, order=natsorted(set(plot_df['chr'])), edgecolor='white', jitter=.4, color=bipal_dbgd[0])
-plt.show()
-# plt.xlabel('Chromosome')
-# plt.ylabel('Crispy identified bias')
-# plt.title('%s (copy-number > %d)' % (sample, thres))
-# plt.savefig('reports/karyotype_bias.png', bbox_inches='tight', dpi=600)
-# plt.close('all')
-
-
-# -
-plot_df = pd.concat([
-    c_gdsc.loc[genes, samples].unstack().rename('bias'),
-    cnv_abs.loc[genes, samples].unstack().rename('cnv')
-], axis=1).query('cnv != -1').dropna()
-plot_df = plot_df.reset_index().rename(columns={'level_0': 'sample', 'level_1': 'gene'})
-plot_df = plot_df.assign(cnv_d=plot_df['cnv'].apply(lambda x: '11+' if x > 10 else str(x)))
-plot_df = plot_df.assign(rank=plot_df.groupby('sample')['bias'].rank(pct=True))
-
-order = natsorted(set(plot_df['cnv_d']))
-
-# Overall copy-number bias
-ax = plot_cnv_rank(plot_df['cnv_d'], plot_df['bias'], notch=True, order=order)
-ax.set_ylabel('Ranked copy-number bias')
-plt.gcf().set_size_inches(3, 2)
-plt.savefig('reports/cnv_boxplot_bias_gdsc.png', bbox_inches='tight', dpi=600)
-plt.close('all')
-
-# Sample specific copy-number bias
-df = pd.pivot_table(plot_df, index='cnv_d', columns='sample', values='bias')
-df = df.loc[order, df.mean().sort_values().index]
-
-sns.set(style='white', font_scale=.75)
-ax = sns.heatmap(df, mask=df.isnull(), cmap='RdYlBu', lw=.3, center=0, square=False, cbar=True)
-ax.set_xlabel('')
-ax.set_ylabel('Copy-number')
-plt.setp(ax.get_yticklabels(), rotation=0)
-plt.gcf().set_size_inches(10, 1.5)
-plt.savefig('reports/cnv_boxplot_bias_heatmap.png', bbox_inches='tight', dpi=600)
 plt.close('all')
