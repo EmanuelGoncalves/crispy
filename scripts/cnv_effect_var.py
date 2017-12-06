@@ -11,6 +11,7 @@ import scipy.stats as st
 import matplotlib.pyplot as plt
 from crispy import bipal_dbgd
 from natsort import natsorted
+from scipy.stats import mode
 from matplotlib.colors import rgb2hex
 from crispy.benchmark_plot import plot_cnv_rank
 
@@ -39,6 +40,26 @@ cnv_abs = cnv.applymap(lambda v: int(v.split(',')[1]))
 
 # Copy-number segments
 cnv_seg = pd.read_csv('data/gdsc/copynumber/Summary_segmentation_data_994_lines_picnic.txt', sep='\t')
+cnv_seg['chr'] = cnv_seg['chr'].replace(23, 'X').replace(24, 'Y').astype(str)
+cnv_seg = cnv_seg[cnv_seg['cellLine'].isin(set(c_gdsc))]
+
+seg = cnv_seg[(cnv_seg['cellLine'] == '697') & (cnv_seg['chr'] == 1)]
+
+ax = plt.gca()
+for i, (s, e, c) in enumerate(seg[['startpos', 'endpos', 'totalCN']].values):
+    ax.plot([s, e], [c, c], lw=1., c='#58595B', alpha=.9, label='totalCN' if i == 0 else None)
+plt.show()
+
+cnv_seg_c = []
+for s in set(cnv_seg['cellLine']):
+    for c in ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '21', '22']:
+        seg = cnv_seg[(cnv_seg['cellLine'] == s) & (cnv_seg['chr'] == c)]
+        seg_c = [((e - s) * (c + 1), (e - s)) for i, (s, e, c) in enumerate(seg[['startpos', 'endpos', 'totalCN']].values)]
+        d, n = zip(*(seg_c))
+        cpv = sum(d) / sum(n) - 1
+        cnv_seg_c.append({'sample': s, 'chr': c, 'ploidy': cpv})
+cnv_seg_c = pd.DataFrame(cnv_seg_c)
+cnv_seg_c = cnv_seg_c.groupby(['sample', 'chr']).first()
 
 
 # - Overlap
@@ -54,6 +75,8 @@ df = pd.concat([
 df = df.reset_index().rename(columns={'level_0': 'sample', 'level_1': 'gene'})
 df = df.assign(chr=sgrna_lib.groupby('GENES')['CHRM'].first()[df['gene']].values)
 
+# chr_cnv = df.groupby(['sample', 'chr'])['cnv'].median()
+# df = df.assign(chr_cnv=cnv_seg_c.loc[[(s, c) for s, c in df[['sample', 'chr']].values]].values)
 chr_cnv = df.groupby(['sample', 'chr'])['cnv'].median()
 df = df.assign(chr_cnv=chr_cnv.loc[[(s, c) for s, c in df[['sample', 'chr']].values]].values)
 
@@ -63,8 +86,10 @@ df = df.assign(ploidy=ploidy[df['sample']].values)
 plot_df = df.groupby(['sample', 'chr', 'cnv'])[['crispr', 'chr_cnv', 'ploidy']].agg({'crispr': np.mean, 'chr_cnv': 'first', 'ploidy': 'first'}).reset_index()
 plot_df = plot_df[~plot_df['chr'].isin(['Y', 'X'])]
 plot_df = plot_df.assign(ratio=plot_df['cnv'] / plot_df['chr_cnv'])
+plot_df = plot_df.dropna()
 
-sns.jointplot('ratio', 'crispr', data=plot_df, kind='reg', color=bipal_dbgd[0], joint_kws={'line_kws': {'color': bipal_dbgd[1]}})
+g = sns.jointplot('ratio', 'crispr', data=plot_df, kind='reg', color=bipal_dbgd[0], joint_kws={'line_kws': {'color': bipal_dbgd[1]}})
+sns.kdeplot(plot_df['ratio'], plot_df['crispr'], ax=g.ax_joint, shade_lowest=False, n_levels=60)
 plt.show()
 
 plt.gcf().set_size_inches(3, 3)
@@ -72,8 +97,9 @@ plt.savefig('reports/ratio_bias.png', bbox_inches='tight', dpi=600)
 plt.close('all')
 
 plot_df_ = pd.concat([
-    plot_df[(plot_df['ratio'] == 1) & (plot_df['cnv'] >= 4)].assign(type='duplication'),
-    plot_df[(plot_df['ratio'] >= 4) & (plot_df['cnv'] >= 4)].assign(type='elongation')
+    plot_df[(plot_df['ratio'] < 1) & (plot_df['cnv'] >= 3)].assign(type='depletion (p<1)'),
+    plot_df[(plot_df['ratio'] < 3) & (plot_df['ratio'] >= 1) & (plot_df['cnv'] >= 3)].assign(type='duplication (p<3)'),
+    plot_df[(plot_df['ratio'] >= 3) & (plot_df['cnv'] >= 3)].assign(type='elongation (p>3)')
 ])
 
 sns.boxplot('crispr', 'type', data=plot_df_, orient='h', notch=True, color=bipal_dbgd[0], fliersize=1)
@@ -84,6 +110,7 @@ plt.ylabel('Chromosome')
 plt.gcf().set_size_inches(3, 1)
 plt.savefig('reports/ratio_bias_boxplot.png', bbox_inches='tight', dpi=600)
 plt.close('all')
+
 
 # -
 sample = 'MDA-MB-415'
