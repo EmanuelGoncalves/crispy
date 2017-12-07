@@ -26,6 +26,8 @@ sgrna_lib = pd.read_csv('data/gdsc/crispr/KY_Library_v1.1_annotated.csv', index_
 nexp = pickle.load(open('data/gdsc/nexp_pickle.pickle', 'rb'))
 
 # GDSC
+fc = pd.read_csv('data/crispr_gdsc_logfc.csv', index_col=0)
+ccrispy = pd.read_csv('data/crispr_gdsc_crispy.csv', index_col=0)
 c_gdsc = pd.DataFrame({
     os.path.splitext(f)[0].replace('crispr_gdsc_crispy_', ''):
         pd.read_csv('data/crispy/' + f, index_col=0)['k_mean']
@@ -35,7 +37,7 @@ c_gdsc = pd.DataFrame({
 # Copy-number absolute counts
 cnv = pd.read_csv('data/gdsc/copynumber/Gene_level_CN.txt', sep='\t', index_col=0)
 cnv = cnv.loc[:, cnv.columns.isin(list(c_gdsc))]
-cnv_abs = cnv.applymap(lambda v: int(v.split(',')[1]))
+cnv_abs = cnv.drop(['chr', 'start', 'stop'], axis=1).applymap(lambda v: int(v.split(',')[1]))
 
 # Copy-number segments
 cnv_seg = pd.read_csv('data/gdsc/copynumber/Summary_segmentation_data_994_lines_picnic.txt', sep='\t')
@@ -59,7 +61,24 @@ genes, samples = set(c_gdsc.index).intersection(cnv_abs.index), set(c_gdsc).inte
 print(len(genes), len(samples))
 
 
+# -
+plot_df = pd.concat([
+    (cnv_abs > 3).sum().rename('cnv'),
+    ploidy.rename('ploidy')
+], axis=1).dropna()
+
+g = sns.jointplot('cnv', 'ploidy', data=plot_df, color=bipal_dbgd[0], joint_kws={'edgecolor': 'white', 'lw': .3}, space=0)
+g.set_axis_labels('# gene with copy-number > 3', 'Cell line ploidy')
+plt.show()
+
+plt.gcf().set_size_inches(3, 3)
+plt.savefig('reports/ploidy_cnv_jointplot.png', bbox_inches='tight', dpi=600)
+plt.close('all')
+
 #
+
+
+# -
 df = pd.concat([
     c_gdsc.loc[genes, samples].unstack().rename('crispr'),
     cnv_abs.loc[genes, samples].unstack().rename('cnv')
