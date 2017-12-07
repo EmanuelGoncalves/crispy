@@ -9,11 +9,13 @@ import pandas as pd
 import seaborn as sns
 import scipy.stats as st
 import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
 from scipy.stats import mode
 from crispy import bipal_dbgd
 from natsort import natsorted
-import matplotlib.patches as mpatches
+from sklearn.metrics import roc_auc_score
 from crispy.benchmark_plot import plot_cnv_rank
+from sklearn.linear_model import LinearRegression
 
 
 # - Imports
@@ -110,6 +112,23 @@ legend.get_title().set_fontsize('4')
 plt.gcf().set_size_inches(4, 3)
 plt.savefig('reports/ploidy_nexp_bias_boxplot.png', bbox_inches='tight', dpi=600)
 plt.close('all')
+
+
+# -
+df = plot_df.groupby(['sample', 'cnv'])['bias'].mean().reset_index().query('cnv > 2')
+
+c_slope = {}
+for c in c_gdsc:
+    if c in nexp and c in cnv_abs:
+        df_ = df.query("sample == '%s'" % c)[['cnv', 'bias']]
+        if df_.shape[0] > 1:
+            x, y = zip(*(df_.values))
+            lm = LinearRegression().fit(np.matrix(x).T, np.array(y))
+            c_slope[c] = lm.coef_[0]
+df = pd.concat([pd.Series(c_slope).rename('slope'), ploidy.rename('ploidy')], axis=1).dropna()
+
+sns.jointplot('slope', 'ploidy', data=df)
+plt.show()
 
 
 # -
