@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 from scipy.stats import mode
 from crispy import bipal_dbgd
 from natsort import natsorted
+import matplotlib.patches as mpatches
 from crispy.benchmark_plot import plot_cnv_rank
 
 
@@ -75,7 +76,40 @@ plt.gcf().set_size_inches(3, 3)
 plt.savefig('reports/ploidy_cnv_jointplot.png', bbox_inches='tight', dpi=600)
 plt.close('all')
 
-#
+
+# -
+plot_df = pd.concat([
+        pd.concat([
+            cnv_abs.loc[nexp[c], c].rename('cnv'),
+            fc.loc[nexp[c], c].rename('bias')
+        ], axis=1).dropna().assign(sample=c).reset_index().rename(columns={'index': 'gene'})
+    for c in c_gdsc if c in nexp and c in cnv_abs
+]).dropna()
+
+# plot_df = plot_df.groupby(['sample', 'cnv'])['bias'].mean().reset_index().query('cnv != -1')
+# plot_df = plot_df.assign(ploidy=ploidy[plot_df['sample']].values)
+plot_df = plot_df.assign(ploidy=cnv_abs.median()[plot_df['sample']].astype(int).values)
+plot_df = plot_df.assign(cnv_d=[str(int(i)) if i < 10 else '10+' for i in plot_df['cnv']])
+
+order = natsorted(set(plot_df.query('cnv > 2')['cnv_d']))
+
+ax = plt.gca()
+# sns.violinplot('ploidy', 'bias', 'cnv_d', data=plot_df.query('cnv > 2'), hue_order=order, palette='Reds', linewidth=.3, cut=0, ax=ax, scale='width')
+sns.boxplot('ploidy', 'bias', 'cnv_d', data=plot_df.query('cnv > 2'), hue_order=order, palette='Reds', linewidth=.3, fliersize=1, ax=ax, notch=True)
+# sns.stripplot('ploidy', 'bias', 'cnv_d', data=plot_df.query('cnv > 2'), hue_order=order, palette='Reds', edgecolor='white', linewidth=.1, size=1, split=True, jitter=.4, ax=ax)
+plt.axhline(0, lw=.3, c=bipal_dbgd[0], ls='-')
+plt.xlabel('Cell line ploidy')
+plt.ylabel('CRISPR fold-change (log2)')
+plt.title('Non-expressed genes fold-change')
+
+plt.show()
+
+handles = [mpatches.Circle([.0, .0], .25, facecolor=c, label=l) for c, l in zip(*(sns.color_palette('Reds', n_colors=len(order)).as_hex(), order))]
+legend = plt.legend(handles=handles, title='Copy-number', prop={'size': 4})
+legend.get_title().set_fontsize('4')
+plt.gcf().set_size_inches(4, 3)
+plt.savefig('reports/ploidy_nexp_bias_boxplot.png', bbox_inches='tight', dpi=600)
+plt.close('all')
 
 
 # -
