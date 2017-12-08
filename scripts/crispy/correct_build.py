@@ -2,13 +2,19 @@
 # Copyright (C) 2017 Emanuel Goncalves
 
 import os
+import pickle
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
+from natsort import natsorted
 from crispy import bipal_gray
+from sklearn.metrics import roc_curve, auc
 from crispy.benchmark_plot import plot_cumsum_auc
 
 # - Import
+# Non-expressed genes
+nexp = pickle.load(open('data/gdsc/nexp_pickle.pickle', 'rb'))
+
 # Essential genes
 essential = pd.read_csv('data/resources/curated_BAGEL_essential.csv', sep='\t')['gene'].rename('essential')
 
@@ -117,6 +123,33 @@ for n, df, df_ in [('gdsc', c_gdsc, c_gdsc_fc)]:
 
 
 # Copy-number bias
-samples = set(gdsc_cnv).intersection(c_gdsc_fc)
-gdsc_cnv = gdsc_cnv[list(samples)]
+plot_df = pd.DataFrame({c: c_gdsc_fc.loc[nexp[c], c] for c in c_gdsc_fc if c in nexp})
+plot_df = pd.concat([
+    plot_df.unstack().rename('fc'),
+    gdsc_cnv.loc[plot_df.index, plot_df.columns].unstack().rename('cnv')
+], axis=1).dropna()
+plot_df = plot_df.assign(cnv=plot_df['cnv'].apply(lambda v: int(v.split(',')[1])).values).query('cnv >= 2')
+plot_df = plot_df.assign(cnv=[str(i) if i < 10 else '10+' for i in plot_df['cnv']])
 
+thresholds = natsorted(set(plot_df['cnv']))
+thresholds_color = sns.light_palette(bipal_gray[0], n_colors=len(thresholds)).as_hex()
+
+ax = plt.gca()
+
+for c, thres in zip(thresholds_color, thresholds):
+    fpr, tpr, _ = roc_curve((plot_df['cnv'] == thres).astype(int), -plot_df['fc'])
+    ax.plot(fpr, tpr, label='%s: AUC=%.2f' % (thres, auc(fpr, tpr)), lw=1., c=c)
+
+ax.plot((0, 1), (0, 1), 'k--', lw=.3, alpha=.5)
+ax.set_xlim(0, 1)
+ax.set_ylim(0, 1)
+ax.set_xlabel('False positive rate')
+ax.set_ylabel('True positive rate')
+ax.set_title('CRISPR/Cas9 copy-number amplification bias\nnon-expressed genes')
+legend = ax.legend(loc=4, title='Copy-number', prop={'size': 6})
+legend.get_title().set_fontsize('7')
+
+# plt.show()
+plt.gcf().set_size_inches(3, 3)
+plt.savefig('reports/processing_gdsc_copy_number_bias.png', bbox_inches='tight', dpi=600)
+plt.close('all')

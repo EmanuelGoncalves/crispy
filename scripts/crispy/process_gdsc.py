@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
+import crispy
 from crispy import bipal_dbgd
 from crispy.data_matrix import DataMatrix
 
@@ -84,7 +85,21 @@ fc.round(5).to_csv('data/crispr_gdsc_logfc.csv')
 
 
 # - Tissue distribution
-plot_df = ss.loc[list(fc), 'Cancer Type'].value_counts().reset_index().rename(columns={'index': 'Cancer Type', 'Cancer Type': 'Counts'})
+plot_df = ss.loc[list(fc), 'Cancer Type'].value_counts(ascending=True).reset_index().rename(columns={'index': 'Cancer Type', 'Cancer Type': 'Counts'})
+plot_df = plot_df.assign(ypos=np.arange(plot_df.shape[0]))
 
-sns.barplot('Counts', 'Cancer Type', data=plot_df, color=bipal_dbgd[0])
-plt.show()
+plt.barh(plot_df['ypos'], plot_df['Counts'], .8, color=bipal_dbgd[0], align='center')
+
+for x, y in plot_df[['ypos', 'Counts']].values:
+    plt.text(y - .5, x, str(y), color='white', ha='right' if y != 1 else 'center', va='center', fontsize=6)
+
+plt.yticks(plot_df['ypos'])
+plt.yticks(plot_df['ypos'], plot_df['Cancer Type'])
+
+plt.xlabel('# cell lines')
+plt.title('CRISPR/Cas9 screen\n(%d cell lines)' % plot_df['Counts'].sum())
+
+# plt.show()
+plt.gcf().set_size_inches(2, 3)
+plt.savefig('reports/screen_samples.png', bbox_inches='tight', dpi=600)
+plt.close('all')
