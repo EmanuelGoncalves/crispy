@@ -131,9 +131,9 @@ def plot_chromosome(pos, original, mean, se=None, seg=None, highlight=None, ax=N
 
     # Highlight
     if highlight is not None:
-        for i in highlight:
+        for ic, i in zip(*(sns.color_palette('tab20', n_colors=len(highlight)), highlight)):
             if i in pos.index:
-                ax.scatter(pos.loc[i], original.loc[i], s=3, marker='X', lw=0, c='#FF8200', alpha=.5, label=i)
+                ax.scatter(pos.loc[i], original.loc[i], s=3, marker='X', lw=0, c=ic, alpha=.5, label=i)
     # Misc
     ax.axhline(0, lw=.3, ls='-', color='black')
 
