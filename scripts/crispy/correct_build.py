@@ -3,15 +3,20 @@
 
 import os
 import pickle
+import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
-from natsort import natsorted
 from crispy import bipal_gray
-from sklearn.metrics import roc_curve, auc
+from natsort import natsorted
+from sklearn.linear_model import LinearRegression
 from crispy.benchmark_plot import plot_cumsum_auc
+from sklearn.metrics import roc_curve, auc, roc_auc_score
 
 # - Import
+# Ploidy
+ploidy = pd.read_csv('data/gdsc/cell_lines_project_ploidy.csv', index_col=0)['Average Ploidy']
+
 # Non-expressed genes
 nexp = pickle.load(open('data/gdsc/nexp_pickle.pickle', 'rb'))
 
@@ -122,14 +127,15 @@ for n, df, df_ in [('gdsc', c_gdsc, c_gdsc_fc)]:
     plt.close('all')
 
 
-# Copy-number bias
+# Copy-number bias AUCs
 plot_df = pd.DataFrame({c: c_gdsc_fc.loc[nexp[c], c] for c in c_gdsc_fc if c in nexp})
 plot_df = pd.concat([
     plot_df.unstack().rename('fc'),
     gdsc_cnv.loc[plot_df.index, plot_df.columns].unstack().rename('cnv')
 ], axis=1).dropna()
-plot_df = plot_df.assign(cnv=plot_df['cnv'].apply(lambda v: int(v.split(',')[1])).values).query('cnv >= 2')
-plot_df = plot_df.assign(cnv=[str(i) if i < 10 else '10+' for i in plot_df['cnv']])
+plot_df = plot_df.assign(cnv_abs=plot_df['cnv'].apply(lambda v: int(v.split(',')[1])).values).query('cnv_abs >= 2')
+plot_df = plot_df.assign(cnv=[str(i) if i < 10 else '10+' for i in plot_df['cnv_abs']])
+plot_df = plot_df.reset_index().rename(columns={'level_0': 'sample', 'level_1': 'gene'})
 
 thresholds = natsorted(set(plot_df['cnv']))
 thresholds_color = sns.light_palette(bipal_gray[0], n_colors=len(thresholds)).as_hex()
@@ -153,3 +159,33 @@ legend.get_title().set_fontsize('7')
 plt.gcf().set_size_inches(3, 3)
 plt.savefig('reports/processing_gdsc_copy_number_bias.png', bbox_inches='tight', dpi=600)
 plt.close('all')
+
+
+# - Copy-number variation across cell lines
+df = {}
+for c in set(plot_df['sample']):
+    df_ = plot_df.query("sample == '%s'" % c)
+
+    df[c] = {}
+
+    for t in thresholds:
+        if (sum(df_['cnv'] == t) >= 5) and (len(set(df_['cnv'])) > 1):
+            df[c][t] = roc_auc_score((df_['cnv'] == t).astype(int), -df_['fc'])
+
+df = pd.DataFrame(df)
+df = df.unstack().reset_index().dropna().rename(columns={'level_0': 'sample', 'level_1': 'cnv', 0: 'auc'})
+
+sns.boxplot('cnv', 'auc', data=df, sym='', order=thresholds, palette=thresholds_color, linewidth=.3)
+sns.stripplot('cnv', 'auc', data=df, order=thresholds, palette=thresholds_color, edgecolor='white', linewidth=.1, size=3, jitter=.4)
+# plt.show()
+
+plt.title('CRISPR/Cas9 copy-number amplification bias\nnon-expressed genes')
+plt.xlabel('Copy-number')
+plt.ylabel('Copy-number AUC (cell lines)')
+plt.axhline(0.5, ls='--', lw=.3, alpha=.5, c=bipal_gray[0])
+plt.gcf().set_size_inches(3, 3)
+plt.savefig('reports/processing_gdsc_copy_number_bias_per_sample.png', bbox_inches='tight', dpi=600)
+plt.close('all')
+
+#
+
