@@ -6,8 +6,10 @@ import pickle
 import numpy as np
 import pandas as pd
 import seaborn as sns
+import scipy.stats as st
 import matplotlib.pyplot as plt
-from crispy import bipal_gray
+import matplotlib.patches as mpatches
+from crispy import bipal_dbgd
 from natsort import natsorted
 from sklearn.linear_model import LinearRegression
 from crispy.benchmark_plot import plot_cumsum_auc
@@ -41,6 +43,12 @@ c_gdsc = pd.DataFrame({
 }).dropna()
 c_gdsc.round(5).to_csv('data/crispr_gdsc_crispy.csv')
 
+c_gdsc_kmean = pd.DataFrame({
+    os.path.splitext(f)[0].replace('crispr_gdsc_crispy_', ''):
+        pd.read_csv('data/crispy/' + f, index_col=0)['k_mean']
+    for f in os.listdir('data/crispy/') if f.startswith('crispr_gdsc_crispy_')
+}).dropna()
+
 # CCLE
 c_ccle_fc = pd.read_csv('data/crispr_ccle_logfc.csv', index_col=0)
 
@@ -50,6 +58,10 @@ c_ccle = pd.DataFrame({
     for f in os.listdir('data/crispy/') if f.startswith('crispr_ccle_crispy_')
 }).dropna()
 c_ccle.round(5).to_csv('data/crispr_ccle_crispy.csv')
+
+
+# - Copy-number absolute
+gdsc_cnv_abs = gdsc_cnv[c_gdsc_fc.columns].applymap(lambda v: int(v.split(',')[1])).replace(-1, np.nan)
 
 
 # - Benchmark
@@ -72,9 +84,9 @@ for n, df, df_ in [('gdsc', c_gdsc, c_gdsc_fc)]:
 
     ax = plt.gca()
 
-    ax.scatter(plot_df['Original'], plot_df['Corrected'], c=bipal_gray[0], s=3, marker='x', lw=0.5)
-    sns.rugplot(plot_df['Original'], height=.02, axis='x', c=bipal_gray[0], lw=.3, ax=ax)
-    sns.rugplot(plot_df['Corrected'], height=.02, axis='y', c=bipal_gray[0], lw=.3, ax=ax)
+    ax.scatter(plot_df['Original'], plot_df['Corrected'], c=bipal_dbgd[0], s=3, marker='x', lw=0.5)
+    sns.rugplot(plot_df['Original'], height=.02, axis='x', c=bipal_dbgd[0], lw=.3, ax=ax)
+    sns.rugplot(plot_df['Corrected'], height=.02, axis='y', c=bipal_dbgd[0], lw=.3, ax=ax)
 
     x_lim, y_lim = ax.get_xlim(), ax.get_ylim()
     ax.plot(x_lim, y_lim, 'k--', lw=.3)
@@ -108,9 +120,9 @@ for n, df, df_ in [('gdsc', c_gdsc, c_gdsc_fc)]:
 
     ax = plt.gca()
 
-    ax.scatter(plot_df['Original'], plot_df['Corrected'], c=bipal_gray[0], s=3, marker='x', lw=0.5)
-    sns.rugplot(plot_df['Original'], height=.02, axis='x', c=bipal_gray[0], lw=.3, ax=ax)
-    sns.rugplot(plot_df['Corrected'], height=.02, axis='y', c=bipal_gray[0], lw=.3, ax=ax)
+    ax.scatter(plot_df['Original'], plot_df['Corrected'], c=bipal_dbgd[0], s=3, marker='x', lw=0.5)
+    sns.rugplot(plot_df['Original'], height=.02, axis='x', c=bipal_dbgd[0], lw=.3, ax=ax)
+    sns.rugplot(plot_df['Corrected'], height=.02, axis='y', c=bipal_dbgd[0], lw=.3, ax=ax)
 
     x_lim, y_lim = ax.get_xlim(), ax.get_ylim()
     ax.plot(x_lim, y_lim, 'k--', lw=.3)
@@ -135,10 +147,12 @@ plot_df = pd.concat([
 ], axis=1).dropna()
 plot_df = plot_df.assign(cnv_abs=plot_df['cnv'].apply(lambda v: int(v.split(',')[1])).values).query('cnv_abs >= 2')
 plot_df = plot_df.assign(cnv=[str(i) if i < 10 else '10+' for i in plot_df['cnv_abs']])
+plot_df = plot_df.assign(ploidy=gdsc_cnv_abs.median()[plot_df['sample']].astype(int).values)
 plot_df = plot_df.reset_index().rename(columns={'level_0': 'sample', 'level_1': 'gene'})
+plot_df = plot_df.assign(rank=st.rankdata(plot_df['fc']) / plot_df.shape[0])
 
 thresholds = natsorted(set(plot_df['cnv']))
-thresholds_color = sns.light_palette(bipal_gray[0], n_colors=len(thresholds)).as_hex()
+thresholds_color = sns.light_palette(bipal_dbgd[0], n_colors=len(thresholds)).as_hex()
 
 ax = plt.gca()
 
@@ -161,7 +175,7 @@ plt.savefig('reports/processing_gdsc_copy_number_bias.png', bbox_inches='tight',
 plt.close('all')
 
 
-# - Copy-number variation across cell lines
+# Copy-number variation across cell lines
 df = {}
 for c in set(plot_df['sample']):
     df_ = plot_df.query("sample == '%s'" % c)
@@ -174,6 +188,7 @@ for c in set(plot_df['sample']):
 
 df = pd.DataFrame(df)
 df = df.unstack().reset_index().dropna().rename(columns={'level_0': 'sample', 'level_1': 'cnv', 0: 'auc'})
+df = df.assign(ploidy=gdsc_cnv_abs.median()[df['sample']].astype(int).values)
 
 sns.boxplot('cnv', 'auc', data=df, sym='', order=thresholds, palette=thresholds_color, linewidth=.3)
 sns.stripplot('cnv', 'auc', data=df, order=thresholds, palette=thresholds_color, edgecolor='white', linewidth=.1, size=3, jitter=.4)
@@ -182,10 +197,69 @@ sns.stripplot('cnv', 'auc', data=df, order=thresholds, palette=thresholds_color,
 plt.title('CRISPR/Cas9 copy-number amplification bias\nnon-expressed genes')
 plt.xlabel('Copy-number')
 plt.ylabel('Copy-number AUC (cell lines)')
-plt.axhline(0.5, ls='--', lw=.3, alpha=.5, c=bipal_gray[0])
+plt.axhline(0.5, ls='--', lw=.3, alpha=.5, c=bipal_dbgd[0])
 plt.gcf().set_size_inches(3, 3)
 plt.savefig('reports/processing_gdsc_copy_number_bias_per_sample.png', bbox_inches='tight', dpi=600)
 plt.close('all')
 
 #
+pal = sns.light_palette(bipal_dbgd[0], n_colors=len(set(df['ploidy']))).as_hex()
 
+sns.boxplot('cnv', 'auc', 'ploidy', data=df, sym='', order=thresholds, palette=pal, linewidth=.3)
+sns.stripplot('cnv', 'auc', 'ploidy', data=df, order=thresholds, palette=pal, edgecolor='white', linewidth=.1, size=1, jitter=.2, split=True)
+# plt.show()
+
+handles = [mpatches.Circle([.0, .0], .25, facecolor=c, label=l) for c, l in zip(*(pal, thresholds))]
+legend = plt.legend(handles=handles, title='Ploidy', prop={'size': 6}).get_title().set_fontsize('6')
+plt.title('Cell ploidy effect CRISPR/Cas9 bias\nnon-expressed genes')
+plt.xlabel('Copy-number')
+plt.ylabel('Copy-number AUC (cell lines)')
+plt.axhline(0.5, ls='--', lw=.3, alpha=.5, c=bipal_dbgd[0])
+plt.gcf().set_size_inches(3, 3)
+plt.savefig('reports/processing_gdsc_copy_number_bias_per_sample_ploidy.png', bbox_inches='tight', dpi=600)
+plt.close('all')
+
+# Copy-number variation relation with ploidy
+ax = plt.gca()
+
+sns.boxplot('cnv', 'fc', 'ploidy', data=plot_df, order=thresholds, palette=pal, linewidth=.3, fliersize=1, ax=ax, notch=True)
+plt.axhline(0, lw=.3, c=bipal_dbgd[0], ls='-')
+plt.xlabel('Copy-number')
+plt.ylabel('CRISPR fold-change (log2)')
+plt.title('Cell ploidy effect CRISPR/Cas9 bias\nnon-expressed genes')
+
+plt.legend(title='Ploidy', prop={'size': 6}).get_title().set_fontsize('6')
+plt.gcf().set_size_inches(4, 3)
+plt.savefig('reports/processing_gdsc_copy_number_bias_ploidy.png', bbox_inches='tight', dpi=600)
+plt.close('all')
+
+# Ploidy effect in copy-number
+plot_df = pd.concat([(gdsc_cnv_abs > 2).sum().rename('cnv'), ploidy.rename('ploidy')], axis=1).dropna()
+
+g = sns.jointplot(
+    'cnv', 'ploidy', data=plot_df, color=bipal_dbgd[0], space=0,
+    joint_kws={'edgecolor': 'white', 'lw': .3, 's': 5},
+    marginal_kws={'bins': 15}
+)
+g.set_axis_labels('# genes with copy-number > 2', 'Cell line ploidy')
+
+plt.gcf().set_size_inches(3, 3)
+plt.savefig('reports/ploidy_cnv_jointplot.png', bbox_inches='tight', dpi=600)
+plt.close('all')
+
+#
+df = pd.concat([
+    ploidy.rename('ploidy'),
+    gdsc_cnv.loc[:, ploidy.index].applymap(lambda v: int(v.split(',')[1]) if str(v).lower() != 'nan' else np.nan).replace(-1, np.nan).median().rename('cnv')
+], axis=1)
+
+g = sns.jointplot(
+    'ploidy', 'cnv', data=df, color=bipal_dbgd[0], space=0,
+    joint_kws={'edgecolor': 'white', 'lw': .3, 's': 5},
+    marginal_kws={'bins': 15}
+)
+g.set_axis_labels('Ploidy COSMIC', 'Ploidy (median copy-number)')
+
+plt.gcf().set_size_inches(3, 3)
+plt.savefig('reports/ploidy_cosmic_corr.png', bbox_inches='tight', dpi=600)
+plt.close('all')
