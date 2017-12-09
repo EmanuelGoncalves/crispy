@@ -43,12 +43,6 @@ c_gdsc = pd.DataFrame({
 }).dropna()
 c_gdsc.round(5).to_csv('data/crispr_gdsc_crispy.csv')
 
-c_gdsc_kmean = pd.DataFrame({
-    os.path.splitext(f)[0].replace('crispr_gdsc_crispy_', ''):
-        pd.read_csv('data/crispy/' + f, index_col=0)['k_mean']
-    for f in os.listdir('data/crispy/') if f.startswith('crispr_gdsc_crispy_')
-}).dropna()
-
 # CCLE
 c_ccle_fc = pd.read_csv('data/crispr_ccle_logfc.csv', index_col=0)
 
@@ -147,9 +141,8 @@ plot_df = pd.concat([
 ], axis=1).dropna()
 plot_df = plot_df.assign(cnv_abs=plot_df['cnv'].apply(lambda v: int(v.split(',')[1])).values).query('cnv_abs >= 2')
 plot_df = plot_df.assign(cnv=[str(i) if i < 10 else '10+' for i in plot_df['cnv_abs']])
-plot_df = plot_df.assign(ploidy=gdsc_cnv_abs.median()[plot_df['sample']].astype(int).values)
 plot_df = plot_df.reset_index().rename(columns={'level_0': 'sample', 'level_1': 'gene'})
-plot_df = plot_df.assign(rank=st.rankdata(plot_df['fc']) / plot_df.shape[0])
+plot_df = plot_df.assign(ploidy=gdsc_cnv_abs.median()[plot_df['sample']].astype(int).values)
 
 thresholds = natsorted(set(plot_df['cnv']))
 thresholds_color = sns.light_palette(bipal_dbgd[0], n_colors=len(thresholds)).as_hex()
@@ -247,7 +240,7 @@ plt.gcf().set_size_inches(3, 3)
 plt.savefig('reports/ploidy_cnv_jointplot.png', bbox_inches='tight', dpi=600)
 plt.close('all')
 
-#
+# Ploidy agreement
 df = pd.concat([
     ploidy.rename('ploidy'),
     gdsc_cnv.loc[:, ploidy.index].applymap(lambda v: int(v.split(',')[1]) if str(v).lower() != 'nan' else np.nan).replace(-1, np.nan).median().rename('cnv')
@@ -262,4 +255,107 @@ g.set_axis_labels('Ploidy COSMIC', 'Ploidy (median copy-number)')
 
 plt.gcf().set_size_inches(3, 3)
 plt.savefig('reports/ploidy_cosmic_corr.png', bbox_inches='tight', dpi=600)
+plt.close('all')
+
+
+# - Ploidy impact after correction
+# Copy-number bias AUCs
+plot_df = pd.DataFrame({c: c_gdsc.loc[nexp[c], c] for c in c_gdsc if c in nexp})
+plot_df = pd.concat([
+    plot_df.unstack().rename('crispy'),
+    gdsc_cnv.loc[plot_df.index, plot_df.columns].unstack().rename('cnv')
+], axis=1).dropna()
+plot_df = plot_df.assign(cnv_abs=plot_df['cnv'].apply(lambda v: int(v.split(',')[1])).values).query('cnv_abs >= 2')
+plot_df = plot_df.assign(cnv=[str(i) if i < 10 else '10+' for i in plot_df['cnv_abs']])
+plot_df = plot_df.reset_index().rename(columns={'level_0': 'sample', 'level_1': 'gene'})
+plot_df = plot_df.assign(ploidy=gdsc_cnv_abs.median()[plot_df['sample']].astype(int).values)
+
+# Enrichment
+df_crispy = {}
+for c in set(plot_df['sample']):
+    df_ = plot_df.query("sample == '%s'" % c)
+
+    df_crispy[c] = {}
+
+    for t in thresholds:
+        if (sum(df_['cnv'] == t) >= 5) and (len(set(df_['cnv'])) > 1):
+            df_crispy[c][t] = roc_auc_score((df_['cnv'] == t).astype(int), -df_['crispy'])
+
+df_crispy = pd.DataFrame(df_crispy)
+df_crispy = df_crispy.unstack().reset_index().dropna().rename(columns={'level_0': 'sample', 'level_1': 'cnv', 0: 'auc'})
+df_crispy = df_crispy.assign(ploidy=gdsc_cnv_abs.median()[df_crispy['sample']].astype(int).values)
+
+sns.boxplot('cnv', 'auc', data=df_crispy, sym='', order=thresholds, palette=thresholds_color, linewidth=.3)
+sns.stripplot('cnv', 'auc', data=df_crispy, order=thresholds, palette=thresholds_color, edgecolor='white', linewidth=.1, size=3, jitter=.4)
+# plt.show()
+
+plt.title('CRISPR/Cas9 copy-number amplification bias\nnon-expressed genes')
+plt.xlabel('Copy-number')
+plt.ylabel('Copy-number AUC (cell lines)')
+plt.axhline(0.5, ls='--', lw=.3, alpha=.5, c=bipal_dbgd[0])
+plt.gcf().set_size_inches(3, 3)
+plt.savefig('reports/processing_gdsc_copy_number_bias_per_sample_corrected.png', bbox_inches='tight', dpi=600)
+plt.close('all')
+
+#
+pal = sns.light_palette(bipal_dbgd[0], n_colors=len(set(df_crispy['ploidy']))).as_hex()
+
+sns.boxplot('cnv', 'auc', 'ploidy', data=df_crispy, sym='', order=thresholds, palette=pal, linewidth=.3)
+sns.stripplot('cnv', 'auc', 'ploidy', data=df_crispy, order=thresholds, palette=pal, edgecolor='white', linewidth=.1, size=1, jitter=.2, split=True)
+# plt.show()
+
+handles = [mpatches.Circle([.0, .0], .25, facecolor=c, label=l) for c, l in zip(*(pal, thresholds))]
+legend = plt.legend(handles=handles, loc=3, title='Ploidy', prop={'size': 6}).get_title().set_fontsize('6')
+plt.title('Cell ploidy effect CRISPR/Cas9 bias\nnon-expressed genes')
+plt.xlabel('Copy-number')
+plt.ylabel('Copy-number AUC (cell lines)')
+plt.axhline(0.5, ls='--', lw=.3, alpha=.5, c=bipal_dbgd[0])
+plt.gcf().set_size_inches(3, 3)
+plt.savefig('reports/processing_gdsc_copy_number_bias_per_sample_ploidy_corrected.png', bbox_inches='tight', dpi=600)
+plt.close('all')
+
+#
+plot_df = pd.concat([
+    df_crispy.set_index(['sample', 'cnv'])['auc'].rename('Corrected'),
+    df.set_index(['sample', 'cnv'])['auc'].rename('Original')
+], axis=1)
+
+g = sns.jointplot(
+    plot_df['Original'], plot_df['Corrected'], color=bipal_dbgd[0], space=0, kind='scatter',
+    joint_kws={'s': 5, 'edgecolor': 'w', 'linewidth': .3}, stat_func=None
+)
+
+x_lim, y_lim = g.ax_joint.get_xlim(), g.ax_joint.get_ylim()
+g.ax_joint.plot(x_lim, y_lim, ls='--', lw=.3, c=bipal_dbgd[0])
+g.ax_joint.axhline(0.5, ls='-', lw=.1, c=bipal_dbgd[0])
+g.ax_joint.axvline(0.5, ls='-', lw=.1, c=bipal_dbgd[0])
+
+g.ax_joint.set_xlim(x_lim)
+g.ax_joint.set_ylim(y_lim)
+
+g.set_axis_labels('Original fold-changes AUCs', 'Corrected fold-changes AUCs')
+
+plt.gcf().set_size_inches(2, 2)
+plt.savefig('reports/processing_crispy_nonessential_auc_scatter_corrected.png', bbox_inches='tight', dpi=600)
+plt.close('all')
+
+#
+ax = plt.gca()
+
+ax.scatter(plot_df['Original'], plot_df['Corrected'], c=bipal_dbgd[0], s=3, marker='x', lw=0.5)
+sns.rugplot(plot_df['Original'], height=.02, axis='x', c=bipal_dbgd[0], lw=.3, ax=ax)
+sns.rugplot(plot_df['Corrected'], height=.02, axis='y', c=bipal_dbgd[0], lw=.3, ax=ax)
+
+x_lim, y_lim = ax.get_xlim(), ax.get_ylim()
+ax.plot(x_lim, y_lim, 'k--', lw=.3)
+
+ax.set_xlim(x_lim)
+ax.set_ylim(y_lim)
+
+ax.set_xlabel('Original fold-changes AUCs')
+ax.set_ylabel('Corrected fold-changes AUCs')
+ax.set_title('Copy-number bias\nnon-essential genes')
+
+plt.gcf().set_size_inches(2, 2)
+plt.savefig('reports/processing_crispy_nonessential_auc_scatter_corrected.png', bbox_inches='tight', dpi=600)
 plt.close('all')
