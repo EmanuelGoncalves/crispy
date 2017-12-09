@@ -7,30 +7,28 @@ import pickle
 import numpy as np
 import pandas as pd
 import seaborn as sns
-import scipy.stats as st
 import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
-from scipy.stats import mode
 from crispy import bipal_dbgd
 from natsort import natsorted
-from sklearn.metrics import roc_auc_score
-from crispy.benchmark_plot import plot_cnv_rank
-from sklearn.linear_model import LinearRegression
+from sklearn.metrics import roc_curve, auc, roc_auc_score
 
 
 # - Imports
-# Ploidy
-ploidy = pd.read_csv('data/gdsc/cell_lines_project_ploidy.csv', index_col=0)['Average Ploidy']
-
 # sgRNA library
 sgrna_lib = pd.read_csv('data/gdsc/crispr/KY_Library_v1.1_annotated.csv', index_col=0).dropna(subset=['STARTpos', 'GENES'])
+
+# HGNC
+ginfo = pd.read_csv('data/resources/hgnc/non_alt_loci_set.txt', sep='\t', index_col=1).dropna(subset=['location'])
+ginfo = ginfo.assign(chr=ginfo['location'].apply(lambda x: x.replace('q', 'p').split('p')[0]))
+ginfo = ginfo[ginfo['chr'].isin(sgrna_lib['CHRM'])]
+
+# Ploidy
+ploidy = pd.read_csv('data/gdsc/cell_lines_project_ploidy.csv', index_col=0)['Average Ploidy']
 
 # Non-expressed genes
 nexp = pickle.load(open('data/gdsc/nexp_pickle.pickle', 'rb'))
 
 # GDSC
-fc = pd.read_csv('data/crispr_gdsc_logfc.csv', index_col=0)
-ccrispy = pd.read_csv('data/crispr_gdsc_crispy.csv', index_col=0)
 c_gdsc = pd.DataFrame({
     os.path.splitext(f)[0].replace('crispr_gdsc_crispy_', ''):
         pd.read_csv('data/crispy/' + f, index_col=0)['k_mean']
@@ -40,137 +38,111 @@ c_gdsc = pd.DataFrame({
 # Copy-number absolute counts
 cnv = pd.read_csv('data/gdsc/copynumber/Gene_level_CN.txt', sep='\t', index_col=0)
 cnv = cnv.loc[:, cnv.columns.isin(list(c_gdsc))]
-cnv_abs = cnv.drop(['chr', 'start', 'stop'], axis=1).applymap(lambda v: int(v.split(',')[1]))
+cnv_abs = cnv.drop(['chr', 'start', 'stop'], axis=1, errors='ignore').applymap(lambda v: int(v.split(',')[1]))
 
-# Copy-number segments
-cnv_seg = pd.read_csv('data/gdsc/copynumber/Summary_segmentation_data_994_lines_picnic.txt', sep='\t')
-cnv_seg['chr'] = cnv_seg['chr'].replace(23, 'X').replace(24, 'Y').astype(str)
-cnv_seg = cnv_seg[cnv_seg['cellLine'].isin(set(c_gdsc))]
 
-cnv_seg_c = []
-for s in set(cnv_seg['cellLine']):
-    for c in ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '21', '22']:
-        seg = cnv_seg[(cnv_seg['cellLine'] == s) & (cnv_seg['chr'] == c)]
-        seg_c = [((e - s) * (c + 1), (e - s)) for i, (s, e, c) in enumerate(seg[['startpos', 'endpos', 'totalCN']].values)]
-        d, n = zip(*(seg_c))
-        cpv = sum(d) / sum(n) - 1
-        cnv_seg_c.append({'sample': s, 'chr': c, 'ploidy': cpv})
-cnv_seg_c = pd.DataFrame(cnv_seg_c)
-cnv_seg_c = cnv_seg_c.groupby(['sample', 'chr']).first()
+# - Estimate chromosome copies
+chr_copies = cnv_abs[cnv_abs.index.isin(ginfo.index)].replace(-1, np.nan)
+chr_copies = chr_copies.groupby(ginfo.loc[chr_copies.index, 'chr']).median()
+chr_copies = chr_copies.drop(['X', 'Y'])
+chr_copies = chr_copies.unstack()
 
 
 # - Overlap
-genes, samples = set(c_gdsc.index).intersection(cnv_abs.index), set(c_gdsc).intersection(cnv_abs)
+genes, samples = set(c_gdsc.index).intersection(cnv_abs.index), set(c_gdsc).intersection(cnv_abs).intersection(nexp)
 print(len(genes), len(samples))
 
 
-# -
-plot_df = pd.concat([
-    (cnv_abs > 3).sum().rename('cnv'),
-    ploidy.rename('ploidy')
-], axis=1).dropna()
-
-g = sns.jointplot('cnv', 'ploidy', data=plot_df, color=bipal_dbgd[0], joint_kws={'edgecolor': 'white', 'lw': .3}, space=0)
-g.set_axis_labels('# gene with copy-number > 3', 'Cell line ploidy')
-plt.show()
-
-plt.gcf().set_size_inches(3, 3)
-plt.savefig('reports/ploidy_cnv_jointplot.png', bbox_inches='tight', dpi=600)
-plt.close('all')
-
-
-# -
-plot_df = pd.concat([
-        pd.concat([
-            cnv_abs.loc[nexp[c], c].rename('cnv'),
-            fc.loc[nexp[c], c].rename('bias')
-        ], axis=1).dropna().assign(sample=c).reset_index().rename(columns={'index': 'gene'})
-    for c in c_gdsc if c in nexp and c in cnv_abs
-]).dropna()
-
-# plot_df = plot_df.groupby(['sample', 'cnv'])['bias'].mean().reset_index().query('cnv != -1')
-# plot_df = plot_df.assign(ploidy=ploidy[plot_df['sample']].values)
-plot_df = plot_df.assign(ploidy=cnv_abs.median()[plot_df['sample']].astype(int).values)
-plot_df = plot_df.assign(cnv_d=[str(int(i)) if i < 10 else '10+' for i in plot_df['cnv']])
-
-order = natsorted(set(plot_df.query('cnv > 2')['cnv_d']))
-
-ax = plt.gca()
-# sns.violinplot('ploidy', 'bias', 'cnv_d', data=plot_df.query('cnv > 2'), hue_order=order, palette='Reds', linewidth=.3, cut=0, ax=ax, scale='width')
-sns.boxplot('ploidy', 'bias', 'cnv_d', data=plot_df.query('cnv > 2'), hue_order=order, palette='Reds', linewidth=.3, fliersize=1, ax=ax, notch=True)
-# sns.stripplot('ploidy', 'bias', 'cnv_d', data=plot_df.query('cnv > 2'), hue_order=order, palette='Reds', edgecolor='white', linewidth=.1, size=1, split=True, jitter=.4, ax=ax)
-plt.axhline(0, lw=.3, c=bipal_dbgd[0], ls='-')
-plt.xlabel('Cell line ploidy')
-plt.ylabel('CRISPR fold-change (log2)')
-plt.title('Non-expressed genes fold-change')
-
-plt.show()
-
-handles = [mpatches.Circle([.0, .0], .25, facecolor=c, label=l) for c, l in zip(*(sns.color_palette('Reds', n_colors=len(order)).as_hex(), order))]
-legend = plt.legend(handles=handles, title='Copy-number', prop={'size': 4})
-legend.get_title().set_fontsize('4')
-plt.gcf().set_size_inches(4, 3)
-plt.savefig('reports/ploidy_nexp_bias_boxplot.png', bbox_inches='tight', dpi=600)
-plt.close('all')
-
-
-# -
-df = plot_df.groupby(['sample', 'cnv'])['bias'].mean().reset_index().query('cnv > 2')
-
-c_slope = {}
-for c in c_gdsc:
-    if c in nexp and c in cnv_abs:
-        df_ = df.query("sample == '%s'" % c)[['cnv', 'bias']]
-        if df_.shape[0] > 1:
-            x, y = zip(*(df_.values))
-            lm = LinearRegression().fit(np.matrix(x).T, np.array(y))
-            c_slope[c] = lm.coef_[0]
-df = pd.concat([pd.Series(c_slope).rename('slope'), ploidy.rename('ploidy')], axis=1).dropna()
-
-sns.jointplot('slope', 'ploidy', data=df)
-plt.show()
-
-
-# -
+# - Estimate gene copies ratio
+df = pd.DataFrame({c: c_gdsc.loc[nexp[c], c] for c in c_gdsc if c in nexp})
 df = pd.concat([
-    c_gdsc.loc[genes, samples].unstack().rename('crispr'),
+    df.unstack().rename('crispr'),
     cnv_abs.loc[genes, samples].unstack().rename('cnv')
-], axis=1).dropna().query('cnv != -1')
-df = df.reset_index().rename(columns={'level_0': 'sample', 'level_1': 'gene'})
+], axis=1).dropna().query('cnv != -1').reset_index().rename(columns={'level_0': 'sample', 'level_1': 'gene'})
+
 df = df.assign(chr=sgrna_lib.groupby('GENES')['CHRM'].first()[df['gene']].values)
+df = df[~df['chr'].isin(['X', 'Y'])]
 
-# chr_cnv = df.groupby(['sample', 'chr'])['cnv'].median()
-# df = df.assign(chr_cnv=cnv_seg_c.loc[[(s, c) for s, c in df[['sample', 'chr']].values]].values)
-chr_cnv = df.groupby(['sample', 'chr'])['cnv'].median()
-df = df.assign(chr_cnv=chr_cnv.loc[[(s, c) for s, c in df[['sample', 'chr']].values]].values)
+df = df.assign(chr_cnv=chr_copies.loc[[(s, c) for s, c in df[['sample', 'chr']].values]].values)
 
-df = df.assign(ploidy=ploidy[df['sample']].values)
+df = df.assign(ratio=df['cnv'] / df['chr_cnv'])
 
-#
-plot_df = df.groupby(['sample', 'chr', 'cnv'])[['crispr', 'chr_cnv', 'ploidy']].agg({'crispr': np.mean, 'chr_cnv': 'first', 'ploidy': 'first'}).reset_index()
-plot_df = plot_df[~plot_df['chr'].isin(['Y', 'X'])]
-plot_df = plot_df.assign(ratio=plot_df['cnv'] / plot_df['chr_cnv'])
-plot_df = plot_df.dropna()
+df = df.assign(ratio_bin=[str(i) if i < 5 else '5+' for i in df['ratio'].round(0).astype(int)])
 
-g = sns.jointplot('ratio', 'crispr', data=plot_df, kind='reg', color=bipal_dbgd[0], joint_kws={'line_kws': {'color': bipal_dbgd[1]}})
-sns.kdeplot(plot_df['ratio'], plot_df['crispr'], ax=g.ax_joint, shade_lowest=False, n_levels=60)
-plt.show()
 
-plt.gcf().set_size_inches(3, 3)
-plt.savefig('reports/ratio_bias.png', bbox_inches='tight', dpi=600)
+# - Plots
+# Ratios histogram
+f, axs = plt.subplots(2, 1, sharex=True)
+
+sns.distplot(df['ratio'], color=bipal_dbgd[0], kde=False, axlabel='', ax=axs[0])
+sns.distplot(df['ratio'], color=bipal_dbgd[0], kde=False, ax=axs[1])
+
+axs[0].axvline(1, lw=.3, ls='--', c=bipal_dbgd[1])
+axs[1].axvline(1, lw=.3, ls='--', c=bipal_dbgd[1])
+
+axs[0].set_ylim(700000, 800000)  # outliers only
+axs[1].set_ylim(0, 70000)  # most of the data
+
+axs[0].spines['bottom'].set_visible(False)
+axs[1].spines['top'].set_visible(False)
+axs[0].xaxis.tick_top()
+axs[0].tick_params(labeltop='off')
+axs[1].xaxis.tick_bottom()
+
+d = .01
+
+kwargs = dict(transform=axs[0].transAxes, color='gray', clip_on=False, lw=.3)
+axs[0].plot((-d, +d), (-d, +d), **kwargs)
+axs[0].plot((1 - d, 1 + d), (-d, +d), **kwargs)
+
+kwargs.update(transform=axs[1].transAxes)
+axs[1].plot((-d, +d), (1 - d, 1 + d), **kwargs)
+axs[1].plot((1 - d, 1 + d), (1 - d, 1 + d), **kwargs)
+
+axs[1].set_xlabel('Copy-number ratio (Gene / Chromosome)')
+
+f.add_subplot(111, frameon=False)
+plt.tick_params(labelcolor='none', top='off', bottom='off', left='off', right='off')
+plt.grid(False)
+
+# plt.ylabel('# number of genes')
+plt.title('Non-expressed genes copy-number ratio')
+plt.gcf().set_size_inches(3, 2)
+plt.savefig('reports/ratio_histogram.png', bbox_inches='tight', dpi=600)
 plt.close('all')
 
-plot_df_ = pd.concat([
-    plot_df[(plot_df['ratio'] < 1) & (plot_df['cnv'] >= 3)].assign(type='depletion (p<1)'),
-    plot_df[(plot_df['ratio'] < 3) & (plot_df['ratio'] >= 1) & (plot_df['cnv'] >= 3)].assign(type='duplication (p<3)'),
-    plot_df[(plot_df['ratio'] >= 3) & (plot_df['cnv'] >= 3)].assign(type='elongation (p>3)')
-])
+# Copy-number ratio association with CRISPR/Cas9 bias
+order = natsorted(set(df['ratio_bin']))
+pal = sns.light_palette(bipal_dbgd[0], n_colors=len(order)).as_hex()
 
-sns.boxplot('crispr', 'type', data=plot_df_, orient='h', notch=True, color=bipal_dbgd[0], fliersize=1)
-plt.show()
+sns.boxplot('crispr', 'ratio_bin', data=df, orient='h', linewidth=.3, fliersize=1, order=order, palette=pal, notch=True)
 
-plt.xlabel('Crispr mean bias')
-plt.ylabel('Chromosome')
-plt.gcf().set_size_inches(3, 1)
-plt.savefig('reports/ratio_bias_boxplot.png', bbox_inches='tight', dpi=600)
+plt.axhline(1, lw=.3, ls='--', c=bipal_dbgd[1])
+plt.axvline(0, lw=.1, ls='-', c=bipal_dbgd[0])
+
+plt.title('Gene copy-number ratio\neffect on CRISPR/Cas9 bias')
+plt.xlabel('CRISPR/Cas9 fold-change bias (log2)')
+plt.ylabel('Copy-number ratio')
+plt.gcf().set_size_inches(2, 2)
+plt.savefig('reports/ratio_boxplot.png', bbox_inches='tight', dpi=600)
+plt.close('all')
+
+# Ratio enrichment
+ax = plt.gca()
+
+for c, thres in zip(pal[2:], order[2:]):
+    fpr, tpr, _ = roc_curve((df['ratio_bin'] == thres).astype(int), -df['crispr'])
+    ax.plot(fpr, tpr, label='%s: AUC=%.2f' % (thres, auc(fpr, tpr)), lw=1., c=c)
+
+ax.plot((0, 1), (0, 1), 'k--', lw=.3, alpha=.5)
+ax.set_xlim(0, 1)
+ax.set_ylim(0, 1)
+ax.set_xlabel('False positive rate')
+ax.set_ylabel('True positive rate')
+ax.set_title('CRISPR/Cas9 copy-number ratio bias\nnon-expressed genes')
+legend = ax.legend(loc=4, title='Copy-number ratio', prop={'size': 8})
+legend.get_title().set_fontsize('7')
+
+plt.gcf().set_size_inches(3, 3)
+plt.savefig('reports/ratio_aucs.png', bbox_inches='tight', dpi=600)
 plt.close('all')
