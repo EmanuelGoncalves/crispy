@@ -159,9 +159,12 @@ plot_df = plot_df.query("chr == '%s'" % plot_df.loc[y_feat, 'chr'])
 
 plot_df_seg = cnv_seg.query("cellLine == '%s'" % c).query("chr == '%s'" % plot_df.loc[y_feat, 'chr'])
 
+# plot_df = plot_df.query('(pos > 3.5e7) & (pos < 4e7)')
+
 ax = plot_chromosome(plot_df['pos'], plot_df['fc'].rename('Original fold-change'), plot_df['bias'].rename('Copy-number bias'), seg=plot_df_seg, highlight=[y_feat, 'ERBB2', 'MDM2', 'MED24'])
 plt.title('Chromosome %s in %s' % (plot_df.loc[y_feat, 'chr'], c))
 plt.ylabel('')
+# plt.xlabel('')
 plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
 plt.gcf().set_size_inches(4, 2)
 plt.savefig('reports/collateral_essentiality_chromosome_plot.png', bbox_inches='tight', dpi=600)

@@ -6,6 +6,7 @@ import pandas as pd
 import seaborn as sns
 import scipy.stats as st
 import matplotlib.pyplot as plt
+from crispy import bipal_dbgd
 from sklearn.metrics.ranking import auc
 
 
@@ -118,18 +119,18 @@ def plot_chromosome(pos, original, mean, se=None, seg=None, highlight=None, ax=N
         ax = plt.gca()
 
     # Plot original values
-    ax.scatter(pos, original, s=2, marker='.', lw=0, c='#58595B', alpha=.5, label=original.name)
+    ax.scatter(pos, original, s=2, marker='.', lw=0, c=bipal_dbgd[0], alpha=.5, label=original.name)
 
     # Plot corrected values
-    ax.scatter(pos, mean, s=4, marker='.', lw=0, c='#FF8200', alpha=.9, label=mean.name)
+    ax.scatter(pos, mean, s=4, marker='.', lw=0, c=bipal_dbgd[1], alpha=.9, label=mean.name)
 
     if se is not None:
-        ax.fill_between(pos, mean - se, mean + se, c='#FF8200', alpha=0.2)
+        ax.fill_between(pos, mean - se, mean + se, c=bipal_dbgd[1], alpha=0.2)
 
     # Plot segments
     if seg is not None:
         for i, (s, e, c) in enumerate(seg[['startpos', 'endpos', 'totalCN']].values):
-            ax.plot([s, e], [c, c], lw=.3, c='#58595B', alpha=.9, label=seg_label if i == 0 else None)
+            ax.plot([s, e], [c, c], lw=.3, c=bipal_dbgd[0], alpha=1., label=seg_label if i == 0 else None)
 
     # Highlight
     if highlight is not None:
@@ -143,11 +144,11 @@ def plot_chromosome(pos, original, mean, se=None, seg=None, highlight=None, ax=N
     if cytobands is not None:
         for i, (s, e, t) in enumerate(cytobands[['start', 'end', 'band']].values):
             if t == 'acen':
-                ax.axvline(s, lw=.2, ls='-', color='#58595B', alpha=.1)
-                ax.axvline(e, lw=.2, ls='-', color='#58595B', alpha=.1)
+                ax.axvline(s, lw=.2, ls='-', color=bipal_dbgd[0], alpha=.1)
+                ax.axvline(e, lw=.2, ls='-', color=bipal_dbgd[0], alpha=.1)
 
             elif not i % 2:
-                ax.axvspan(s, e, alpha=0.1, facecolor='#58595B')
+                ax.axvspan(s, e, alpha=0.1, facecolor=bipal_dbgd[0])
 
     # Legend
     if legend:
@@ -157,6 +158,6 @@ def plot_chromosome(pos, original, mean, se=None, seg=None, highlight=None, ax=N
     ax.set_xlabel('Chromosome position')
     ax.set_ylabel('Fold-change')
 
-    ax.set_xlim(0, pos.max())
+    ax.set_xlim(pos.min(), pos.max())
 
     return ax
