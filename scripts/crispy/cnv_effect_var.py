@@ -48,6 +48,15 @@ chr_copies = chr_copies.drop(['X', 'Y'])
 chr_copies = chr_copies.unstack()
 
 
+# - Build copy-number ratio data-frame for all genes
+cnv_ratio = cnv_abs[cnv_abs.index.isin(ginfo.index)].replace(-1, np.nan).unstack().rename('cnv').dropna().astype(int).reset_index().rename(columns={'level_0': 'sample'})
+cnv_ratio = cnv_ratio.assign(chr=ginfo.loc[cnv_ratio['gene'], 'chr'].values)
+cnv_ratio = cnv_ratio[~cnv_ratio['chr'].isin(['X', 'Y'])]
+cnv_ratio = cnv_ratio.assign(chr_cnv=chr_copies.loc[[(s, c) for s, c in cnv_ratio[['sample', 'chr']].values]].astype(int).values)
+cnv_ratio = cnv_ratio.assign(ratio=cnv_ratio['cnv'] / cnv_ratio['chr_cnv'])
+cnv_ratio.to_csv('data/copy_number_ratio.csv', index=False)
+
+
 # - Overlap
 genes, samples = set(c_gdsc.index).intersection(cnv_abs.index), set(c_gdsc).intersection(cnv_abs).intersection(nexp)
 print(len(genes), len(samples))
@@ -68,6 +77,8 @@ df = df.assign(chr_cnv=chr_copies.loc[[(s, c) for s, c in df[['sample', 'chr']].
 df = df.assign(ratio=df['cnv'] / df['chr_cnv'])
 
 df = df.assign(ratio_bin=[str(i) if i < 5 else '5+' for i in df['ratio'].round(0).astype(int)])
+
+df.to_csv('data/crispr_gdsc_cnratio_nexp.csv', index=False)
 
 
 # - Plots
@@ -141,8 +152,26 @@ ax.set_xlabel('False positive rate')
 ax.set_ylabel('True positive rate')
 ax.set_title('CRISPR/Cas9 copy-number ratio bias\nnon-expressed genes')
 legend = ax.legend(loc=4, title='Copy-number ratio', prop={'size': 8})
-legend.get_title().set_fontsize('7')
+legend.get_title().set_fontsize('8')
 
 plt.gcf().set_size_inches(3, 3)
 plt.savefig('reports/ratio_aucs.png', bbox_inches='tight', dpi=600)
+plt.close('all')
+
+#
+plot_df = df.query("ratio_bin == '1'").groupby(['cnv', 'chr_cnv'])['ratio'].count().reset_index()
+plot_df = pd.pivot_table(plot_df, index='cnv', columns='chr_cnv', values='ratio')
+plot_df.index, plot_df.columns = [str(int(i)) for i in plot_df.index], [str(int(i)) for i in plot_df.columns]
+
+sns.set(style='white', font_scale=1)
+g = sns.heatmap(
+    plot_df, center=0, cmap=sns.light_palette(bipal_dbgd[0], as_cmap=True), annot=True, fmt='g', square=True,
+    linewidths=.3, cbar=False, annot_kws={'fontsize': 7}
+)
+plt.setp(g.get_yticklabels(), rotation=0)
+plt.xlabel('# chromosome copies')
+plt.ylabel('# gene copies')
+plt.title('Non-expressed genes; copy-number ratio = 1')
+plt.gcf().set_size_inches(5, 5)
+plt.savefig('reports/ratio_counts_heatmap.png', bbox_inches='tight', dpi=600)
 plt.close('all')
