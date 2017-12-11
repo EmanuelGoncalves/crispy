@@ -10,7 +10,7 @@ from sklearn.metrics.ranking import auc
 
 
 # TODO: Add documentation
-def plot_cumsum_auc(X, index_set, ax=None, cmap='viridis', legend=True, plot_mean=False):
+def plot_cumsum_auc(X, index_set, ax=None, palette=None, legend=True, plot_mean=False):
     """
     Plot cumulative sum of values X considering index_set list.
 
@@ -30,7 +30,9 @@ def plot_cumsum_auc(X, index_set, ax=None, cmap='viridis', legend=True, plot_mea
         'auc': {}
     }
 
-    for c, f in zip(sns.color_palette(cmap, X.shape[1]).as_hex(), list(X)):
+    palette = sns.color_palette('viridis', X.shape[1]).as_hex() if None else palette
+
+    for c, f in zip(palette, list(X)):
         # Build data-frame
         x = X[f].sort_values().dropna()
 

@@ -160,7 +160,7 @@ plot_df = plot_df.query("chr == '%s'" % plot_df.loc[y_feat, 'chr'])
 plot_df_seg = cnv_seg.query("cellLine == '%s'" % c).query("chr == '%s'" % plot_df.loc[y_feat, 'chr'])
 
 ax = plot_chromosome(plot_df['pos'], plot_df['fc'].rename('Original fold-change'), plot_df['bias'].rename('Copy-number bias'), seg=plot_df_seg, highlight=[y_feat, 'ERBB2', 'MDM2', 'MED24'])
-plt.title('%s - chromosome: %s' % (c, plot_df.loc[y_feat, 'chr']))
+plt.title('Chromosome %s in %s' % (plot_df.loc[y_feat, 'chr'], c))
 plt.ylabel('')
 plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
 plt.gcf().set_size_inches(4, 2)

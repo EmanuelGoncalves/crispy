@@ -61,14 +61,17 @@ gdsc_cnv_abs = gdsc_cnv[c_gdsc_fc.columns].applymap(lambda v: int(v.split(',')[1
 # - Benchmark
 # Essential/Non-essential genes AUC
 for n, df, df_ in [('gdsc', c_gdsc, c_gdsc_fc)]:
+    # Palette
+    pal = sns.light_palette(bipal_dbgd[0], n_colors=df.shape[1]).as_hex()
+
     # Essential AUCs corrected fold-changes
-    ax, stats_ess = plot_cumsum_auc(df, essential, plot_mean=True, legend=False)
+    ax, stats_ess = plot_cumsum_auc(df, essential, plot_mean=True, legend=False, palette=pal)
     plt.gcf().set_size_inches(3, 3)
     plt.savefig('reports/processing_%s_crispy_essential_auc.png' % n, bbox_inches='tight', dpi=600)
     plt.close('all')
 
     # Essential AUCs original fold-changes
-    ax, stats_ess_fc = plot_cumsum_auc(df_, essential, plot_mean=True, legend=False)
+    ax, stats_ess_fc = plot_cumsum_auc(df_, essential, plot_mean=True, legend=False, palette=pal)
     plt.gcf().set_size_inches(3, 3)
     plt.savefig('reports/processing_%s_crispy_essential_auc_original_fc.png' % n, bbox_inches='tight', dpi=600)
     plt.close('all')
@@ -97,14 +100,17 @@ for n, df, df_ in [('gdsc', c_gdsc, c_gdsc_fc)]:
     plt.close('all')
 
 for n, df, df_ in [('gdsc', c_gdsc, c_gdsc_fc)]:
+    # Palette
+    pal = sns.light_palette(bipal_dbgd[0], n_colors=df.shape[1]).as_hex()
+
     # Non-essential AUCs corrected fold-changes
-    ax, stats_ness = plot_cumsum_auc(df, nessential, plot_mean=True, legend=False)
+    ax, stats_ness = plot_cumsum_auc(df, nessential, plot_mean=True, legend=False, palette=pal)
     plt.gcf().set_size_inches(3, 3)
     plt.savefig('reports/processing_%s_crispy_nonessential_auc.png' % n, bbox_inches='tight', dpi=600)
     plt.close('all')
 
     # Non-essential AUCs original fold-changes
-    ax, stats_ness_fc = plot_cumsum_auc(df_, nessential, plot_mean=True, legend=False)
+    ax, stats_ness_fc = plot_cumsum_auc(df_, nessential, plot_mean=True, legend=False, palette=pal)
     plt.gcf().set_size_inches(3, 3)
     plt.savefig('reports/processing_%s_crispy_nonessential_auc_original_fc.png' % n, bbox_inches='tight', dpi=600)
     plt.close('all')
