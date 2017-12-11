@@ -180,7 +180,6 @@ for c in set(plot_df['sample']):
     df_ = plot_df.query("sample == '%s'" % c)
 
     df[c] = {}
-
     for t in thresholds:
         if (sum(df_['cnv'] == t) >= 5) and (len(set(df_['cnv'])) > 1):
             df[c][t] = roc_auc_score((df_['cnv'] == t).astype(int), -df_['fc'])
