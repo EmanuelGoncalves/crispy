@@ -75,13 +75,11 @@ for s in set(df['sample']):
                     'chr_cnv': int(chr_copies.loc[(s, c)]),
                     'auc': roc_auc_score((df_['cnv'] == t).astype(int), -df_['fc'])
                 })
-
-
 plot_df = pd.DataFrame(plot_df)
 plot_df = plot_df.assign(chr_cnv=[str(int(i)) if i < 6 else '6+' for i in plot_df['chr_cnv']])
 plot_df = plot_df.assign(ploidy=ploidy[plot_df['sample']].values)
 
-# Plot
+# Copy-number bias per chromosome
 hue_order = natsorted(set(plot_df.query("chr_cnv != '1'")['chr_cnv']))
 hue_color = sns.light_palette(bipal_dbgd[0], n_colors=len(hue_order)).as_hex()
 
@@ -99,7 +97,7 @@ plt.gcf().set_size_inches(3, 3)
 plt.savefig('reports/processing_gdsc_copy_number_bias_per_chr.png', bbox_inches='tight', dpi=600)
 plt.close('all')
 
-#
+# Chromosome copies association with cell ploidy
 order = natsorted(set(plot_df['chr_cnv']))
 order_color = sns.light_palette(bipal_dbgd[0], n_colors=len(order)).as_hex()
 
