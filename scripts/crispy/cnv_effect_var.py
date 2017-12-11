@@ -72,7 +72,7 @@ df = pd.concat([
 df = df.assign(chr=sgrna_lib.groupby('GENES')['CHRM'].first()[df['gene']].values)
 df = df[~df['chr'].isin(['X', 'Y'])]
 
-df = df.assign(chr_cnv=chr_copies.loc[[(s, c) for s, c in df[['sample', 'chr']].values]].values)
+df = df.assign(chr_cnv=chr_copies.loc[[(s, c) for s, c in df[['sample', 'chr']].values]].round(0).values)
 
 df = df.assign(ratio=df['cnv'] / df['chr_cnv'])
 
@@ -158,12 +158,12 @@ plt.gcf().set_size_inches(3, 3)
 plt.savefig('reports/ratio_aucs.png', bbox_inches='tight', dpi=600)
 plt.close('all')
 
-#
+# Ratios heatmap
 plot_df = df.query("ratio_bin == '1'").groupby(['cnv', 'chr_cnv'])['ratio'].count().reset_index()
 plot_df = pd.pivot_table(plot_df, index='cnv', columns='chr_cnv', values='ratio')
 plot_df.index, plot_df.columns = [str(int(i)) for i in plot_df.index], [str(int(i)) for i in plot_df.columns]
 
-sns.set(style='white', font_scale=1)
+sns.set_style('whitegrid')
 g = sns.heatmap(
     plot_df, center=0, cmap=sns.light_palette(bipal_dbgd[0], as_cmap=True), annot=True, fmt='g', square=True,
     linewidths=.3, cbar=False, annot_kws={'fontsize': 7}
@@ -171,7 +171,7 @@ g = sns.heatmap(
 plt.setp(g.get_yticklabels(), rotation=0)
 plt.xlabel('# chromosome copies')
 plt.ylabel('# gene copies')
-plt.title('Non-expressed genes; copy-number ratio = 1')
+plt.title('Non-expressed genes with copy-number ratio ~1')
 plt.gcf().set_size_inches(5, 5)
 plt.savefig('reports/ratio_counts_heatmap.png', bbox_inches='tight', dpi=600)
 plt.close('all')
