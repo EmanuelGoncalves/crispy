@@ -111,7 +111,7 @@ def plot_cnv_rank(x, y, ax=None, stripplot=False, hline=0.5, order=None, color='
     return ax
 
 
-def plot_chromosome(pos, original, mean, se=None, seg=None, highlight=None, ax=None, legend=False, cytobands=None):
+def plot_chromosome(pos, original, mean, se=None, seg=None, highlight=None, ax=None, legend=False, cytobands=None, seg_label='Copy-number'):
     if ax is None:
         ax = plt.gca()
 
@@ -127,13 +127,13 @@ def plot_chromosome(pos, original, mean, se=None, seg=None, highlight=None, ax=N
     # Plot segments
     if seg is not None:
         for i, (s, e, c) in enumerate(seg[['startpos', 'endpos', 'totalCN']].values):
-            ax.plot([s, e], [c, c], lw=.3, c='#58595B', alpha=.9, label='totalCN' if i == 0 else None)
+            ax.plot([s, e], [c, c], lw=.3, c='#58595B', alpha=.9, label=seg_label if i == 0 else None)
 
     # Highlight
     if highlight is not None:
         for ic, i in zip(*(sns.color_palette('tab20', n_colors=len(highlight)), highlight)):
             if i in pos.index:
-                ax.scatter(pos.loc[i], original.loc[i], s=3, marker='X', lw=0, c=ic, alpha=.5, label=i)
+                ax.scatter(pos.loc[i], original.loc[i], s=6, marker='X', lw=0, c=ic, alpha=.9, label=i)
     # Misc
     ax.axhline(0, lw=.3, ls='-', color='black')
 
