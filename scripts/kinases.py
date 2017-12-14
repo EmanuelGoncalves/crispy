@@ -135,9 +135,9 @@ plt.close('all')
 
 
 # -
-plot_df = ccrispy.loc[kfam['kinase']].T.corr()
+plot_df = ccrispy.loc[kns]
 sns.clustermap(plot_df, cmap='RdGy', center=0)
-plt.gcf().set_size_inches(15, 15)
+plt.gcf().set_size_inches(15, 3)
 plt.savefig('reports/kinases_essentiality_clustermap_corr.png', bbox_inches='tight', dpi=600)
 plt.close('all')
 

@@ -29,11 +29,12 @@ ploidy = pd.read_csv('data/gdsc/cell_lines_project_ploidy.csv', index_col=0)['Av
 nexp = pickle.load(open('data/gdsc/nexp_pickle.pickle', 'rb'))
 
 # GDSC
-c_gdsc = pd.DataFrame({
-    os.path.splitext(f)[0].replace('crispr_gdsc_crispy_', ''):
-        pd.read_csv('data/crispy/' + f, index_col=0)['k_mean']
-    for f in os.listdir('data/crispy/') if f.startswith('crispr_gdsc_crispy_')
-}).dropna()
+# c_gdsc = pd.DataFrame({
+#     os.path.splitext(f)[0].replace('crispr_gdsc_crispy_', ''):
+#         pd.read_csv('data/crispy/' + f, index_col=0)['k_mean']
+#     for f in os.listdir('data/crispy/') if f.startswith('crispr_gdsc_crispy_')
+# }).dropna()
+c_gdsc = pd.read_csv('data/crispr_gdsc_logfc.csv', index_col=0)
 
 # Copy-number absolute counts
 cnv = pd.read_csv('data/gdsc/copynumber/Gene_level_CN.txt', sep='\t', index_col=0)
