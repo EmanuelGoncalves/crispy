@@ -14,6 +14,12 @@ from sklearn.metrics import roc_curve, auc, roc_auc_score
 
 
 # - Imports
+# Samplesheet
+ss = pd.read_csv('data/gdsc/samplesheet.csv', index_col=0)
+
+# MOBEMs
+mobems = pd.read_csv('data/gdsc/mobems/PANCAN_simple_MOBEM.rdata.annotated.csv', index_col=0)
+
 # sgRNA library
 sgrna_lib = pd.read_csv('data/gdsc/crispr/KY_Library_v1.1_annotated.csv', index_col=0).dropna(subset=['STARTpos', 'GENES'])
 
@@ -29,12 +35,13 @@ ploidy = pd.read_csv('data/gdsc/cell_lines_project_ploidy.csv', index_col=0)['Av
 nexp = pickle.load(open('data/gdsc/nexp_pickle.pickle', 'rb'))
 
 # GDSC
-# c_gdsc = pd.DataFrame({
-#     os.path.splitext(f)[0].replace('crispr_gdsc_crispy_', ''):
-#         pd.read_csv('data/crispy/' + f, index_col=0)['k_mean']
-#     for f in os.listdir('data/crispy/') if f.startswith('crispr_gdsc_crispy_')
-# }).dropna()
-c_gdsc = pd.read_csv('data/crispr_gdsc_logfc.csv', index_col=0)
+# c_gdsc = pd.read_csv('data/crispr_gdsc_logfc.csv', index_col=0)
+
+c_gdsc = pd.DataFrame({
+    os.path.splitext(f)[0].replace('crispr_gdsc_crispy_', ''):
+        pd.read_csv('data/crispy/' + f, index_col=0)['k_mean']
+    for f in os.listdir('data/crispy/') if f.startswith('crispr_gdsc_crispy_')
+}).dropna()
 
 # Copy-number absolute counts
 cnv = pd.read_csv('data/gdsc/copynumber/Gene_level_CN.txt', sep='\t', index_col=0)
@@ -137,6 +144,25 @@ plt.xlabel('CRISPR/Cas9 fold-change bias (log2)')
 plt.ylabel('Copy-number ratio')
 plt.gcf().set_size_inches(2, 2)
 plt.savefig('reports/ratio_boxplot.png', bbox_inches='tight', dpi=600)
+plt.close('all')
+
+# Copy-number ratio boxplot by feature
+order = natsorted(set(df['ratio_bin']))
+
+plot_df = df[df['sample'].isin(set(ss[ss['Cancer Type'] == 'Breast Carcinoma'].index))]
+# plot_df = df.copy()
+plot_df = plot_df.assign(mutation=mobems.loc['BRCA1_mut', plot_df['sample']].values)
+
+sns.boxplot('crispr', 'ratio_bin', 'mutation', data=plot_df, orient='h', linewidth=.3, fliersize=1, order=order, palette=sns.light_palette(bipal_dbgd[0], n_colors=3).as_hex()[1:], notch=True)
+
+plt.axhline(1, lw=.3, ls='--', c=bipal_dbgd[1])
+plt.axvline(0, lw=.1, ls='-', c=bipal_dbgd[0])
+
+plt.title('Gene copy-number ratio\neffect on CRISPR/Cas9 bias')
+plt.xlabel('CRISPR/Cas9 fold-change bias (log2)')
+plt.ylabel('Copy-number ratio')
+plt.gcf().set_size_inches(2, 2)
+plt.savefig('reports/ratio_boxplot_by_feature.png', bbox_inches='tight', dpi=600)
 plt.close('all')
 
 # Ratio enrichment
