@@ -151,7 +151,7 @@ order = natsorted(set(df['ratio_bin']))
 
 plot_df = df[df['sample'].isin(set(ss[ss['Cancer Type'] == 'Breast Carcinoma'].index))]
 # plot_df = df.copy()
-plot_df = plot_df.assign(mutation=mobems.loc['BRCA1_mut', plot_df['sample']].values)
+plot_df = plot_df.assign(mutation=mobems.loc['ATM_mut', plot_df['sample']].values)
 
 sns.boxplot('crispr', 'ratio_bin', 'mutation', data=plot_df, orient='h', linewidth=.3, fliersize=1, order=order, palette=sns.light_palette(bipal_dbgd[0], n_colors=3).as_hex()[1:], notch=True)
 
