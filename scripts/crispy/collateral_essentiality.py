@@ -89,12 +89,15 @@ lmm_df = lmm_df[lmm_df['gene_crispr'] != lmm_df['gene_cnvabs']]
 lmm_df = lmm_df.assign(chr_crispr=ginfo.loc[lmm_df['gene_crispr'], 'chr'].values)
 lmm_df = lmm_df.assign(chr_cnvabs=ginfo.loc[lmm_df['gene_cnvabs'], 'chr'].values)
 
+ratio_nexp_ov = (cnv_ratios.loc[xs.columns, samples] > 1.5).astype(int).dot((nexp.loc[ys.columns, samples] == 0).astype(int).T).unstack()
+lmm_df = lmm_df.loc[(ratio_nexp_ov.loc[[(y, x) for y, x in lmm_df[['gene_crispr', 'gene_cnvabs']].values]] == 0).values]
+
 lmm_df = lmm_df.assign(lm_qvalue=qvalues(lmm_df['lm_pvalue'].values)).sort_values('lm_qvalue')
 print(lmm_df)
 
 
 # - Plot
-idx = 72246
+idx = 120950
 y_feat, x_feat = lmm_df.loc[idx, 'gene_crispr'], lmm_df.loc[idx, 'gene_cnvabs']
 
 plot_df = pd.concat([
@@ -111,7 +114,7 @@ order = natsorted(set(plot_df['ratio_bin']))
 pal = {'No': bipal_dbgd[1], 'Yes': bipal_dbgd[0]}
 
 # Boxplot
-sns.boxplot('ratio_bin', 'crispy', data=plot_df, order=order, color=bipal_dbgd[0], sym='', linewidth=.3)
+sns.boxplot('ratio_bin', 'crispy', data=plot_df, order=order, color=bipal_dbgd[0], sym='', linewidth=.3, saturation=.1)
 sns.stripplot('ratio_bin', 'crispy', 'expressed', data=plot_df, order=order, palette=pal, edgecolor='white', linewidth=.1, size=2, jitter=.1, alpha=.8)
 
 plt.axhline(0, ls='-', lw=.1, c=bipal_dbgd[0])
@@ -120,7 +123,7 @@ plt.ylabel('%s\nCRISPR/Cas9 cop-number bias' % y_feat)
 plt.xlabel('%s\nCopy-number ratio' % x_feat)
 plt.title('Collateral essentiality\nbeta=%.1f; q-value=%.1e' % (lmm_df.loc[idx, 'lm_beta'], lmm_df.loc[idx, 'lm_qvalue']))
 
-legend = plt.legend(title='Expressed', prop={'size': 8})
+legend = plt.legend(title='Expressed', prop={'size': 8}, loc=3)
 legend.get_title().set_fontsize('8')
 
 plt.gcf().set_size_inches(2, 3)
