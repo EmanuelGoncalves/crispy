@@ -35,7 +35,7 @@ ploidy = pd.read_csv('data/gdsc/cell_lines_project_ploidy.csv', index_col=0)['Av
 nexp = pickle.load(open('data/gdsc/nexp_pickle.pickle', 'rb'))
 
 # GDSC
-# c_gdsc = pd.read_csv('data/crispr_gdsc_logfc.csv', index_col=0)
+c_gdsc_fc = pd.read_csv('data/crispr_gdsc_crispy.csv', index_col=0)
 
 c_gdsc = pd.DataFrame({
     os.path.splitext(f)[0].replace('crispr_gdsc_crispy_', ''):
@@ -150,8 +150,8 @@ plt.close('all')
 order = natsorted(set(df['ratio_bin']))
 
 plot_df = df[df['sample'].isin(set(ss[ss['Cancer Type'] == 'Breast Carcinoma'].index))]
-# plot_df = df.copy()
-plot_df = plot_df.assign(mutation=mobems.loc['ATM_mut', plot_df['sample']].values)
+# plot_df = plot_df.assign(mutation=mobems.loc['TP53_mut', plot_df['sample']].values)
+plot_df = plot_df.assign(mutation=(c_gdsc_fc.loc['XRCC4'] <= -1).astype(int)[plot_df['sample']].values)
 
 sns.boxplot('crispr', 'ratio_bin', 'mutation', data=plot_df, orient='h', linewidth=.3, fliersize=1, order=order, palette=sns.light_palette(bipal_dbgd[0], n_colors=3).as_hex()[1:], notch=True)
 
