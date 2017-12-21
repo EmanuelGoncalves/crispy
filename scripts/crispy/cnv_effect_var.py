@@ -10,18 +10,12 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 from crispy import bipal_dbgd
 from natsort import natsorted
-from sklearn.metrics import roc_curve, auc, roc_auc_score
+from sklearn.metrics import roc_curve, auc
 
 
 # - Imports
 # Gene HGNC info
 ginfo = pd.read_csv('data/crispy_hgnc_info.csv', index_col=0)
-
-# Samplesheet
-ss = pd.read_csv('data/gdsc/samplesheet.csv', index_col=0)
-
-# MOBEMs
-mobems = pd.read_csv('data/gdsc/mobems/PANCAN_simple_MOBEM.rdata.annotated.csv', index_col=0)
 
 # Non-expressed genes
 nexp = pickle.load(open('data/gdsc/nexp_pickle.pickle', 'rb'))
