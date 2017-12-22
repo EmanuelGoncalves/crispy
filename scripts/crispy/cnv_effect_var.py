@@ -107,8 +107,6 @@ order = natsorted(set(df['ratio_bin']))
 pal = sns.light_palette(bipal_dbgd[0], n_colors=len(order)).as_hex()
 
 sns.boxplot('crispy', 'ratio_bin', data=df, orient='h', linewidth=.3, fliersize=1, order=order, palette=pal, notch=True)
-
-# plt.axhline(1, lw=.3, ls='--', c=bipal_dbgd[1])
 plt.axvline(0, lw=.1, ls='-', c=bipal_dbgd[0])
 
 plt.title('Gene copy-number ratio\neffect on CRISPR/Cas9 bias')
