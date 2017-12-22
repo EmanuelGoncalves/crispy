@@ -2,7 +2,6 @@
 # Copyright (C) 2017 Emanuel Goncalves
 
 import os
-import re
 import pickle
 import numpy as np
 import pandas as pd
@@ -23,13 +22,13 @@ ss = pd.read_csv('data/gdsc/samplesheet.csv', index_col=0)
 ginfo = pd.read_csv('data/crispy_hgnc_info.csv', index_col=0)
 
 # Copy-number
-cnv = pd.read_csv('data/crispy_gene_copy_number.csv', index_col=0)
+cnv = pd.read_csv('data/crispy_gene_copy_number.csv', index_col=0).replace(-1, np.nan)
 
 # Ploidy
 ploidy = pd.read_csv('data/crispy_sample_ploidy.csv', index_col=0)['ploidy']
 
 # Copy-number ratios
-cnv_ratios = pd.read_csv('data/crispy_copy_number_ratio.csv', index_col=0).replace(-1, np.nan)
+cnv_ratios = pd.read_csv('data/crispy_copy_number_ratio.csv', index_col=0)
 
 # Non-expressed genes
 nexp = pickle.load(open('data/gdsc/nexp_pickle.pickle', 'rb'))
@@ -93,11 +92,12 @@ ratio_nexp_ov = (cnv_ratios.loc[xs.columns, samples] > 1.5).astype(int).dot((nex
 lmm_df = lmm_df.loc[(ratio_nexp_ov.loc[[(y, x) for y, x in lmm_df[['gene_crispr', 'gene_cnvabs']].values]] == 0).values]
 
 lmm_df = lmm_df.assign(lm_qvalue=qvalues(lmm_df['lm_pvalue'].values)).sort_values('lm_qvalue')
+lmm_df.query('lm_qvalue < 0.05').to_csv('data/crispy_collateral_essentialities.csv')
 print(lmm_df)
 
 
 # - Plot
-idx = 120950
+idx = 72246
 y_feat, x_feat = lmm_df.loc[idx, 'gene_crispr'], lmm_df.loc[idx, 'gene_cnvabs']
 
 plot_df = pd.concat([
