@@ -8,12 +8,13 @@ import seaborn as sns
 import itertools as it
 import matplotlib.pyplot as plt
 from limix.plot import qqplot
+from sklearn.decomposition import PCA
 from crispy import bipal_dbgd, bipal_gray
 from scipy.stats import pearsonr, iqr, uniform
 from scipy.stats.stats import rankdata
-from limix.stats import qvalues, linear_kinship
 from limix.qtl import qtl_test_lmm, qtl_test_lm
 from limix_core.util.preprocess import gaussianize
+from limix.stats import qvalues, linear_kinship, empirical_pvalues
 
 
 # - Imports
@@ -27,16 +28,23 @@ d_response.columns = d_response.columns.droplevel(0)
 # Samplesheet
 ss = pd.read_csv('data/gdsc/samplesheet.csv', index_col=0).dropna(subset=['Cancer Type', 'Microsatellite'])
 
+# Drug samplesheet
+ds = pd.read_csv('data/gdsc/drug_samplesheet.csv', index_col=0)
+
 # Essential genes
 essential = list(pd.read_csv('data/resources/curated_BAGEL_essential.csv', sep='\t')['gene'])
+
+# Growth rate
+growth = pd.read_csv('data/gdsc/growth_rate.csv', index_col=0)
 
 
 # - Kinship
 kinship = pd.DataFrame(linear_kinship(crispr.T.values), index=crispr.columns, columns=crispr.columns)
+# pcs = pd.DataFrame(PCA(n_components=15).fit_transform(gexp.T), index=gexp.columns)
 
 
 # - Overlap
-samples = list(set(d_response).intersection(crispr).intersection(ss.index))
+samples = list(set(d_response).intersection(crispr).intersection(ss.index).intersection(growth.index))
 d_response, crispr = d_response[samples], crispr[samples]
 print('Samples: %d' % len(samples))
 
@@ -60,14 +68,18 @@ ys = d_response[samples].T
 ys = ys.fillna(ys.mean())
 
 xs = crispr[ys.index].T
-xs = pd.DataFrame(gaussianize(xs.values), index=xs.index, columns=xs.columns)
+xs = xs.subtract(xs.mean()).divide(xs.std())
+# xs = pd.DataFrame(gaussianize(xs.values), index=xs.index, columns=xs.columns)
 
 k = kinship.loc[ys.index, ys.index]
 
-covs = pd.get_dummies(ss.loc[ys.index, ['Cancer Type', 'Microsatellite']]).astype(float)
+covs = pd.concat([
+    pd.get_dummies(ss.loc[ys.index, ['Cancer Type']]).astype(float),
+    growth.loc[ys.index, 'NC1_ratio_mean']
+], axis=1).loc[ys.index]
 
 # Linear regression
-lmm = qtl_test_lmm(pheno=ys.values, snps=xs.values, K=k.values, covs=covs.values)
+lmm = qtl_test_lm(pheno=ys.values, snps=xs.values, covs=covs.values)
 
 # Adjust p-values
 qvalue = qvalues(lmm.getPv())
@@ -78,7 +90,7 @@ drug_id, drug_name, drug_screen = zip(*drugs)
 
 lmm_cd = pd.DataFrame({
     'drug_id': drug_id, 'drug_name': drug_name, 'drug_screen': drug_screen, 'crispr': genes,
-    'beta': lmm.getBetaSNP().ravel(),
+    'beta': lmm.getBetaSNP().ravel(), 'ste': lmm.getBetaSNPste().ravel(),
     'pvalue': lmm.getPv().ravel(),
     'qvalue': qvalue.ravel()
 })
@@ -86,8 +98,6 @@ lmm_cd = pd.DataFrame({
 
 # - PPI
 # Drug targets manual curated list
-ds = pd.read_csv('data/gdsc/drug_samplesheet.csv', index_col=0)
-
 d_targets = ds['Target Curated'].dropna().to_dict()
 d_targets = {k: {t.strip() for t in d_targets[k].split(';')} for k in d_targets}
 
@@ -161,8 +171,8 @@ plt.close('all')
 
 
 # - Drug target Histogram
-sns.distplot(lmm_cd.query('target != 0')['beta'], label='All', color=bipal_dbgd[0], kde_kws={'lw': 1.})
-sns.distplot(lmm_cd.query('target == 0')['beta'], label='Target', color=bipal_dbgd[1], kde_kws={'lw': 1.})
+sns.distplot(lmm_cd.query('target != 0')['pvalue'], label='All', color=bipal_dbgd[0], kde_kws={'lw': 1.}, kde=False)
+sns.distplot(lmm_cd.query('target == 0')['pvalue'], label='Target', color=bipal_dbgd[1], kde_kws={'lw': 1.}, kde=False)
 
 plt.xlabel('Drug ~ CRISPR beta')
 plt.ylabel('Density')
@@ -208,48 +218,47 @@ plt.savefig('reports/drug/drug_target_cum_dist.png', bbox_inches='tight', dpi=60
 plt.close('all')
 
 
-# # - Corrplot
-# idx = 205654
-#
-# d_id, d_name, d_screen, gene = lmm_cd.loc[idx, ['drug_id', 'drug_name', 'drug_screen', 'crispr']].values
-#
-# plot_df = pd.DataFrame({
-#     'drug': d_response.loc[(d_id, d_name, d_screen), samples],
-#     'crispr': crispr.loc[gene, samples],
-# }).dropna()
-# plot_df = pd.concat([plot_df, ss.loc[plot_df.index, ['Cancer Type', 'Microsatellite']]], axis=1)
-#
-#
-# def marginal_distplot(a, vertical=False, **kws):
-#     x = plot_df['drug'] if vertical else plot_df['crispr']
-#     ax = sns.distplot(x, vertical=vertical, **kws)
-#     ax.set_ylabel('')
-#     ax.set_xlabel('')
-#     ax.set_ylim((min(x) * 1.05, max(x) * 1.05)) if vertical else ax.set_xlim((min(x) * 1.05, max(x) * 1.05))
-#
-#
-# sns.set(
-#     style='ticks', context='paper', font_scale=.75,
-#     rc={'axes.linewidth': .3, 'xtick.major.width': .3, 'ytick.major.width': .3, 'xtick.major.size': 2.5, 'ytick.major.size': 2.5}
-# )
-# g = sns.JointGrid('crispr', 'drug', plot_df, space=0, ratio=8)
-#
-# sns.regplot(
-#     x='crispr', y='drug', data=plot_df, ax=g.ax_joint,
-#     color=bipal_dbgd[0], truncate=True, fit_reg=True,
-#     scatter_kws={'s': 10, 'edgecolor': 'w', 'linewidth': .3, 'alpha': .8}, line_kws={'linewidth': .5}
-# )
-#
-# g.plot_marginals(marginal_distplot, color=bipal_dbgd[0], kde=False)
-#
-# g.annotate(pearsonr, template='R={val:.2g}, p={p:.1e}')
-#
-# g.ax_joint.axhline(0, ls='-', lw=0.1, c=bipal_dbgd[0])
-# g.ax_joint.axvline(0, ls='-', lw=0.1, c=bipal_dbgd[0])
-#
-# g.set_axis_labels('%s (fold-change)' % gene, '%s (ln IC50)' % d_name)
-#
-# plt.gcf().set_size_inches(2, 2)
-# plt.savefig('reports/drug/crispr_drug_corrplot.png', bbox_inches='tight', dpi=600)
-# plt.close('all')
-#
+# - Corrplot
+idx = 151934
+
+d_id, d_name, d_screen, gene = lmm_cd.loc[idx, ['drug_id', 'drug_name', 'drug_screen', 'crispr']].values
+
+plot_df = pd.DataFrame({
+    'drug': d_response.loc[(d_id, d_name, d_screen), samples],
+    'crispr': crispr.loc[gene, samples],
+}).dropna()
+plot_df = pd.concat([plot_df, ss.loc[plot_df.index, ['Cancer Type', 'Microsatellite']]], axis=1)
+
+
+def marginal_distplot(a, vertical=False, **kws):
+    x = plot_df['drug'] if vertical else plot_df['crispr']
+    ax = sns.distplot(x, vertical=vertical, **kws)
+    ax.set_ylabel('')
+    ax.set_xlabel('')
+    ax.set_ylim((min(x) * 1.05, max(x) * 1.05)) if vertical else ax.set_xlim((min(x) * 1.05, max(x) * 1.05))
+
+
+sns.set(
+    style='ticks', context='paper', font_scale=.75,
+    rc={'axes.linewidth': .3, 'xtick.major.width': .3, 'ytick.major.width': .3, 'xtick.major.size': 2.5, 'ytick.major.size': 2.5}
+)
+g = sns.JointGrid('crispr', 'drug', plot_df, space=0, ratio=8)
+
+sns.regplot(
+    x='crispr', y='drug', data=plot_df, ax=g.ax_joint,
+    color=bipal_dbgd[0], truncate=True, fit_reg=True,
+    scatter_kws={'s': 10, 'edgecolor': 'w', 'linewidth': .3, 'alpha': .8}, line_kws={'linewidth': .5}
+)
+
+g.plot_marginals(marginal_distplot, color=bipal_dbgd[0], kde=False)
+
+g.annotate(pearsonr, template='R={val:.2g}, p={p:.1e}')
+
+g.ax_joint.axhline(0, ls='-', lw=0.1, c=bipal_dbgd[0])
+g.ax_joint.axvline(0, ls='-', lw=0.1, c=bipal_dbgd[0])
+
+g.set_axis_labels('%s (fold-change)' % gene, '%s (ln IC50)' % d_name)
+
+plt.gcf().set_size_inches(2, 2)
+plt.savefig('reports/drug/crispr_drug_corrplot.png', bbox_inches='tight', dpi=600)
+plt.close('all')
