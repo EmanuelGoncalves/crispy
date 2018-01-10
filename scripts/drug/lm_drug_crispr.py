@@ -2,12 +2,10 @@
 # Copyright (C) 2018 Emanuel Goncalves
 
 import time
-import numpy as np
 import pandas as pd
-import seaborn as sns
 from scipy.stats import iqr
 from crispy.regression.linear import lr
-from sklearn.linear_model import LinearRegression
+from statsmodels.stats.multitest import multipletests
 
 # - Imports
 # Essential genes
@@ -50,7 +48,7 @@ crispr = crispr[(crispr.abs() >= 2).sum(1) >= 5]
 # - lmm: drug ~ crispr + tissue
 print('CRISPR genes: %d, Drug: %d' % (len(set(crispr.index)), len(set(d_response.index))))
 
-xs, ys = crispr.sample(10).T, d_response.T
+xs, ys = crispr.T, d_response.T
 
 time_start = time.time()
 
@@ -66,5 +64,8 @@ print('Total run time (0.5M tests): %.2f mins' % (time_per_run * 5e5 / 60))
 
 # -
 lm_res_df = pd.concat([lm_res[i].unstack().rename(i) for i in lm_res], axis=1).reset_index()
-print(lm_res_df.sort_values('f_pval'))
+lm_res_df = lm_res_df.assign(fdr=multipletests(lm_res_df['f_pval'], method='fdr_bh')[1])
+
+lm_res_df.sort_values('fdr').to_csv('data/lm_drug_crispr.csv', index=False)
+print(lm_res_df.sort_values('fdr'))
 
