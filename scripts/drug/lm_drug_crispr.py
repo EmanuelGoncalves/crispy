@@ -50,25 +50,18 @@ crispr = crispr[(crispr.abs() >= 2).sum(1) >= 5]
 # - lmm: drug ~ crispr + tissue
 print('CRISPR genes: %d, Drug: %d' % (len(set(crispr.index)), len(set(d_response.index))))
 
-t_meas = []
-# gene, drug = 'TP53', (1047, 'Nutlin-3a (-)', 'RS')
-for gene_idx, drug_idx in zip(*(range(0, 1000), range(0, d_response.shape[0]))):
-    print(gene_idx, drug_idx)
+xs, ys = crispr.sample(10).T.values, d_response.T.values
 
-    time_start = time.time()
+time_start = time.time()
 
-    # Build data-frames
-    yy = d_response.iloc[drug_idx].values
-    xx = crispr.iloc[[gene_idx]].T.values
+r2_scores = lr(xs, ys)
 
-    res = lr(xx, yy)
+time_elapsed = time.time() - time_start
 
-    time_lm = time.time()
+time_per_run = time_elapsed / (xs.shape[1] * ys.shape[1])
 
-    #
-    t_meas.append(('lm', time_lm - time_start))
+print(time_per_run)
+print('Total run time (0.5M tests): %.2f mins' % (time_per_run * 5e5 / 60))
 
-t_meas = pd.DataFrame(t_meas, columns=['func', 'time'])
-print(t_meas.groupby('func').median())
-print('Total run time (0.5M tests)', t_meas.groupby('func').median() * 5e5 / 60)
-# sns.boxplot('func', 'time', data=t_meas, notch=True)
+# -
+print(r2_scores)

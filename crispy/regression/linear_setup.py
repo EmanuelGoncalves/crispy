@@ -1,12 +1,13 @@
 #!/usr/bin/env python
 # Copyright (C) 2018 Emanuel Goncalves
 
-from distutils.core import setup
+import numpy
+from distutils.core import setup, Extension
 from Cython.Build import cythonize
 
-# python linear_setup.py build_ext --inplace
 
 setup(
-  name='SS GSEA',
-  ext_modules=cythonize('linear_setup.py'),
+  name='LR',
+  ext_modules=cythonize('linear.pyx'),
+  include_dirs=[numpy.get_include()]
 )

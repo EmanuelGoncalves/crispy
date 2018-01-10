@@ -1,6 +1,90 @@
 CHANGES
 =======
 
+* Linear regression computational time optimisation
+* Linear regression computational time optimisation
+* Growth rate added as covariate for crispr versus drug association
+* Kinship matrix with linear regression updated
+* CRISPR/drug integration drug targets analysis
+* CRISPR + drug response integration analysis
+* Ratio implication in essential genes
+* HaCaTs cell lines CRISPR; Correlation comparison CNV vs Ratio
+* HaCaTs cell lines CRISPR; Correlation comparison CNV vs Ratio
+* Systematic collateral essentialities focused on genes with high copy-number ratio and not expressed
+* Systematic collateral essentialities analysis updated
+* Copy-number ratios analysis refactored
+* Copy-number ratio calculation exported to an independent script file
+* Copy-number ratio calculation exported to an independent script file
+* copy-number ratio effects minor updated testing other genomic features
+* MRR pathway analysis samples updated
+* MRR pathway analysis
+* Ratio analysis performed with original fold-changes by feature
+* Ratio analysis performed with original fold-changes
+* Collateral essentiality updated
+* Deprecated reports removed
+* CRISPR variation across chromosome comments updated
+* Bug fixed in chromosome copies estimation
+* Set chromosome plot to comply with color palette
+* CRISPR impact by chromosome analysis done
+* Minor updated in plots layout
+* Collateral essentialities analysis updated
+* Collateral essentialities and copy-number ratio analysis updated
+* Copy-number ratio analysis updated
+* ploidy enrichment analysis
+* Ploidy enrichment analysis
+* CNV bias variation across cell lines
+* Sample overall count and copy-number effect plots added
+* Refactoring Crispy analysis scripts
+* Synthetic lethalities analysis initiated
+* Ploidy impact in CRISPR fold-change, linear regression
+* Ploidy impact in CRISPR fold-change
+* Metric plots adpated; CNV effect association with ploidy
+* Copy-number ratio deprecated plots removed
+* Copy-number ratio plots added
+* Copy-number ratio association
+* Copy-number ratio association with bias
+* Synthetic lethal interactions with copy-number
+* Synthetic lethal interactions with copy-number
+* Karyotype analysis;Synthetic lethal
+* Karyotype analysis
+* Kinases phenotypic analysis updated
+* kinases essentiality analysis started
+* kinases essentiality corr
+* kinases analysis started
+* ccleanr comparison
+* ccleanr comparison
+* copy-number effect across cell lines reports
+* copy-number effect across cell lines
+* Benchmark plot updated
+* Benchmark plot updated
+* Assemble crispy corrected scores
+* CCLE processing; GDSC+CCLE correction scripts added
+* CCLE crispr data processed
+* Processing GDSC completed
+* Bias correction unsupervised and sample preprocessing
+* Bias correction GP mean bug fixed; Model simplified to RBF
+* Kernel benchamrk updated to unsupervised model
+* kernel benchmark updated
+* Kernel benchmark script added
+* raw counts dropout metric
+* copy-number impact variability
+* Breast cell lines subtypes clustering
+* Crispr + drug analysis updated and CERES comparison
+* kmeans clustering updated
+* Kmeans analysis to crispr + drug
+* Reports updated. Crispr + drug analysis started
+* Minor corrections added to biases correction module. Method comparison script added
+* Multithreaded updated to run with concurrent futures
+* Biases correction refactored to inherit GaussianProcessRegression
+* deprecated plots removed. shrna benchmark added
+* Crispy correction performed with CNV. Sampling of hyper parameters added
+* Global analysis of GDSC CRISPR samples
+* Fold-change correction performed with copy-number linear and non-linear
+* Plot chromosome added; Variance explained exported
+* Correction method refactored and scripts to execute in the cluster implemented
+* Benchmark plots added
+* DataMatrix class updated to process GDSC crispr panel
+* Updates to DataMatrix class with processing methods
 * package structured changed
 * Source folder renamed
 * Initial refactorisation of the package
