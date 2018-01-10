@@ -219,7 +219,7 @@ plt.close('all')
 
 
 # - Corrplot
-idx = 151934
+idx = 179708
 
 d_id, d_name, d_screen, gene = lmm_cd.loc[idx, ['drug_id', 'drug_name', 'drug_screen', 'crispr']].values
 
