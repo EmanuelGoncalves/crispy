@@ -11,13 +11,14 @@ from sklearn.linear_model import LinearRegression
 Linear regression omiting NaNs in dependent variable (ys)
 
 """
-def lr(xs, ys, covs=None):
-    outputs = __lr(xs.values, ys.values, covs)
+def lr(xs, ys, ws):
+    outputs = __lr(xs.values, ys.values, ws.values)
     return {i: pd.DataFrame(outputs[i], index=xs.columns, columns=ys.columns) for i in outputs}
 
 
-def __lr(xs, ys, covs):
+def __lr(xs, ys, ws):
     # Initialize variables
+    cdef float lr
     cdef int x_idx, y_idx
 
     cdef np.ndarray xx = np.zeros(ys.shape[0], dtype=np.float64)
@@ -31,16 +32,32 @@ def __lr(xs, ys, covs):
     cdef np.ndarray f_stat = np.zeros([xs.shape[1], ys.shape[1]], dtype=np.float64)
     cdef np.ndarray f_pval = np.zeros([xs.shape[1], ys.shape[1]], dtype=np.float64)
 
+    cdef np.ndarray lr_stat = np.zeros([xs.shape[1], ys.shape[1]], dtype=np.float64)
+    cdef np.ndarray lr_pval = np.zeros([xs.shape[1], ys.shape[1]], dtype=np.float64)
+
+
     # Iterate through matricies
-    for x_idx in range(xs.shape[1]):
+    for y_idx in range(ys.shape[1]):
+        # Build Y array
+        yy = ys[:, y_idx]
 
-        for y_idx in range(ys.shape[1]):
+        # Remove NaNs
+        yy_nans = np.isnan(yy)
+        yy = yy[~yy_nans]
 
-            # Build arrays
-            xx, yy = xs[:, [x_idx]], ys[:, y_idx]
+        # Linear regression only with covariates
+        covs = ws[~yy_nans]
 
-            # Omit NaNs
-            xx, yy = xx[~np.isnan(yy)], yy[~np.isnan(yy)]
+        lm_pred_covs = LinearRegression().fit(covs, yy).predict(covs)
+
+        lm_llog_covs = log_likelihood(yy, lm_pred_covs)
+
+        for x_idx in range(xs.shape[1]):
+            # Build X matrix
+            xx = xs[:, [x_idx]][~yy_nans]
+
+            # Build X matrix with covariates
+            xx_covs = np.concatenate([xx, covs], axis=1)
 
             # Linear regression
             lm = LinearRegression().fit(xx, yy)
@@ -48,18 +65,28 @@ def __lr(xs, ys, covs):
             # Predict
             yy_pred = lm.predict(xx)
 
-            # Stats
+            # Betas
             betas[x_idx, y_idx] = lm.coef_[0]
 
+            # R-squared
             r2_scores[x_idx, y_idx] = r_squared(yy, yy_pred)
 
+            # F-statistic
             f_stats = f_statistic(yy, yy_pred, len(yy), xx.shape[1])
             f_stat[x_idx, y_idx] = f_stats[0]
             f_pval[x_idx, y_idx] = f_stats[1]
 
+            # Log-ratio test
+            lm_pred_xx_covs = LinearRegression().fit(xx_covs, yy).predict(xx_covs)
+            lm_llog_feat = log_likelihood(yy, lm_pred_xx_covs)
+
+            lr = 2 * (lm_llog_feat - lm_llog_covs)
+            lr_stat[x_idx, y_idx] = lr
+            lr_pval[x_idx, y_idx] = stats.chi2(1).sf(lr)
+
     # Assemble outputs
     res = {
-        'beta': betas, 'r2': r2_scores, 'f_stat': f_stat, 'f_pval': f_pval
+        'beta': betas, 'r2': r2_scores, 'f_stat': f_stat, 'f_pval': f_pval, 'lr': lr_stat, 'lr_pval': lr_pval
     }
 
     return res

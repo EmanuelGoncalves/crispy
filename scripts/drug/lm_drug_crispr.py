@@ -48,11 +48,12 @@ crispr = crispr[(crispr.abs() >= 2).sum(1) >= 5]
 # - lmm: drug ~ crispr + tissue
 print('CRISPR genes: %d, Drug: %d' % (len(set(crispr.index)), len(set(d_response.index))))
 
-xs, ys = crispr.T, d_response.T
+xs, ys = crispr.sample(10)[samples].T, d_response[samples].T
+ws = pd.concat([pd.get_dummies(ss[['Cancer Type']]), growth['NC1_ratio_mean']], axis=1).loc[samples]
 
 time_start = time.time()
 
-lm_res = lr(xs, ys)
+lm_res = lr(xs, ys, ws)
 
 time_elapsed = time.time() - time_start
 
@@ -64,8 +65,9 @@ print('Total run time (0.5M tests): %.2f mins' % (time_per_run * 5e5 / 60))
 
 # -
 lm_res_df = pd.concat([lm_res[i].unstack().rename(i) for i in lm_res], axis=1).reset_index()
-lm_res_df = lm_res_df.assign(fdr=multipletests(lm_res_df['f_pval'], method='fdr_bh')[1])
+lm_res_df = lm_res_df.assign(f_fdr=multipletests(lm_res_df['f_pval'], method='fdr_bh')[1])
+lm_res_df = lm_res_df.assign(lr_fdr=multipletests(lm_res_df['lr_pval'], method='fdr_bh')[1])
 
-lm_res_df.sort_values('fdr').to_csv('data/lm_drug_crispr.csv', index=False)
-print(lm_res_df.sort_values('fdr'))
+lm_res_df.sort_values('lr_fdr').to_csv('data/lm_drug_crispr.csv', index=False)
+print(lm_res_df.sort_values('lr_fdr'))
 
