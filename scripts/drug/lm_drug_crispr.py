@@ -50,11 +50,11 @@ crispr = crispr[(crispr.abs() >= 2).sum(1) >= 5]
 # - lmm: drug ~ crispr + tissue
 print('CRISPR genes: %d, Drug: %d' % (len(set(crispr.index)), len(set(d_response.index))))
 
-xs, ys = crispr.sample(10).T.values, d_response.T.values
+xs, ys = crispr.sample(10).T, d_response.T
 
 time_start = time.time()
 
-r2_scores = lr(xs, ys)
+lm_res = lr(xs, ys)
 
 time_elapsed = time.time() - time_start
 
@@ -63,5 +63,8 @@ time_per_run = time_elapsed / (xs.shape[1] * ys.shape[1])
 print(time_per_run)
 print('Total run time (0.5M tests): %.2f mins' % (time_per_run * 5e5 / 60))
 
+
 # -
-print(r2_scores)
+lm_res_df = pd.concat([lm_res[i].unstack().rename(i) for i in lm_res], axis=1).reset_index()
+print(lm_res_df.sort_values('f_pval'))
+

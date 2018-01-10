@@ -1,7 +1,9 @@
 # Copyright (C) 2018 Emanuel Goncalves
 
 import numpy as np
+import pandas as pd
 cimport numpy as np
+from scipy import stats
 from sklearn.linear_model import LinearRegression
 
 
@@ -10,13 +12,24 @@ Linear regression omiting NaNs in dependent variable (ys)
 
 """
 def lr(xs, ys, covs=None):
+    outputs = __lr(xs.values, ys.values, covs)
+    return {i: pd.DataFrame(outputs[i], index=xs.columns, columns=ys.columns) for i in outputs}
+
+
+def __lr(xs, ys, covs):
     # Initialize variables
     cdef int x_idx, y_idx
 
-    cdef np.ndarray r2_scores = np.zeros([xs.shape[1], ys.shape[1]], dtype=np.float64)
-
     cdef np.ndarray xx = np.zeros(ys.shape[0], dtype=np.float64)
     cdef np.ndarray yy = np.zeros(ys.shape[0], dtype=np.float64)
+
+    # Initialize output variables
+    cdef np.ndarray betas = np.zeros([xs.shape[1], ys.shape[1]], dtype=np.float64)
+
+    cdef np.ndarray r2_scores = np.zeros([xs.shape[1], ys.shape[1]], dtype=np.float64)
+
+    cdef np.ndarray f_stat = np.zeros([xs.shape[1], ys.shape[1]], dtype=np.float64)
+    cdef np.ndarray f_pval = np.zeros([xs.shape[1], ys.shape[1]], dtype=np.float64)
 
     # Iterate through matricies
     for x_idx in range(xs.shape[1]):
@@ -36,11 +49,34 @@ def lr(xs, ys, covs=None):
             yy_pred = lm.predict(xx)
 
             # Stats
+            betas[x_idx, y_idx] = lm.coef_[0]
+
             r2_scores[x_idx, y_idx] = r_squared(yy, yy_pred)
 
-            log_likelihood(yy, yy_pred)
+            f_stats = f_statistic(yy, yy_pred, len(yy), xx.shape[1])
+            f_stat[x_idx, y_idx] = f_stats[0]
+            f_pval[x_idx, y_idx] = f_stats[1]
 
-    return r2_scores
+    # Assemble outputs
+    res = {
+        'beta': betas, 'r2': r2_scores, 'f_stat': f_stat, 'f_pval': f_pval
+    }
+
+    return res
+
+
+"""
+F-statistic
+"""
+def f_statistic(np.ndarray[np.float64_t, ndim=1] y_true, np.ndarray[np.float64_t, ndim=1] y_pred, np.int64_t n, np.int64_t p):
+    msm = np.power(y_pred - y_true.mean(), 2).sum() / p
+    mse = np.power(y_true - y_pred, 2).sum() / (n - p - 1)
+
+    f = msm / mse
+
+    f_pval = stats.f.sf(f, p, n - p - 1)
+
+    return [f, f_pval]
 
 
 """
