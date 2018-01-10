@@ -13,8 +13,8 @@ def lr(xs, ys):
     cdef np.ndarray xx = np.zeros(ys.shape[0], dtype=np.float64)
     cdef np.ndarray yy = np.zeros(ys.shape[0], dtype=np.float64)
 
-    for x_idx in xrange(xs.shape[1]):
-        for y_idx in xrange(ys.shape[1]):
+    for x_idx in range(xs.shape[1]):
+        for y_idx in range(ys.shape[1]):
             xx, yy = xs[:, [x_idx]], ys[:, y_idx]
 
             xx, yy = xx[~np.isnan(yy)], yy[~np.isnan(yy)]
