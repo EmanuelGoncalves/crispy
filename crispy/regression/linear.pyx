@@ -28,6 +28,7 @@ def __lr(xs, ys, ws):
     cdef np.ndarray betas = np.zeros([xs.shape[1], ys.shape[1]], dtype=np.float64)
 
     cdef np.ndarray r2_scores = np.zeros([xs.shape[1], ys.shape[1]], dtype=np.float64)
+    cdef np.ndarray r2_scores_lr = np.zeros([xs.shape[1], ys.shape[1]], dtype=np.float64)
 
     cdef np.ndarray f_stat = np.zeros([xs.shape[1], ys.shape[1]], dtype=np.float64)
     cdef np.ndarray f_pval = np.zeros([xs.shape[1], ys.shape[1]], dtype=np.float64)
@@ -83,10 +84,11 @@ def __lr(xs, ys, ws):
             lr = 2 * (lm_llog_feat - lm_llog_covs)
             lr_stat[x_idx, y_idx] = lr
             lr_pval[x_idx, y_idx] = stats.chi2(1).sf(lr)
+            r2_scores_lr[x_idx, y_idx] = r_squared(yy, lm_pred_xx_covs)
 
     # Assemble outputs
     res = {
-        'beta': betas, 'r2': r2_scores, 'f_stat': f_stat, 'f_pval': f_pval, 'lr': lr_stat, 'lr_pval': lr_pval
+        'beta': betas, 'r2': r2_scores, 'f_stat': f_stat, 'f_pval': f_pval, 'lr': lr_stat, 'lr_pval': lr_pval, 'lr_r2': r2_scores_lr
     }
 
     return res

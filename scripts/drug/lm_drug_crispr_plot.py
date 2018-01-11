@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
+from limix.plot import qqplot
 from crispy import bipal_dbgd
 from scipy.stats import pearsonr, iqr, uniform
 
@@ -82,11 +83,6 @@ for i in ['*', '-']:
         edgecolor='white', lw=.1, s=5, alpha=.5, c=pal[i]
     )
 
-plt.scatter(
-    plot_df.query('target == 0')['beta'], plot_df.query('target == 0')['log10_qvalue'],
-    edgecolor='white', lw=.1, s=5, alpha=.5, c=bipal_dbgd[1]
-)
-
 # Add FDR threshold lines
 plt.text(plt.xlim()[0]*.98, -np.log10(.05) * 1.01, 'FDR 5%', ha='left', color=pal['*'], alpha=0.65, fontsize=5)
 plt.axhline(-np.log10(.05), c=pal['*'], ls='--', lw=.3, alpha=.7)
@@ -141,7 +137,7 @@ plt.close('all')
 
 
 # - Corrplot
-idx = 16
+idx = 1
 
 d_id, d_name, d_screen, gene = lm_df.loc[idx, ['DRUG_ID', 'DRUG_NAME', 'VERSION', 'GENES']].values
 

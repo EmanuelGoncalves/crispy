@@ -2,9 +2,11 @@
 # Copyright (C) 2018 Emanuel Goncalves
 
 import time
+import numpy as np
 import pandas as pd
 from scipy.stats import iqr
 from crispy.regression.linear import lr
+from sklearn.preprocessing import StandardScaler
 from statsmodels.stats.multitest import multipletests
 
 # - Imports
@@ -13,6 +15,7 @@ essential = list(pd.read_csv('data/resources/curated_BAGEL_essential.csv', sep='
 
 # CRISPR
 crispr = pd.read_csv('data/gdsc/crispr/crisprcleanr_gene.csv', index_col=0).dropna()
+crispr = crispr.subtract(crispr.mean()).divide(crispr.std())
 
 # Drug response
 d_response = pd.read_csv('data/gdsc/drug_single/drug_ic50_merged_matrix.csv', index_col=[0, 1, 2], header=[0, 1])
@@ -48,9 +51,14 @@ crispr = crispr[(crispr.abs() >= 2).sum(1) >= 5]
 # - lmm: drug ~ crispr + tissue
 print('CRISPR genes: %d, Drug: %d' % (len(set(crispr.index)), len(set(d_response.index))))
 
+# Build matricies
 xs, ys = crispr[samples].T, d_response[samples].T
 ws = pd.concat([pd.get_dummies(ss[['Cancer Type']]), growth['NC1_ratio_mean']], axis=1).loc[samples]
 
+# Standardize xs
+xs = pd.DataFrame(StandardScaler().fit_transform(xs), index=xs.index, columns=xs.columns)
+
+# Linear regression
 time_start = time.time()
 
 lm_res = lr(xs, ys, ws)
@@ -59,7 +67,7 @@ time_elapsed = time.time() - time_start
 
 time_per_run = time_elapsed / (xs.shape[1] * ys.shape[1])
 
-print(time_per_run)
+print('Total run time: %.5f; Time per run: %.5f' % (time_elapsed, time_per_run))
 print('Total run time (0.5M tests): %.2f mins' % (time_per_run * 5e5 / 60))
 
 
@@ -70,4 +78,3 @@ lm_res_df = lm_res_df.assign(lr_fdr=multipletests(lm_res_df['lr_pval'], method='
 
 lm_res_df.sort_values('lr_fdr').to_csv('data/drug/lm_drug_crispr.csv', index=False)
 print(lm_res_df.sort_values('lr_fdr'))
-
