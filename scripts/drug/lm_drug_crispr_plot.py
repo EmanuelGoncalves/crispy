@@ -6,9 +6,8 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
-from limix.plot import qqplot
 from crispy import bipal_dbgd
-from scipy.stats import pearsonr, iqr, uniform
+from scipy.stats import pearsonr, uniform
 
 
 # - Import
@@ -23,7 +22,7 @@ d_response.columns = d_response.columns.droplevel(0)
 lm_df = pd.read_csv('data/drug/lm_drug_crispr.csv')
 
 # Samplesheet
-ss = pd.read_csv('data/gdsc/samplesheet.csv', index_col=0).dropna(subset=['Cancer Type', 'Microsatellite'])
+ss = pd.read_csv('data/gdsc/samplesheet.csv', index_col=0).dropna(subset=['Cancer Type'])
 
 # Growth rate
 growth = pd.read_csv('data/gdsc/growth_rate.csv', index_col=0)

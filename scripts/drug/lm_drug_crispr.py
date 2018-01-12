@@ -9,6 +9,7 @@ from crispy.regression.linear import lr
 from sklearn.preprocessing import StandardScaler
 from statsmodels.stats.multitest import multipletests
 
+
 # - Imports
 # Essential genes
 essential = list(pd.read_csv('data/resources/curated_BAGEL_essential.csv', sep='\t')['gene'])
@@ -22,7 +23,7 @@ d_response = pd.read_csv('data/gdsc/drug_single/drug_ic50_merged_matrix.csv', in
 d_response.columns = d_response.columns.droplevel(0)
 
 # Samplesheet
-ss = pd.read_csv('data/gdsc/samplesheet.csv', index_col=0).dropna(subset=['Cancer Type', 'Microsatellite'])
+ss = pd.read_csv('data/gdsc/samplesheet.csv', index_col=0).dropna(subset=['Cancer Type'])
 
 # Drug samplesheet
 ds = pd.read_csv('data/gdsc/drug_samplesheet.csv', index_col=0)
@@ -71,8 +72,9 @@ print('Total run time: %.5f; Time per run: %.5f' % (time_elapsed, time_per_run))
 print('Total run time (0.5M tests): %.2f mins' % (time_per_run * 5e5 / 60))
 
 
-# -
+# - Export results
 lm_res_df = pd.concat([lm_res[i].unstack().rename(i) for i in lm_res], axis=1).reset_index()
+
 lm_res_df = lm_res_df.assign(f_fdr=multipletests(lm_res_df['f_pval'], method='fdr_bh')[1])
 lm_res_df = lm_res_df.assign(lr_fdr=multipletests(lm_res_df['lr_pval'], method='fdr_bh')[1])
 
