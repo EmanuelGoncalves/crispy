@@ -48,7 +48,7 @@ xs, ws = mobems[samples].T, pd.concat([pd.get_dummies(ss[['Cancer Type']]), grow
 
 # Linear regressions
 lm_res = []
-for gene, drug_id, drug_name, drug_screen in ppairs[:3]:
+for gene, drug_id, drug_name, drug_screen in ppairs:
     # Linear regressions of drug and crispr
     lm_res_crispr = lr(xs, crispr.loc[[gene], samples].T, ws)
     lm_res_drug = lr(xs, d_response.loc[[(drug_id, drug_name, drug_screen)], samples].T, ws)
@@ -67,5 +67,5 @@ lm_res = lm_res.assign(drug_lr_fdr=multipletests(lm_res['drug_lr_pval'], method=
 lm_res = lm_res.assign(crispr_lr_fdr=multipletests(lm_res['crispr_lr_pval'], method='fdr_bh')[1])
 
 # Export
-lm_res.sort_values('lr_fdr').to_csv('data/drug/lm_drug_crispr_genomic.csv', index=False)
+lm_res.sort_values('crispr_lr_fdr').to_csv('data/drug/lm_drug_crispr_genomic.csv', index=False)
 print(lm_res.sort_values('crispr_lr_fdr'))
