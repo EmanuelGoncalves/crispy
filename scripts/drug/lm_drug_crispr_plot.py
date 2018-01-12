@@ -72,32 +72,52 @@ lm_df = lm_df.assign(target=[drug_target_distance(d, t) for d, t in lm_df[['DRUG
 # - Volcano
 plot_df = lm_df.copy()
 plot_df['signif'] = ['*' if i < 0.05 else '-' for i in plot_df['lr_fdr']]
-plot_df['log10_qvalue'] = -np.log10(plot_df['lr_fdr'])
+plot_df['log10_qvalue'] = -np.log10(plot_df['lr_pval'])
 
 pal = dict(zip(*(['*', '-'], sns.light_palette(bipal_dbgd[0], 3, reverse=True).as_hex()[:-1])))
 
 # Scatter
 for i in ['*', '-']:
-    plt.scatter(
-        plot_df.query("(target != 0) & (signif == '%s')" % i)['beta'], plot_df.query("(target != 0) & (signif == '%s')" % i)['log10_qvalue'],
-        edgecolor='white', lw=.1, s=5, alpha=.5, c=pal[i]
-    )
+    plot_df_ = plot_df.query("(signif == '%s')" % i)
+    plt.scatter(plot_df_['beta'], plot_df_['log10_qvalue'], edgecolor='white', lw=.1, s=3, alpha=.5, c=pal[i])
 
 # Add FDR threshold lines
-plt.text(plt.xlim()[0]*.98, -np.log10(.05) * 1.01, 'FDR 5%', ha='left', color=pal['*'], alpha=0.65, fontsize=5)
-plt.axhline(-np.log10(.05), c=pal['*'], ls='--', lw=.3, alpha=.7)
+yy = plot_df.loc[(plot_df['lr_fdr'] - 0.05).abs().sort_values().index[0], 'lr_pval']
+plt.text(plt.xlim()[0]*.98, -np.log10(yy) * 1.01, 'FDR 5%', ha='left', color=pal['*'], alpha=0.65, fontsize=5)
+plt.axhline(-np.log10(yy), c=pal['*'], ls='--', lw=.3, alpha=.7)
 
 # Add axis lines
 plt.axvline(0, c=bipal_dbgd[0], lw=.1, ls='-', alpha=.3)
 
 # Add axis labels and title
-plt.title('Drug ~ CRISPR', fontsize=8, fontname='sans-serif')
-plt.xlabel('Beta', fontsize=8, fontname='sans-serif')
-plt.ylabel('q-value (-log10)', fontsize=8, fontname='sans-serif')
+plt.title('Linear regression: Drug ~ CRISPR', fontsize=8, fontname='sans-serif')
+plt.xlabel('Model coefficient (beta)', fontsize=8, fontname='sans-serif')
+plt.ylabel('Log-ratio test p-value (-log10)', fontsize=8, fontname='sans-serif')
 
 # Save plot
 plt.gcf().set_size_inches(2., 4.)
 plt.savefig('reports/drug/lmm_crispr_volcano.png', bbox_inches='tight', dpi=300)
+plt.close('all')
+
+
+# - Barplot count number of significant associations
+plot_df = pd.DataFrame({
+    'ypos': [0, 1], 'type': ['positive', 'negative'], 'count': [sum(lm_df.query('lr_fdr < 0.05')['beta'] > 0), sum(lm_df.query('lr_fdr < 0.05')['beta'] < 0)]
+})
+
+plt.barh(plot_df['ypos'], plot_df['count'], .8, color=bipal_dbgd[0], align='center')
+
+for x, y in plot_df[['ypos', 'count']].values:
+    plt.text(y - .5, x, str(y), color='white', ha='right' if y != 1 else 'center', va='center', fontsize=10)
+
+plt.yticks(plot_df['ypos'])
+plt.yticks(plot_df['ypos'], plot_df['type'])
+
+plt.xlabel('# significant associations (FDR < 5%)')
+plt.title('Significant Drug ~ CRISPR associations (%d)' % plot_df['count'].sum())
+
+plt.gcf().set_size_inches(3, 1.5)
+plt.savefig('reports/drug/signif_assoc_count.png', bbox_inches='tight', dpi=600)
 plt.close('all')
 
 
@@ -125,14 +145,31 @@ patches[0].set_xy(patches[0].get_xy()[:-1])
 plt.xlim(0, 1)
 plt.ylim(0, 1)
 
-# ax.set_title('Copy-number correlation with CRISPR bias')
 ax.set_xlabel('Drug ~ CRISPR p-value')
 ax.set_ylabel('Cumulative distribution')
 
-ax.legend(loc='upper left')
+ax.legend(loc=4)
 
 plt.gcf().set_size_inches(2.5, 2)
 plt.savefig('reports/drug/drug_target_cum_dist.png', bbox_inches='tight', dpi=600)
+plt.close('all')
+
+
+# - PPI boxplot
+plot_df = lm_df.dropna()
+plot_df = plot_df.assign(thres=['Target' if i == 0 else ('%d' % i if i < 4 else '>=4') for i in plot_df['target']])
+
+order = ['Target', '1', '2', '3', '>=4']
+palette = sns.light_palette(bipal_dbgd[0], len(order), reverse=True)
+
+sns.boxplot('lr_pval', 'thres', data=plot_df, orient='h', linewidth=.3, notch=True, fliersize=1, palette=palette, order=order)
+
+plt.ylabel('PPI distance')
+plt.xlabel('Drug ~ Drug-target CRISPR p-value')
+
+plt.title('Drug-targets in protein-protein networks')
+plt.gcf().set_size_inches(3, 1.5)
+plt.savefig('reports/drug/ppi_boxplot.png', bbox_inches='tight', dpi=600)
 plt.close('all')
 
 
