@@ -50,14 +50,13 @@ print(lm_robust_either)
 for name in ['drug', 'crispr']:
     plot_df = lm_res.copy()
     plot_df['signif'] = ['*' if i < 0.05 else '-' for i in plot_df['%s_lr_fdr' % name]]
-    plot_df['log10_qvalue'] = -np.log10(plot_df['%s_lr_pval' % name])
 
     pal = dict(zip(*(['*', '-'], sns.light_palette(bipal_dbgd[0], 3, reverse=True).as_hex()[:-1])))
 
     # Scatter
-    for i in ['*', '-']:
+    for i in ['-', '*']:
         plot_df_ = plot_df.query("(signif == '%s')" % i)
-        plt.scatter(plot_df_['%s_beta' % name], plot_df_['log10_qvalue'], edgecolor='white', lw=.1, s=3, alpha=.5, c=pal[i])
+        plt.scatter(plot_df_['%s_beta' % name], -np.log10(plot_df_['%s_lr_pval' % name]), edgecolor='white', lw=.1, s=3, alpha=1., c=pal[i])
 
     # Add FDR threshold lines
     yy = plot_df.loc[(plot_df['%s_lr_fdr' % name] - 0.05).abs().sort_values().index[0], '%s_lr_pval' % name]

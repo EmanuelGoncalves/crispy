@@ -172,47 +172,37 @@ plt.savefig('reports/drug/ppi_boxplot.png', bbox_inches='tight', dpi=600)
 plt.close('all')
 
 
-# - Corrplot
-idx = 1
+# -
+drug_fields = ['DRUG_ID', 'DRUG_NAME', 'VERSION']
 
+drug_lr = lm_df.loc[lm_df.groupby(drug_fields)['lr_fdr'].idxmin()].set_index(drug_fields)
+drug_target_lr = lm_df.query('target == 0').groupby(drug_fields)['lr_fdr'].min()
+
+print(drug_lr.sort_values('lr_fdr')[['GENES', 'target', 'r2', 'lr_fdr']])
+
+
+# - Corrplot
+idx = 14
 d_id, d_name, d_screen, gene = lm_df.loc[idx, ['DRUG_ID', 'DRUG_NAME', 'VERSION', 'GENES']].values
 
+# Build data-frame
 plot_df = pd.DataFrame({
     'drug': d_response.loc[(d_id, d_name, d_screen), samples],
     'crispr': crispr.loc[gene, samples],
 }).dropna()
 plot_df = pd.concat([plot_df, ss.loc[plot_df.index, ['Cancer Type', 'Microsatellite']]], axis=1)
 
-
-def marginal_distplot(a, vertical=False, **kws):
-    x = plot_df['drug'] if vertical else plot_df['crispr']
-    ax = sns.distplot(x, vertical=vertical, **kws)
-    ax.set_ylabel('')
-    ax.set_xlabel('')
-    ax.set_ylim((min(x) * 1.05, max(x) * 1.05)) if vertical else ax.set_xlim((min(x) * 1.05, max(x) * 1.05))
-
-
-sns.set(
-    style='ticks', context='paper', font_scale=.75,
-    rc={'axes.linewidth': .3, 'xtick.major.width': .3, 'ytick.major.width': .3, 'xtick.major.size': 2.5, 'ytick.major.size': 2.5}
+# Plot
+g = sns.jointplot(
+    'crispr', 'drug', data=plot_df, kind='reg', space=0, color=bipal_dbgd[0], annot_kws=dict(stat='r'),
+    marginal_kws={'kde': False}, joint_kws={'scatter_kws': {'edgecolor': 'w', 'lw': .3, 's': 12}, 'line_kws': {'lw': 1.}}
 )
-g = sns.JointGrid('crispr', 'drug', plot_df, space=0, ratio=8)
-
-sns.regplot(
-    x='crispr', y='drug', data=plot_df, ax=g.ax_joint,
-    color=bipal_dbgd[0], truncate=True, fit_reg=True,
-    scatter_kws={'s': 10, 'edgecolor': 'w', 'linewidth': .3, 'alpha': .8}, line_kws={'linewidth': .5}
-)
-
-g.plot_marginals(marginal_distplot, color=bipal_dbgd[0], kde=False)
-
-g.annotate(pearsonr, template='R={val:.2g}, p={p:.1e}')
 
 g.ax_joint.axhline(0, ls='-', lw=0.1, c=bipal_dbgd[0])
 g.ax_joint.axvline(0, ls='-', lw=0.1, c=bipal_dbgd[0])
 
-g.set_axis_labels('%s (fold-change)' % gene, '%s (ln IC50)' % d_name)
+g.set_axis_labels('%s (fold-change)' % gene, '%s (screen=%s; ln IC50)' % (d_name, d_screen))
 
-plt.gcf().set_size_inches(2, 2)
+plt.gcf().set_size_inches(2., 2.)
 plt.savefig('reports/drug/crispr_drug_corrplot.png', bbox_inches='tight', dpi=600)
 plt.close('all')
