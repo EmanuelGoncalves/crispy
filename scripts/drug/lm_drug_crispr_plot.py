@@ -2,10 +2,12 @@
 # Copyright (C) 2018 Emanuel Goncalves
 
 import igraph
+import textwrap
 import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
+from matplotlib.gridspec import GridSpec
 from crispy import bipal_dbgd
 from scipy.stats import pearsonr, uniform
 
@@ -173,12 +175,47 @@ plt.close('all')
 
 
 # -
-drug_fields = ['DRUG_ID', 'DRUG_NAME', 'VERSION']
+order = lm_df.query('lr_fdr < 0.05').groupby(['DRUG_NAME'])['lr_fdr'].min().sort_values()
 
-drug_lr = lm_df.loc[lm_df.groupby(drug_fields)['lr_fdr'].idxmin()].set_index(drug_fields)
-drug_target_lr = lm_df.query('target == 0').groupby(drug_fields)['lr_fdr'].min()
+plot_df = lm_df.query('lr_fdr < 0.05').copy().sort_values('lr_fdr')
+plot_df = plot_df.groupby(['DRUG_NAME', 'GENES']).first().reset_index().sort_values('lr_fdr')
+plot_df = plot_df.groupby('DRUG_NAME').head(10).set_index('DRUG_NAME')
 
-print(drug_lr.sort_values('lr_fdr')[['GENES', 'target', 'r2', 'lr_fdr']])
+plot_df__, n_top, xpos = [], 10, 0
+for drug_name in order.iloc[10:20].index:
+    plot_df_ = plot_df.loc[drug_name]
+    plot_df_ = plot_df_.assign(y=-np.log10(plot_df_['lr_fdr']))
+
+    plot_df_ = plot_df_.assign(xpos=np.arange(xpos, xpos + plot_df_.shape[0]))
+    xpos += plot_df_.shape[0]
+
+    plot_df__.append(plot_df_)
+
+    xpos += 1
+
+plot_df = pd.concat(plot_df__).reset_index()
+
+# Plot
+plt.bar(plot_df.query('target != 0')['xpos'], plot_df.query('target != 0')['y'], .8, color=bipal_dbgd[0], align='center')
+plt.bar(plot_df.query('target == 0')['xpos'], plot_df.query('target == 0')['y'], .8, color=bipal_dbgd[1], align='center')
+
+for x, y, t in plot_df[['xpos', 'y', 'target']].values:
+    l = '-' if np.isnan(t) or np.isposinf(t) else ('T' if t == 0 else str(int(t)))
+    plt.text(x, y - .25, l, color='white', ha='center', fontsize=6)
+
+plt.ylim(ymax=4)
+
+for k, v in plot_df.groupby('DRUG_NAME')['xpos'].mean().sort_values().to_dict().items():
+    plt.text(v, 4 - .5, textwrap.fill(k, 15), ha='center', fontsize=6)
+
+plt.xticks(plot_df['xpos'], plot_df['GENES'], rotation=90, fontsize=5)
+
+plt.ylabel('Log-ratio FDR (-log10)')
+plt.title('Top significant Drug ~ CRISPR associations')
+
+plt.gcf().set_size_inches(8, 1.5)
+plt.savefig('reports/drug/drug_associations_barplot.png', bbox_inches='tight', dpi=600)
+plt.close('all')
 
 
 # - Corrplot
