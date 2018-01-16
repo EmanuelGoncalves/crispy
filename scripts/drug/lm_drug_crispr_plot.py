@@ -7,9 +7,11 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
-from matplotlib.gridspec import GridSpec
 from crispy import bipal_dbgd
+from matplotlib.colors import rgb2hex
+from matplotlib.gridspec import GridSpec
 from scipy.stats import pearsonr, uniform
+from sklearn.metrics import roc_curve, auc
 
 
 # - Import
@@ -171,6 +173,30 @@ plt.xlabel('Drug ~ Drug-target CRISPR p-value')
 plt.title('Drug-targets in protein-protein networks')
 plt.gcf().set_size_inches(3, 1.5)
 plt.savefig('reports/drug/ppi_boxplot.png', bbox_inches='tight', dpi=600)
+plt.close('all')
+
+
+# - PPI significant associations
+plot_df = lm_df.query('lr_fdr < 0.1').dropna()
+plot_df = plot_df.assign(thres=['Target' if i == 0 else ('%d' % i if i < 4 else '>=4') for i in plot_df['target']])
+
+ax = plt.gca()
+for t, c in zip(*(['Target', '1', '2', '3', '>=4'], [bipal_dbgd[1]] + list(map(rgb2hex, sns.light_palette(bipal_dbgd[0], len(order) - 1, reverse=True))))):
+    if plot_df_.shape[0] > 0:
+        fpr, tpr, _ = roc_curve((plot_df['thres'] == t).astype(int), 1 - plot_df['lr_fdr'])
+        ax.plot(fpr, tpr, label='%s=%.2f (AUC)' % (t, auc(fpr, tpr)), lw=1., c=c)
+
+ax.plot((0, 1), (0, 1), 'k--', lw=.3, alpha=.5)
+ax.set_xlim(0, 1)
+ax.set_ylim(0, 1)
+ax.set_xlabel('False positive rate')
+ax.set_ylabel('True positive rate')
+ax.set_title('Protein-protein interactions\nDrug ~ CRISPR (FDR < 10%)')
+
+legend = ax.legend(loc=4, prop={'size': 6})
+
+plt.gcf().set_size_inches(3, 3)
+plt.savefig('reports/drug/ppi_signif_roc.png', bbox_inches='tight', dpi=600)
 plt.close('all')
 
 

@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 # Copyright (C) 2018 Emanuel Goncalves
 
-import os
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -18,13 +17,6 @@ brass_df = pd.read_csv('data/gdsc/wgs/wgs_brass_bedpe.csv')
 # Gene copy-number ratio
 cnv_ratios = pd.read_csv('data/crispy_copy_number_ratio.csv', index_col=0).replace(-1, np.nan)
 
-# GDSC CRISPR mean bias
-c_gdsc = pd.DataFrame({
-    os.path.splitext(f)[0].replace('crispr_gdsc_crispy_', ''):
-        pd.read_csv('data/crispy/' + f, index_col=0)['k_mean']
-    for f in os.listdir('data/crispy/') if f.startswith('crispr_gdsc_crispy_')
-}).dropna()
-
 
 # - Overlap
 samples = set(brass_df['sample']).intersection(cnv_ratios)
@@ -34,16 +26,15 @@ print('Samples: ', len(samples), 'Genes: ', len(genes))
 
 # -
 sv_ratio = brass_df.loc[list(map(lambda x: len(x.split(',')) == 1, brass_df['sample']))]
-sv_ratio = sv_ratio[~sv_ratio['# chr1'].isin(['X', 'Y'])]
 sv_ratio = sv_ratio.query("copynumber_flag == 1 & assembly_score != '_'")
+sv_ratio = sv_ratio[sv_ratio['gene1'] == sv_ratio['gene2']]
 
-sv_ratio = pd.melt(sv_ratio, id_vars=['sample', 'svclass'], value_vars=['gene1', 'gene2']).query("value != '_'")
+sv_ratio = pd.melt(sv_ratio, id_vars=['sample', 'svclass'], value_vars=['gene1']).query("value != '_'")
 sv_ratio = sv_ratio[sv_ratio['value'].isin(genes) & sv_ratio['sample'].isin(samples)]
-
-sv_ratio = sv_ratio.assign(ratio=[cnv_ratios.loc[g, s] for g, s in sv_ratio[['value', 'sample']].values]).dropna().sort_values('ratio')
 sv_ratio = sv_ratio.drop_duplicates(subset=['sample', 'svclass', 'value'])
 
-# sv_ratio = sv_ratio.assign(crispy=c_gdsc.unstack().loc[[(s, g) for g, s in sv_ratio[['value', 'sample']].values]].values)
+sv_ratio = sv_ratio.assign(ratio=[cnv_ratios.loc[g, s] for g, s in sv_ratio[['value', 'sample']].values]).dropna().sort_values('ratio')
+sv_ratio = sv_ratio.assign(ratio_rank=sv_ratio['ratio'].rank(pct=True))
 
 
 # -
@@ -64,4 +55,14 @@ legend = ax.legend(loc=4, prop={'size': 6})
 
 plt.gcf().set_size_inches(3, 3)
 plt.savefig('reports/brass_sv_ratio_cumdist.png', bbox_inches='tight', dpi=600)
+plt.close('all')
+
+
+# -
+sns.boxplot('ratio_rank', 'svclass', data=sv_ratio, orient='h', color=bipal_dbgd[0], notch=True, linewidth=.5, fliersize=1)
+plt.title('Structural rearrangements relation with\ncopy-number ratio')
+plt.xlabel('Copy-number ratio (rank)')
+plt.ylabel('')
+plt.gcf().set_size_inches(3, 1)
+plt.savefig('reports/brass_sv_ratio_boxplot.png', bbox_inches='tight', dpi=600)
 plt.close('all')
