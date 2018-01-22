@@ -48,5 +48,5 @@ def plot_gsea(e_score, pvalue, dataset, hits, running_hit, filename, title, y1_l
 
     plt.close('all')
 
-    print '[INFO] GSEA plot saved: ', filename
+    print('[INFO] GSEA plot saved: ', filename)
 

@@ -1,6 +1,34 @@
 CHANGES
 =======
 
+* Restructuring and FISH validation experiments
+* Readme added to crispr scripts
+* Crispy analysis re-factoring initiated
+* Copy-number comparison between cripy estimated and picnic
+* Copy-number comparison
+* Gene copy-number ratio added; Copy-number matricies exported
+* Copy-number estimations performed now at the segment bed file level
+* WGS ploidy estimation comparison initiated
+* Synthetic lethality analysis updated; SV analysis updated
+* Synthetic lethality analysis updated
+* Drug-CRISPR enrichment for significant associations
+* SV brass updated
+* Roc analysis done in the SV
+* WGS structural variation analysis started
+* Novel drug targets analysis updated
+* Drug crispr associations updated
+* Robust pharmacogenomic association analysis added
+* PCA analysis of drug response data
+* CRISPR Drug associations with genomic features added
+* Drug crispr association plots updated
+* Linear regressions r2 added for full model. Input data standardized
+* Linear regression plots updated with newer analysis
+* log ratio test added to linear regressions
+* Output of linear regression formatted
+* Linear regression added support to pandas dataframes
+* Initial documentation added
+* xrange modified to range
+* Linear regression computational time optimisation
 * Linear regression computational time optimisation
 * Linear regression computational time optimisation
 * Growth rate added as covariate for crispr versus drug association
