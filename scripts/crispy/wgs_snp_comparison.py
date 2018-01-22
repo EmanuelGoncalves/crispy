@@ -39,7 +39,7 @@ g.map_lower(corrfunc)
 plt.suptitle('Ploidy WGS vs SNP', y=1.05)
 
 plt.gcf().set_size_inches(3.5, 3.5)
-plt.savefig('reports/wgs_snp_comparison_ploidy.png', bbox_inches='tight', dpi=600)
+plt.savefig('reports/crispy/wgs_snp_comparison_ploidy.png', bbox_inches='tight', dpi=600)
 plt.close('all')
 
 
@@ -76,7 +76,7 @@ ax.set_ylabel('Total copy-number')
 ax.legend()
 
 plt.gcf().set_size_inches(4, 2)
-plt.savefig('reports/wgs_snp_comparison_%s_%s.png' % (sample, gene), bbox_inches='tight', dpi=600)
+plt.savefig('reports/crispy/wgs_snp_comparison_%s_%s.png' % (sample, gene), bbox_inches='tight', dpi=600)
 plt.close('all')
 
 # Differences barplot
@@ -117,5 +117,5 @@ for n, df in [('max', snp_vs_max), ('min', snp_vs_min)]:
 
     plt.title('Gene copy-number weighted vs %s' % n)
     plt.gcf().set_size_inches(3, 2)
-    plt.savefig('reports/wgs_snp_comparison_%s_barplot.png' % n, bbox_inches='tight', dpi=600)
+    plt.savefig('reports/crispy/wgs_snp_comparison_%s_barplot.png' % n, bbox_inches='tight', dpi=600)
     plt.close('all')
