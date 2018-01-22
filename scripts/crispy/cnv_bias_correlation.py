@@ -16,22 +16,22 @@ c_gdsc = pd.DataFrame({
     for f in os.listdir('data/crispy/') if f.startswith('crispr_gdsc_crispy_')
 }).dropna()
 
-# Copy-number absolute counts
-cnv_abs = pd.read_csv('data/crispy_gene_copy_number.csv', index_col=0).replace(-1, np.nan)
+# Copy-number
+cnv = pd.read_csv('data/crispy_gene_copy_number_snp.csv', index_col=0)
 
-# Gene copy-number ratio
-cnv_ratios = pd.read_csv('data/crispy_copy_number_ratio.csv', index_col=0)
+# Copy-number
+ratios = pd.read_csv('data/crispy_gene_copy_number_ratio_snp.csv', index_col=0)
 
 
 # - Overlap
-genes, samples = list(set(c_gdsc.index).intersection(cnv_abs.index).intersection(cnv_ratios.index)), list(set(c_gdsc).intersection(cnv_abs).intersection(cnv_ratios))
+genes, samples = list(set(c_gdsc.index).intersection(cnv.index).intersection(ratios.index)), list(set(c_gdsc).intersection(cnv).intersection(cnv))
 print(len(genes), len(samples))
 
 
 # - Correlation
 plot_df = pd.concat([
-    c_gdsc.loc[genes, samples].T.corrwith(cnv_abs.loc[genes, samples].T).rename('cnv'),
-    c_gdsc.loc[genes, samples].T.corrwith(cnv_ratios.loc[genes, samples].T).rename('ratio'),
+    c_gdsc.loc[genes, samples].T.corrwith(cnv.loc[genes, samples].T).rename('cnv'),
+    c_gdsc.loc[genes, samples].T.corrwith(ratios.loc[genes, samples].T).rename('ratio'),
 ], axis=1)
 
 # Histogram
@@ -44,7 +44,7 @@ plt.ylabel('Density')
 plt.legend(loc='upper left')
 
 plt.gcf().set_size_inches(3, 2)
-plt.savefig('reports/correlation_histograms.png', bbox_inches='tight', dpi=600)
+plt.savefig('reports/crispy/copy_number_bias_corr_histograms.png', bbox_inches='tight', dpi=600)
 plt.close('all')
 
 # Cumulative
@@ -65,5 +65,5 @@ ax.set_ylabel('Cumulative distribution')
 ax.legend(loc='upper left')
 
 plt.gcf().set_size_inches(2.5, 2)
-plt.savefig('reports/correlation_cumulative.png', bbox_inches='tight', dpi=600)
+plt.savefig('reports/crispy/copy_number_bias_corr_cumulative.png', bbox_inches='tight', dpi=600)
 plt.close('all')

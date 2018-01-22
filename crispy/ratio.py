@@ -1,10 +1,8 @@
 #!/usr/bin/env python
 # Copyright (C) 2018 Emanuel Goncalves
 
-import os
 import numpy as np
 import pandas as pd
-import seaborn as sns
 import matplotlib.pyplot as plt
 from crispy import bipal_dbgd
 from pybedtools import BedTool

@@ -12,23 +12,24 @@ from natsort import natsorted
 from crispy import bipal_dbgd
 from limix.stats import qvalues
 from limix.qtl import qtl_test_lm
+from crispy.ratio import _GFF_HEADERS
 
 
 # - Imports
 # Samplesheet
 ss = pd.read_csv('data/gdsc/samplesheet.csv', index_col=0)
 
-# Gene HGNC info
-ginfo = pd.read_csv('data/crispy_hgnc_info.csv', index_col=0)
+# Gene genomic infomration
+ginfo = pd.read_csv('data/gencode.v27lift37.annotation.sorted.gff', sep='\t', names=_GFF_HEADERS, index_col='feature')
 
 # Copy-number
-cnv = pd.read_csv('data/crispy_gene_copy_number.csv', index_col=0).replace(-1, np.nan)
+cnv = pd.read_csv('data/crispy_gene_copy_number_snp.csv', index_col=0)
 
 # Ploidy
-ploidy = pd.read_csv('data/crispy_sample_ploidy.csv', index_col=0)['ploidy']
+ploidy = pd.read_csv('data/crispy_ploidy_snp.csv', index_col=0, names=['sample', 'ploidy'])['ploidy']
 
-# Copy-number ratios
-cnv_ratios = pd.read_csv('data/crispy_copy_number_ratio.csv', index_col=0)
+# Copy-number
+ratios = pd.read_csv('data/crispy_gene_copy_number_ratio_snp.csv', index_col=0)
 
 # Non-expressed genes
 nexp = pickle.load(open('data/gdsc/nexp_pickle.pickle', 'rb'))
@@ -46,13 +47,13 @@ cgenes = pd.read_csv('data/resources/Census_allThu Dec 21 15_43_09 2017.tsv', se
 
 
 # - Overlap
-samples = set(gdsc_kmean).intersection(nexp).intersection(cnv_ratios).intersection(ploidy.index)
+samples = set(gdsc_kmean).intersection(nexp).intersection(ratios).intersection(ploidy.index)
 print(len(samples))
 
 
 # - Recurrent amplified genes
 g_amp = pd.DataFrame({s: (cnv[s] > 8 if ploidy[s] > 2.7 else cnv[s] > 4).astype(int) for s in samples})
-g_amp = g_amp.loc[g_amp.index.isin(cnv_ratios.index) & g_amp.index.isin(cgenes['Gene Symbol'])]
+g_amp = g_amp.loc[g_amp.index.isin(ratios.index) & g_amp.index.isin(cgenes['Gene Symbol'])]
 g_amp = g_amp[g_amp.sum(1) >= 3]
 
 
@@ -63,7 +64,7 @@ g_nexp = g_nexp[g_nexp.sum(1) >= (g_nexp.shape[1] * .5)]
 
 # - Linear regressions
 # Build matrices
-xs = cnv_ratios.loc[g_amp.index, samples].T
+xs = ratios.loc[g_amp.index, samples].T
 xs = xs.loc[:, (xs > 2).sum() >= 3]
 xs = xs.replace(np.nan, 1)
 
@@ -88,7 +89,7 @@ lmm_df = lmm_df[lmm_df['gene_crispr'] != lmm_df['gene_cnvabs']]
 lmm_df = lmm_df.assign(chr_crispr=ginfo.loc[lmm_df['gene_crispr'], 'chr'].values)
 lmm_df = lmm_df.assign(chr_cnvabs=ginfo.loc[lmm_df['gene_cnvabs'], 'chr'].values)
 
-ratio_nexp_ov = (cnv_ratios.loc[xs.columns, samples] > 1.5).astype(int).dot((nexp.loc[ys.columns, samples] == 0).astype(int).T).unstack()
+ratio_nexp_ov = (ratios.loc[xs.columns, samples] > 1.5).astype(int).dot((nexp.loc[ys.columns, samples] == 0).astype(int).T).unstack()
 lmm_df = lmm_df.loc[(ratio_nexp_ov.loc[[(y, x) for y, x in lmm_df[['gene_crispr', 'gene_cnvabs']].values]] == 0).values]
 
 lmm_df = lmm_df.assign(lm_qvalue=qvalues(lmm_df['lm_pvalue'].values)).sort_values('lm_qvalue')
@@ -97,13 +98,13 @@ print(lmm_df)
 
 
 # - Plot
-idx = 72246
+idx = 67990
 y_feat, x_feat = lmm_df.loc[idx, 'gene_crispr'], lmm_df.loc[idx, 'gene_cnvabs']
 
 plot_df = pd.concat([
     gdsc_kmean.loc[y_feat, samples].rename('crispy'),
     cnv.loc[x_feat, samples].rename('cnv'),
-    cnv_ratios.loc[x_feat, samples].rename('ratio'),
+    ratios.loc[x_feat, samples].rename('ratio'),
     g_amp.loc[x_feat].rename('amp'),
     nexp.loc[y_feat].replace({1.0: 'No', 0.0: 'Yes'}).rename('expressed'),
     ss['Cancer Type'],
@@ -127,5 +128,5 @@ legend = plt.legend(title='Expressed', prop={'size': 8}, loc=3)
 legend.get_title().set_fontsize('8')
 
 plt.gcf().set_size_inches(2, 3)
-plt.savefig('reports/collateral_essentiality_boxplot.png', bbox_inches='tight', dpi=600)
+plt.savefig('reports/crispy/collateral_essentiality_boxplot.png', bbox_inches='tight', dpi=600)
 plt.close('all')
