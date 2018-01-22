@@ -102,4 +102,4 @@ def plot_gene(gene, bed_file, ax=None):
     for seg_start, seg_end, seg_cn in gff_int_df.loc[gene, ['start', 'end', 'total_cn_bed']].values:
         ax.plot([seg_start, seg_end], [seg_cn, seg_cn], lw=1., c=bipal_dbgd[0], alpha=1.)
 
-    plt.show()
+    return ax
