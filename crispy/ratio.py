@@ -44,14 +44,17 @@ def map_cn(bed_file, method='min,max,mean,median,collapse,count', cn_field_pos=4
     # Conver to data-frame
     gff_map_df = gff_map_df.to_dataframe(names=_GFF_HEADERS + method.split(',')).set_index('feature')
 
-    # Add weighted gene copy-number
+    # Weighted gene copy-number
     gff_map_df = pd.concat([gff_map_df, gff_int_df.rename('weight')], axis=1)
 
-    # Add number of chromosome copies
+    # Number of chromosome copies
     gff_map_df = gff_map_df.assign(chr_weight=chromosome_cn(bed_file)[gff_map_df['chr']].values)
 
-    # Add sample ploidy
+    # Sample ploidy
     gff_map_df = gff_map_df.assign(ploidy=ploidy(bed_file))
+
+    # Gene ratio
+    gff_map_df = gff_map_df.assign(ratio=gff_map_df['weight'].divide(gff_map_df['chr_weight']).values)
 
     return gff_map_df
 
