@@ -59,15 +59,14 @@ print('Samples: %d; Genes: %d' % (len(samples), len(genes)))
 
 #
 snp_vs_max = cnv_gene_snp.loc[genes, samples].unstack().subtract(cnv_gene_max.loc[genes, samples].unstack()).dropna()
-
-snp_vs_max_count = dict(zip(*(np.unique(snp_vs_max.astype(int), return_counts=True))))
+snp_vs_min = cnv_gene_snp.loc[genes, samples].unstack().subtract(cnv_gene_min.loc[genes, samples].unstack()).dropna()
 
 #
-sample, gene = 'HCC2218', 'SKAP1'
+sample, gene = 'HCC2218', 'CDK12'
 
 ax = plot_gene(gene, 'data/gdsc/copynumber/snp6_bed/%s.snp6.picnic.bed' % sample)
 
-ax.axhline(cnv_gene_max.loc[gene, sample], lw=.3, ls='--', label='max', c=bipal_dbgd[0])
+ax.axhline(cnv_gene_min.loc[gene, sample], lw=.3, ls='--', label='min', c=bipal_dbgd[0])
 ax.axhline(cnv_gene_snp.loc[gene, sample], lw=.3, ls='--', label='wmean', c=bipal_dbgd[1])
 
 ax.set_title(gene)
@@ -77,5 +76,46 @@ ax.set_ylabel('Total copy-number')
 ax.legend()
 
 plt.gcf().set_size_inches(4, 2)
-plt.savefig('reports/wgs_snp_comparison_.png', bbox_inches='tight', dpi=600)
+plt.savefig('reports/wgs_snp_comparison_%s_%s.png' % (sample, gene), bbox_inches='tight', dpi=600)
 plt.close('all')
+
+# Differences barplot
+for n, df in [('max', snp_vs_max), ('min', snp_vs_min)]:
+    f, axs = plt.subplots(2, 1, sharex=True)
+
+    sns.distplot(df.astype(int), color=bipal_dbgd[0], kde=False, axlabel='', ax=axs[0])
+    sns.distplot(df.astype(int), color=bipal_dbgd[0], kde=False, ax=axs[1])
+
+    ymax = df.astype(int).value_counts()
+    axs[0].set_ylim(ymax.iloc[0] - 100, ymax.iloc[0] + 10)  # outliers only
+    axs[1].set_ylim(0, ymax.iloc[1] + 20)  # most of the data
+
+    axs[0].spines['bottom'].set_visible(False)
+    axs[1].spines['top'].set_visible(False)
+    axs[0].xaxis.tick_top()
+    axs[0].tick_params(labeltop='off')
+    axs[1].xaxis.tick_bottom()
+
+    axs[0].get_yaxis().get_major_formatter().set_useOffset(False)
+    axs[1].get_yaxis().get_major_formatter().set_useOffset(False)
+
+    d = .01
+
+    kwargs = dict(transform=axs[0].transAxes, color='gray', clip_on=False, lw=.3)
+    axs[0].plot((-d, +d), (-d, +d), **kwargs)
+    axs[0].plot((1 - d, 1 + d), (-d, +d), **kwargs)
+
+    kwargs.update(transform=axs[1].transAxes)
+    axs[1].plot((-d, +d), (1 - d, 1 + d), **kwargs)
+    axs[1].plot((1 - d, 1 + d), (1 - d, 1 + d), **kwargs)
+
+    axs[1].set_xlabel('Copy-number difference')
+
+    f.add_subplot(111, frameon=False)
+    plt.tick_params(labelcolor='none', top='off', bottom='off', left='off', right='off')
+    plt.grid(False)
+
+    plt.title('Gene copy-number weighted vs %s' % n)
+    plt.gcf().set_size_inches(3, 2)
+    plt.savefig('reports/wgs_snp_comparison_%s_barplot.png' % n, bbox_inches='tight', dpi=600)
+    plt.close('all')
