@@ -7,3 +7,4 @@ seaborn>=0.7
 natsort>=5.1.0
 limix>=1.0.0
 pybedtools>=0.7
+bsub>=0.3.5

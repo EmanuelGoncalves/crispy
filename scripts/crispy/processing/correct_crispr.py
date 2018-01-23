@@ -8,6 +8,11 @@ from datetime import datetime as dt
 from crispy.biases_correction import CRISPRCorrection
 
 
+BSUB_CORES = 16
+BSUB_MEMORY = 32000
+BSUB_QUEQUE = 'normal'
+
+
 def correct_cnv(sample, crispr, cnv, lib):
     # Build data-frame
     df = pd.concat([crispr[sample].rename('fc'), cnv[sample].rename('cnv'), lib.rename('chr')], axis=1).dropna()
@@ -16,12 +21,15 @@ def correct_cnv(sample, crispr, cnv, lib):
     crispy = CRISPRCorrection().rename(sample).fit_by(by=df['chr'], X=df[['cnv']], y=df['fc'])
     crispy = pd.concat([v.to_dataframe() for k, v in crispy.items()])
 
+    # Export
+    crispy.to_csv('data/crispy/crispr_gdsc_crispy_%s.csv' % sample)
+
     return crispy
 
 
-def correct_cnv_gdsc(crispr_file='data/crispr_gdsc_logfc.csv', cnv_file='data/crispy_gene_copy_number_snp.csv', lib_file='data/gencode.v27lift37.annotation.sorted.gff'):
+def correct_cnv(crispr_file='data/crispr_gdsc_logfc.csv', cnv_file='data/crispy_gene_copy_number_snp.csv', lib_file='data/crispr_libs/KY_Library_v1.1_updated.csv'):
     # Import sgRNA library
-    lib = pd.read_csv(lib_file, sep='\t', names=GFF_HEADERS, index_col='feature')['chr']
+    lib = pd.read_csv(lib_file, index_col=0).groupby('gene')['chr']
 
     # CRISPR fold-changes
     crispr = pd.read_csv(crispr_file, index_col=0)
@@ -31,53 +39,37 @@ def correct_cnv_gdsc(crispr_file='data/crispr_gdsc_logfc.csv', cnv_file='data/cr
 
     # Crispy
     for sample in set(crispr).intersection(cnv):
-        print('GDSC Crispy: %s' % sample)
+        print('[INFO] bsub option detected')
+        print('[INFO] Crispy: {}'.format(sample))
 
-        # Bias correction
-        crispy = correct_cnv(sample, crispr, cnv, lib)
+        if len(sys.argv) > 1 and sys.argv[1] == 'bsub':
+            jname = 'crispy_GDSC_{}'.format(sample)
 
-        # Export
-        crispy.to_csv('data/crispy/crispr_gdsc_crispy_%s.csv' % sample)
+            # Define command
+            j_cmd = 'python3.6.1 scripts/crispy/processing/correct_crispr.py bsub {}'.format(sample)
 
+            # Create bsub
+            j = bsub(
+                jname, R='select[mem>{}] rusage[mem={}] span[hosts=1]'.format(BSUB_MEMORY, BSUB_MEMORY), M=BSUB_MEMORY,
+                verbose=True, q=BSUB_QUEQUE, J=jname, o=jname, e=jname, n=BSUB_CORES,
+            )
 
-def correct_cnv_ccle(lib_file='data/ccle/crispr_ceres/sgrnamapping.csv', crispr_file='data/crispr_ccle_logfc.csv', cnv_file='data/ccle/crispr_ceres/data_log2CNA.txt'):
-    # Import sgRNA library
-    sgrna_lib = pd.read_csv(lib_file).dropna(subset=['Gene'])
-    sgrna_lib = sgrna_lib.assign(chr=sgrna_lib['Locus'].apply(lambda x: x.split('_')[0]))
-    sgrna_lib_genes = sgrna_lib.groupby('Gene')['chr'].first()
+            # Submit
+            j(j_cmd)
+            print('[INFO {}] bsub GDSC {}'.format(dt.now().strftime('%Y-%m-%d %H:%M:%S'), sample))
 
-    # CRISPR fold-changes
-    crispr = pd.read_csv(crispr_file, index_col=0)
-
-    # Copy-number absolute counts
-    cnv = pd.read_csv(cnv_file, sep='\t', index_col=0)
-
-    # Crispy
-    for sample in set(crispr).intersection(cnv):
-        print('CCLE Crispy: %s' % sample)
-
-        # Build data-frame
-        df = pd.concat([crispr[sample].rename('fc'), 2 * (2 ** cnv[sample].rename('cnv')), sgrna_lib_genes.rename('chr')], axis=1).dropna()
-
-        # Biases correction
-        crispy = CRISPRCorrection().rename(sample).fit_by(by=df['chr'], X=df[['cnv']], y=df['fc'])
-        crispy = pd.concat([v.to_dataframe() for k, v in crispy.items()])
-
-        # Store
-        crispy.to_csv('data/crispy/crispr_ccle_crispy_%s.csv' % sample)
+        else:
+            # Bias correction
+            crispy = correct_cnv(sample, crispr, cnv, lib)
 
 
 def main():
-    if len(sys.argv) > 1 and sys.argv[1] == 'bsub':
+    if len(sys.argv) > 2 and sys.argv[1] == 'bsub':
         print('[INFO] bsub option detected')
 
 
     else:
-        # Correct GDSC CRISPR
-        correct_cnv_gdsc()
-
-        # Correct CCLE CRISPR
-        correct_cnv_ccle()
+        correct_cnv()
 
 
 if __name__ == '__main__':
