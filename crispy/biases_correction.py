@@ -5,10 +5,12 @@ of CRISPR dropout effects.
 Copyright (C) 2017 Emanuel Goncalves
 """
 
+import scipy as sp
 import pandas as pd
 from sklearn import clone
 from functools import partial
 from datetime import datetime as dt
+from crispy.ratio import GFF_HEADERS
 from concurrent.futures import ThreadPoolExecutor
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import WhiteKernel, ConstantKernel, RBF
@@ -51,9 +53,6 @@ class CRISPRCorrection(GaussianProcessRegressor):
     def predict(self, X, return_std=True, return_cov=False):
         return super().predict(X, return_std=return_std, return_cov=return_cov)
 
-    def fit(self, X, y):
-        return super().fit(X, y)
-
     def regress_out(self, X=None, y=None):
         if X is None or y is None:
             X, y = self.X_train_, self.y_train_
@@ -70,9 +69,40 @@ class CRISPRCorrection(GaussianProcessRegressor):
         res = pd.concat([X, y], axis=1)\
             .assign(k_mean=self.predict(X, return_std=False) - self.y_train_mean)\
             .assign(fit_by=self.fit_by_value)
+
         res = res.assign(regressed_out=res[self.y_name] - res['k_mean'])
 
+        res = res.assign(var_exp=self.var_explained(X)['K1'])
+
         return res
+
+    """
+    Method taken from LIMIX (github.com/limix/limix)
+    
+    """
+    @staticmethod
+    def covar_rescaling(c):
+        n = c.shape[0]
+
+        p = sp.eye(n) - sp.ones((n, n)) / n
+
+        cp = c - c.mean(0)[:, sp.newaxis]
+
+        return (n - 1) / sp.sum(p * cp)
+
+    def var_explained(self, X=None):
+        X = self.X_train_ if X is None else X
+
+        kernels = [('K1', self.kernel_.k1), ('K2', self.kernel_.k2)]
+
+        cov_var = pd.Series({n: (1 / self.covar_rescaling(k.__call__(X))) for n, k in kernels}, name='Variance')
+
+        cov_var /= cov_var.sum()
+
+        return cov_var
+
+    def fit(self, X, y):
+        return super().fit(X, y)
 
     def fit_by(self, by, X, y):
         values = set(by)
@@ -94,3 +124,31 @@ class CRISPRCorrection(GaussianProcessRegressor):
         estimator.y_name = y.name
 
         return estimator.fit(X.loc[by_index], y.loc[by_index])
+
+
+# TODO: separate data for testing
+if __name__ == '__main__':
+    # Sample
+    sample = 'AU565'
+    print('Crispy bias correction test: {}'.format(sample))
+
+    # Import sgRNA library
+    lib = pd.read_csv('data/gencode.v27lift37.annotation.sorted.gff', sep='\t', names=GFF_HEADERS, index_col='feature')['chr']
+
+    # CRISPR fold-changes
+    crispr = pd.read_csv('data/crispr_gdsc_logfc.csv', index_col=0)[sample]
+
+    # Copy-number
+    cnv = pd.read_csv('data/crispy_gene_copy_number_snp.csv', index_col=0)[sample]
+
+    # Build data-frame
+    df = pd.concat([crispr.rename('fc'), cnv.rename('cnv'), lib.rename('chr')], axis=1).dropna()
+    df = df[df['chr'].isin(['chr1', 'chr17'])]
+    assert df.shape > 0, 'Empty data-frame'
+
+    # Correction
+    crispy = CRISPRCorrection().rename(sample).fit_by(by=df['chr'], X=df[['cnv']], y=df['fc'])
+    crispy = pd.concat([v.to_dataframe() for k, v in crispy.items()])
+    assert crispy.groupby('fit_by')['var_exp'].first()['chr17'] > crispy.groupby('fit_by')['var_exp'].first()['chr1'], 'Var explained failled fitting'
+
+    print(crispy)

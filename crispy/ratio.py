@@ -7,24 +7,24 @@ import matplotlib.pyplot as plt
 from crispy import bipal_dbgd
 from pybedtools import BedTool
 
-_SEX_CHR = ['chrX', 'chrY']
+SEX_CHR = ['chrX', 'chrY']
 
-_GFF_FILE = 'data/gencode.v27lift37.annotation.sorted.gff'
+GFF_FILE = 'data/gencode.v27lift37.annotation.sorted.gff'
 
-_GFF_HEADERS = ['chr', 'db', 'type', 'start', 'end', 'score', 'strand', 'frame', 'feature']
+GFF_HEADERS = ['chr', 'db', 'type', 'start', 'end', 'score', 'strand', 'frame', 'feature']
 
 
 def map_cn(bed_file, method='min,max,mean,median,collapse,count', cn_field_pos=4, null=np.nan):
     # - Imports
     # Import Genes annotation bed file and specified bed file
-    gff, bed = BedTool(_GFF_FILE).sort(), BedTool(bed_file).sort()
+    gff, bed = BedTool(GFF_FILE).sort(), BedTool(bed_file).sort()
 
     # BED headers
     bed_headers = list(map(lambda x: '%s_bed' % x, open(bed_file, 'r').readline().rstrip().split('\t')))
 
     # - Intersect regions of copy-number measurements with genes
     # Intersect Copy-Number BED to GFF
-    gff_int_df = gff.intersect(bed, wb=True).to_dataframe(names=_GFF_HEADERS + bed_headers)
+    gff_int_df = gff.intersect(bed, wb=True).to_dataframe(names=GFF_HEADERS + bed_headers)
 
     # Intersect length
     gff_int_df = gff_int_df.assign(int_length=(gff_int_df['end'] - gff_int_df['start']))
@@ -40,7 +40,7 @@ def map_cn(bed_file, method='min,max,mean,median,collapse,count', cn_field_pos=4
     gff_map_df = gff.map(bed, c=cn_field_pos, o=method, null=null)
 
     # Conver to data-frame
-    gff_map_df = gff_map_df.to_dataframe(names=_GFF_HEADERS + method.split(',')).set_index('feature')
+    gff_map_df = gff_map_df.to_dataframe(names=GFF_HEADERS + method.split(',')).set_index('feature')
 
     # Weighted gene copy-number
     gff_map_df = pd.concat([gff_map_df, gff_int_df.rename('weight')], axis=1)
@@ -60,7 +60,7 @@ def map_cn(bed_file, method='min,max,mean,median,collapse,count', cn_field_pos=4
 def _segments_cn(bed_file):
     bed = pd.read_csv(bed_file, sep='\t')
 
-    bed = bed[~bed['#chr'].isin(_SEX_CHR)]
+    bed = bed[~bed['#chr'].isin(SEX_CHR)]
 
     bed = bed.assign(length=(bed['end'] - bed['start']))
 
@@ -85,13 +85,13 @@ def ploidy(bed_file):
 
 def plot_gene(gene, bed_file, ax=None):
     # Import Genes annotation bed file and specified bed file
-    gff, bed = BedTool(_GFF_FILE).sort(), BedTool(bed_file).sort()
+    gff, bed = BedTool(GFF_FILE).sort(), BedTool(bed_file).sort()
 
     # BED headers
     bed_headers = list(map(lambda x: '%s_bed' % x, open(bed_file, 'r').readline().rstrip().split('\t')))
 
     # Intersect Copy-Number BED to GFF
-    gff_int_df = gff.intersect(bed, wb=True).to_dataframe(names=_GFF_HEADERS + bed_headers).set_index('feature')
+    gff_int_df = gff.intersect(bed, wb=True).to_dataframe(names=GFF_HEADERS + bed_headers).set_index('feature')
 
     # if ax is None:
     ax = plt.gca()

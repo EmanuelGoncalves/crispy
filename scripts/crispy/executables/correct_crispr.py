@@ -2,6 +2,8 @@
 # Copyright (C) 2018 Emanuel Goncalves
 
 import pandas as pd
+from bsub import bsub
+from datetime import datetime as dt
 from crispy.biases_correction import CRISPRCorrection
 
 
@@ -66,9 +68,13 @@ def correct_cnv_ccle(lib_file='data/ccle/crispr_ceres/sgrnamapping.csv', crispr_
         crispy.to_csv('data/crispy/crispr_ccle_crispy_%s.csv' % sample)
 
 
-if __name__ == '__main__':
+def main(argvs):
     # Correct GDSC CRISPR
     correct_cnv_gdsc()
 
-    # # Correct CCLE CRISPR
-    # correct_cnv_ccle()
+    # Correct CCLE CRISPR
+    correct_cnv_ccle()
+
+
+if __name__ == '__main__':
+    main(argvs)

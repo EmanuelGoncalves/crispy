@@ -9,13 +9,13 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 from crispy import bipal_dbgd
 from natsort import natsorted
-from crispy.ratio import _GFF_HEADERS
+from crispy.ratio import GFF_HEADERS
 from sklearn.metrics import roc_auc_score
 
 
 # - Imports
 # Gene genomic infomration
-ginfo = pd.read_csv('data/gencode.v27lift37.annotation.sorted.gff', sep='\t', names=_GFF_HEADERS, index_col='feature')
+ginfo = pd.read_csv('data/gencode.v27lift37.annotation.sorted.gff', sep='\t', names=GFF_HEADERS, index_col='feature')
 
 # Non-expressed genes
 nexp = pickle.load(open('data/gdsc/nexp_pickle.pickle', 'rb'))
