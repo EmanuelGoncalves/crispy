@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # Copyright (C) 2018 Emanuel Goncalves
 
+import sys
 import pandas as pd
 from bsub import bsub
 from datetime import datetime as dt
@@ -8,10 +9,8 @@ from crispy.biases_correction import CRISPRCorrection
 
 
 def correct_cnv(sample, crispr, cnv, lib):
-    lib_genes = lib.groupby('GENES')['CHRM'].first()
-
     # Build data-frame
-    df = pd.concat([crispr[sample].rename('fc'), cnv[sample].rename('cnv'), lib_genes.rename('chr')], axis=1).dropna()
+    df = pd.concat([crispr[sample].rename('fc'), cnv[sample].rename('cnv'), lib.rename('chr')], axis=1).dropna()
 
     # Correction
     crispy = CRISPRCorrection().rename(sample).fit_by(by=df['chr'], X=df[['cnv']], y=df['fc'])
@@ -20,9 +19,9 @@ def correct_cnv(sample, crispr, cnv, lib):
     return crispy
 
 
-def correct_cnv_gdsc(lib_file='data/gdsc/crispr/KY_Library_v1.1_annotated.csv', crispr_file='data/crispr_gdsc_logfc.csv', cnv_file='data/crispy_gene_copy_number_snp.csv'):
+def correct_cnv_gdsc(crispr_file='data/crispr_gdsc_logfc.csv', cnv_file='data/crispy_gene_copy_number_snp.csv', lib_file='data/gencode.v27lift37.annotation.sorted.gff'):
     # Import sgRNA library
-    lib = pd.read_csv(lib_file, index_col=0).dropna(subset=['GENES'])
+    lib = pd.read_csv(lib_file, sep='\t', names=GFF_HEADERS, index_col='feature')['chr']
 
     # CRISPR fold-changes
     crispr = pd.read_csv(crispr_file, index_col=0)
@@ -68,13 +67,18 @@ def correct_cnv_ccle(lib_file='data/ccle/crispr_ceres/sgrnamapping.csv', crispr_
         crispy.to_csv('data/crispy/crispr_ccle_crispy_%s.csv' % sample)
 
 
-def main(argvs):
-    # Correct GDSC CRISPR
-    correct_cnv_gdsc()
+def main():
+    if len(sys.argv) > 1 and sys.argv[1] == 'bsub':
+        print('[INFO] bsub option detected')
 
-    # Correct CCLE CRISPR
-    correct_cnv_ccle()
+
+    else:
+        # Correct GDSC CRISPR
+        correct_cnv_gdsc()
+
+        # Correct CCLE CRISPR
+        correct_cnv_ccle()
 
 
 if __name__ == '__main__':
-    main(argvs)
+    main()

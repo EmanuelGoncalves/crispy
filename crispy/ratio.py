@@ -14,6 +14,7 @@ GFF_FILE = 'data/gencode.v27lift37.annotation.sorted.gff'
 GFF_HEADERS = ['chr', 'db', 'type', 'start', 'end', 'score', 'strand', 'frame', 'feature']
 
 
+# TODO: Add Documentation
 def map_cn(bed_file, method='min,max,mean,median,collapse,count', cn_field_pos=4, null=np.nan):
     # - Imports
     # Import Genes annotation bed file and specified bed file
