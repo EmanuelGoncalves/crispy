@@ -11,7 +11,7 @@ def foldchange_gdsc(
 ):
     # - Imports
     # sgRNA library
-    sgrna_lib = pd.read_csv(lib_file, index_col=0).dropna(subset=['GENES'])
+    sgrna_lib = pd.read_csv(lib_file, index_col=0).dropna(subset=['gene'])
 
     # Manifest
     manifest = pd.read_csv(manifest_file, index_col='header').query('to_use == True')
@@ -61,7 +61,7 @@ def foldchange_gdsc(
     fc = fc.groupby(manifest.loc[fc.columns, 'name'], axis=1).mean()
 
     # Average gene level
-    fc = fc.groupby(sgrna_lib.reindex(fc.index)['GENES']).mean().dropna()
+    fc = fc.groupby(sgrna_lib.reindex(fc.index)['gene']).mean().dropna()
 
     # Export
     fc.round(5).to_csv('data/crispr_gdsc_logfc.csv')

@@ -9,7 +9,7 @@ from pybedtools import BedTool
 
 SEX_CHR = ['chrX', 'chrY']
 
-GFF_FILE = 'data/gencode.v27lift37.annotation.sorted.gff'
+GFF_FILE = 'data/gene_sets/gencode.gene.annotation.gff'
 
 GFF_HEADERS = ['chr', 'db', 'type', 'start', 'end', 'score', 'strand', 'frame', 'feature']
 
@@ -40,7 +40,7 @@ def map_cn(bed_file, method='min,max,mean,median,collapse,count', cn_field_pos=4
     # Mapped bed Copy-Number to GFF
     gff_map_df = gff.map(bed, c=cn_field_pos, o=method, null=null)
 
-    # Conver to data-frame
+    # Convert to data-frame
     gff_map_df = gff_map_df.to_dataframe(names=GFF_HEADERS + method.split(',')).set_index('feature')
 
     # Weighted gene copy-number
