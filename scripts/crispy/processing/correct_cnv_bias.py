@@ -56,8 +56,8 @@ def iterate_correction(crispr_file, crispr_lib_file, cnv_file, output_folder, bs
     overlap_samples = set(crispr).intersection(cnv)
     overlap_genes = set(crispr.index).intersection(cnv.index)
 
-    assert len(overlap_samples) == 0, 'No samples (columns) overlap between CRISPR and Copy-number matrices'
-    assert len(overlap_genes) == 0, 'No genes (rows) overlap between CRISPR and Copy-number matrices'
+    assert len(overlap_samples) > 0, 'No samples (columns) overlap between CRISPR and Copy-number matrices'
+    assert len(overlap_genes) > 0, 'No genes (rows) overlap between CRISPR and Copy-number matrices'
 
     # run correction for each cell line
     for sample in overlap_genes:
