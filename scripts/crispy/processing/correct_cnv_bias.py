@@ -60,7 +60,7 @@ def iterate_correction(crispr_file, crispr_lib_file, cnv_file, output_folder, bs
     assert len(overlap_genes) > 0, 'No genes (rows) overlap between CRISPR and Copy-number matrices'
 
     # run correction for each cell line
-    for sample in overlap_genes:
+    for sample in overlap_samples:
         if bsub_flag:
             print('[{}] Crispy: bsub {}'.format(dt.now().strftime('%Y-%m-%d %H:%M:%S'), sample))
 
