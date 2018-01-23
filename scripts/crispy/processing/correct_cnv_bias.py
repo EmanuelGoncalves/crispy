@@ -48,7 +48,7 @@ def run_correction(sample_name, crispr_file, crispr_lib_file, cnv_file, output_f
     crispy.to_csv('{}/crispy_crispr_{}.csv'.format(output_folder, sample_name))
 
 
-def iterate_correction(crispr_file, crispr_lib_file, cnv_file, output_folder):
+def iterate_correction(crispr_file, crispr_lib_file, cnv_file, output_folder, bsub_flag):
     # CRISPR and Copy-number samples
     crispr, cnv = pd.read_csv(crispr_file, index_col=0), pd.read_csv(cnv_file, index_col=0)
 
@@ -61,33 +61,34 @@ def iterate_correction(crispr_file, crispr_lib_file, cnv_file, output_folder):
 
     # run correction for each cell line
     for sample in overlap_genes:
-        print('[{}] {}: {}'.format(dt.now().strftime('%Y-%m-%d %H:%M:%S'), sample, output_folder))
-        run_correction(sample, crispr_file, crispr_lib_file, cnv_file, output_folder)
+        if bsub_flag:
+            print('[{}] Crispy: bsub {}'.format(dt.now().strftime('%Y-%m-%d %H:%M:%S'), sample))
+
+            # Set job name
+            jname = 'crispy_{}'.format(sample)
+
+            # Define command
+            j_cmd = "python3.6.1 scripts/crispy/processing/correct_cnv_bias.py {} {} {} {} -sample '{}'"\
+                .format(crispr_file, crispr_lib_file, cnv_file, output_folder, sample)
+
+            # Create bsub
+            j = bsub(
+                jname, R='select[mem>{}] rusage[mem={}] span[hosts=1]'.format(BSUB_MEMORY, BSUB_MEMORY), M=BSUB_MEMORY,
+                verbose=True, q=BSUB_QUEQUE, J=jname, o=jname, e=jname, n=BSUB_CORES,
+            )
+
+            # Submit
+            j(j_cmd)
+
+        else:
+            print('[{}] {}: {}'.format(dt.now().strftime('%Y-%m-%d %H:%M:%S'), sample, output_folder))
+            run_correction(sample, crispr_file, crispr_lib_file, cnv_file, output_folder)
 
 
 def main():
     args = parser.parse_args()
 
-    if args.bsub and args.sample is not None:
-        print('[{}] Crispy: bsub {}'.format(dt.now().strftime('%Y-%m-%d %H:%M:%S'), args.sample))
-
-        jname = 'crispy_{}'.format(args.sample)
-
-        # Define command
-        j_cmd = "python3.6.1 scripts/crispy/processing/correct_cnv_bias.py {} {} {} {} -sample '{}'"\
-            .format(args.crispr_file, args.crispr_lib_file, args.cnv_file, args.output_folder, args.sample)
-
-        # Create bsub
-        j = bsub(
-            jname, R='select[mem>{}] rusage[mem={}] span[hosts=1]'.format(BSUB_MEMORY, BSUB_MEMORY), M=BSUB_MEMORY,
-            verbose=True, q=BSUB_QUEQUE, J=jname, o=jname, e=jname, n=BSUB_CORES,
-        )
-
-        # Submit
-        j(j_cmd)
-        print('[{}] Crispy -bsub {}'.format(dt.now().strftime('%Y-%m-%d %H:%M:%S'), args.sample))
-
-    elif args.sample is not None:
+    if args.sample is not None:
         print('[{}] Crispy: {}'.format(dt.now().strftime('%Y-%m-%d %H:%M:%S'), args.sample))
 
         run_correction(args.sample, args.crispr_file, args.crispr_lib_file, args.cnv_file, args.output_folder)
@@ -97,7 +98,7 @@ def main():
     else:
         print('[{}] Crispy: {}'.format(dt.now().strftime('%Y-%m-%d %H:%M:%S'), args.output_folder))
 
-        iterate_correction(args.crispr_file, args.crispr_lib_file, args.cnv_file, args.output_folder)
+        iterate_correction(args.crispr_file, args.crispr_lib_file, args.cnv_file, args.output_folder, args.bsub)
 
         print('[{}] Crispy'.format(dt.now().strftime('%Y-%m-%d %H:%M:%S')))
 
