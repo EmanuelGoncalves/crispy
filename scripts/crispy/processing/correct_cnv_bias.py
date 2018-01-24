@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # Copyright (C) 2018 Emanuel Goncalves
 
+import os
 import argparse
 import pandas as pd
 from bsub import bsub
@@ -83,6 +84,13 @@ def iterate_correction(crispr_file, crispr_lib_file, cnv_file, output_folder, bs
         else:
             print('[{}] {}: {}'.format(dt.now().strftime('%Y-%m-%d %H:%M:%S'), sample, output_folder))
             run_correction(sample, crispr_file, crispr_lib_file, cnv_file, output_folder)
+
+
+def assemble_matrix(output_folder, field='regressed_out'):
+    crispy_fc = pd.DataFrame({
+        os.path.splitext(i)[0].split('_')[-1]: pd.read_csv(output_folder + i, index_col=0)[field] for i in os.listdir(output_folder) if i.startswith('crispy_crispr_')
+    })
+    return crispy_fc
 
 
 def main():
