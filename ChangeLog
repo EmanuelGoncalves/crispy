@@ -1,6 +1,20 @@
 CHANGES
 =======
 
+* Copy-number bias per chromosome analysis added to qc and bias assessement
+* Copy-number bias plotting of corrected crispr fold-changes updated
+* QC and copy-number bias of original CRISPR fc plots updated
+* Plotting main methods added
+* Sample iteration fixed
+* Assert bug corrected in cnv bias correction script
+* Copy-number main bug fixed
+* Deprecated Copy-number correction script removed
+* Copy-number correction script main supports bsub
+* Copy-number bed files processing main file updated
+* Crispy refactoring main functions updated
+* Var explained adapted to bias correction
+* copy-number ratios script updated
+* Crispy fold-change, correction and copy-number ratios scripts main method added
 * Restructuring and FISH validation experiments
 * Readme added to crispr scripts
 * Crispy analysis re-factoring initiated
