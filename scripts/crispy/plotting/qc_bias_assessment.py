@@ -10,9 +10,28 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 from crispy import bipal_dbgd
 from natsort import natsorted
-from crispy.utils import bin_cnv
+from sklearn.metrics import roc_curve, auc
 from crispy.benchmark_plot import plot_cumsum_auc
-from sklearn.metrics import roc_curve, auc, roc_auc_score
+from crispy.utils import bin_cnv, multilabel_roc_auc_score
+
+
+def tissue_coverage(x, y, data, outfile):
+    df = data.assign(ypos=np.arange(data.shape[0]))
+
+    plt.barh(df['ypos'], df[x], .8, color=bipal_dbgd[0], align='center')
+
+    for xx, yy in df[['ypos', x]].values:
+        plt.text(yy - .25, xx, str(yy), color='white', ha='right', va='center', fontsize=6)
+
+    plt.yticks(df['ypos'])
+    plt.yticks(df['ypos'], df[y])
+
+    plt.xlabel('# cell lines')
+    plt.title('CRISPR/Cas9 screen\n(%d cell lines)' % df['Counts'].sum())
+
+    plt.gcf().set_size_inches(2, 3)
+    plt.savefig(outfile, bbox_inches='tight', dpi=600)
+    plt.close('all')
 
 
 def auc_curves(df, geneset, outfile):
@@ -111,11 +130,32 @@ def copy_number_bias_arocs_per_sample(x, y, hue, data, outfile):
     plt.close('all')
 
 
+def arocs_scatter(x, y, data, outfile):
+    g = sns.jointplot(data[x], data[y], color=bipal_dbgd[0], space=0, kind='scatter', joint_kws={'s': 5, 'edgecolor': 'w', 'linewidth': .3}, stat_func=None)
+
+    x_lim, y_lim = g.ax_joint.get_xlim(), g.ax_joint.get_ylim()
+    g.ax_joint.plot(x_lim, y_lim, ls='--', lw=.3, c=bipal_dbgd[0])
+    g.ax_joint.axhline(0.5, ls='-', lw=.1, c=bipal_dbgd[0])
+    g.ax_joint.axvline(0.5, ls='-', lw=.1, c=bipal_dbgd[0])
+
+    g.ax_joint.set_xlim(x_lim)
+    g.ax_joint.set_ylim(y_lim)
+
+    g.set_axis_labels('{} fold-changes AUCs'.format(x), '{} fold-changes AUCs'.format(y))
+
+    plt.gcf().set_size_inches(3, 3)
+    plt.savefig(outfile, bbox_inches='tight', dpi=600)
+    plt.close('all')
+
+
 def main():
     # - Import
     # (non)essential genes
     essential = pd.read_csv('data/gene_sets/curated_BAGEL_essential.csv', sep='\t')['gene'].rename('essential')
     nessential = pd.read_csv('data/gene_sets/curated_BAGEL_nonEssential.csv', sep='\t')['gene'].rename('non-essential')
+
+    # Samplesheet
+    ss = pd.read_csv('data/gdsc/samplesheet.csv', index_col=0)
 
     # Non-expressed genes
     nexp = pickle.load(open('data/gdsc/nexp_pickle.pickle', 'rb'))
@@ -133,6 +173,13 @@ def main():
     # - Overlap samples
     samples = list(set(cnv).intersection(c_gdsc_fc).intersection(c_gdsc_crispy).intersection(nexp))
     print('[INFO] Samples overlap: {}'.format(len(samples)))
+
+    # - Plot: Cancer type coverage
+    tissue_coverage(
+        'Counts', 'Cancer type',
+        ss.loc[samples, 'Cancer Type'].value_counts(ascending=True).reset_index().rename(columns={'index': 'Cancer type', 'Cancer Type': 'Counts'}),
+        'reports/crispy/cancer_types_histogram.png'
+    )
 
     # - Plot: QC Gene-sets AUCs
     auc_stats_fc_ess = auc_curves(c_gdsc_fc[samples], essential, 'reports/crispy/qc_aucs_fc_essential.png')
@@ -153,7 +200,7 @@ def main():
         'reports/crispy/qc_aucs_nonessential.png', 'Non-essential genes'
     )
 
-    # - Plot: Copy-number bias AROCs
+    # - Plot: Copy-number bias in ORIGINAL CRISPR fold-changes (AROCs)
     plot_df = pd.concat([
         pd.DataFrame({c: c_gdsc_fc.reindex(nexp[c])[c] for c in samples if c in nexp}).unstack().rename('fc'),
         cnv[samples].applymap(lambda v: bin_cnv(v, 10)).unstack().rename('cnv')
@@ -165,17 +212,35 @@ def main():
     copy_number_bias_arocs('cnv', 'fc', plot_df, 'reports/crispy/copynumber_bias.png')
 
     # Plot CNV bias per samples
-    plot_df_aucs = pd.DataFrame({
-        c: {
-            t: roc_auc_score(
-                (plot_df.query("sample == '{}'".format(c))['cnv'] == t).astype(int), -plot_df.query("sample == '{}'".format(c))['fc']
-            ) for t in set(plot_df['cnv']) if (sum(plot_df.query("sample == '{}'".format(c))['cnv'] == t) >= 5) and (len(set(plot_df.query("sample == '{}'".format(c))['fc'])) > 1)
-        } for c in set(plot_df['sample'])
-    })
+    plot_df_aucs = pd.DataFrame({c: multilabel_roc_auc_score('cnv', 'fc', plot_df.query("sample == '{}'".format(c)), min_events=5) for c in samples})
     plot_df_aucs = plot_df_aucs.unstack().reset_index().dropna().rename(columns={'level_0': 'sample', 'level_1': 'cnv', 0: 'auc'})
     plot_df_aucs = plot_df_aucs.assign(ploidy=ploidy.loc[plot_df_aucs['sample']].apply(lambda v: bin_cnv(v, 5)).values)
 
     copy_number_bias_arocs_per_sample('cnv', 'auc', 'ploidy', plot_df_aucs, 'reports/crispy/copynumber_bias_per_sample.png')
+
+    # - Plot: Copy-number bias in CORRECTED CRISPR fold-changes (AROCs)
+    plot_df_crispy = pd.concat([
+        pd.DataFrame({c: c_gdsc_crispy.reindex(nexp[c])[c] for c in samples if c in nexp}).unstack().rename('fc'),
+        cnv[samples].applymap(lambda v: bin_cnv(v, 10)).unstack().rename('cnv')
+    ], axis=1).dropna()
+    plot_df_crispy = plot_df_crispy.reset_index().rename(columns={'level_0': 'sample', 'level_1': 'gene'})
+    plot_df_crispy = plot_df_crispy[~plot_df_crispy['cnv'].isin(['0', '1'])]
+    plot_df_crispy = plot_df_crispy.assign(ploidy=ploidy.loc[plot_df_crispy['sample']].values)
+
+    # Plot overall CNV bias
+    copy_number_bias_arocs('cnv', 'fc', plot_df_crispy, 'reports/crispy/copynumber_bias_corrected.png')
+
+    # Plot CNV bias per samples
+    plot_df_crispy_aucs = pd.DataFrame({c: multilabel_roc_auc_score('cnv', 'fc', plot_df_crispy.query("sample == '{}'".format(c)), min_events=5) for c in samples})
+    plot_df_crispy_aucs = plot_df_crispy_aucs.unstack().reset_index().dropna().rename(columns={'level_0': 'sample', 'level_1': 'cnv', 0: 'auc'})
+    plot_df_crispy_aucs = plot_df_crispy_aucs.assign(ploidy=ploidy.loc[plot_df_crispy_aucs['sample']].apply(lambda v: bin_cnv(v, 5)).values)
+
+    copy_number_bias_arocs_per_sample('cnv', 'auc', 'ploidy', plot_df_crispy_aucs, 'reports/crispy/copynumber_bias_corrected_per_sample.png')
+
+    # - Compare AROCs before and after correction
+    arocs_scatter('Original', 'Corrected', pd.concat([
+        plot_df_crispy_aucs.set_index(['sample', 'cnv'])['auc'].rename('Corrected'), plot_df_aucs.set_index(['sample', 'cnv'])['auc'].rename('Original')
+    ], axis=1), 'reports/crispy/copynumber_bias_arocs_scatter.png')
 
 
 if __name__ == '__main__':
