@@ -16,7 +16,7 @@ from pyensembl import EnsemblRelease
 brass_df = pd.read_csv('data/gdsc/wgs/wgs_brass_bedpe.csv')
 
 # Gene copy-number ratio
-cnv_ratios = pd.read_csv('data/crispy_copy_number_ratio.csv', index_col=0).replace(-1, np.nan)
+cnv_ratios = pd.read_csv('data/crispy_copy_number_gene_ratio_snp.csv', index_col=0)
 
 # Pyensembl release 77: human reference genome GRCh37
 densembl = EnsemblRelease(75)
@@ -42,7 +42,7 @@ sv_ratio = pd.DataFrame(sv_ratio).dropna()
 
 
 # -
-plot_df = sv_ratio.query('bkdist > 2500')
+# plot_df = sv_ratio.query('bkdist > 2500')
 
 order = ['deletion', 'inversion', 'translocation', 'tandem-duplication']
 
@@ -62,7 +62,7 @@ ax.set_title('Structural rearrangements relation with\ncopy-number ratio')
 legend = ax.legend(loc=4, prop={'size': 6})
 
 plt.gcf().set_size_inches(3, 3)
-plt.savefig('reports/brass_sv_ratio_cumdist.png', bbox_inches='tight', dpi=600)
+plt.savefig('reports/crispy/brass_sv_ratio_cumdist.png', bbox_inches='tight', dpi=600)
 plt.close('all')
 
 #
@@ -71,5 +71,5 @@ plt.title('Structural rearrangements relation with\ncopy-number ratio')
 plt.xlabel('Copy-number ratio (rank)')
 plt.ylabel('')
 plt.gcf().set_size_inches(3, 1)
-plt.savefig('reports/brass_sv_ratio_boxplot.png', bbox_inches='tight', dpi=600)
+plt.savefig('reports/crispy/brass_sv_ratio_boxplot.png', bbox_inches='tight', dpi=600)
 plt.close('all')

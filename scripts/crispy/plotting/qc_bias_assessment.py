@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
 from crispy import bipal_dbgd
 from natsort import natsorted
 from crispy.utils import bin_cnv
@@ -74,25 +75,13 @@ def copy_number_bias_arocs(y_true, y_pred, data, outfile):
     plt.close('all')
 
 
-def copy_number_bias_arocs_per_sample(y_true, y_pred, groupby, hue, data, outfile):
-    thresholds = natsorted(set(data[y_true]))
+def copy_number_bias_arocs_per_sample(x, y, hue, data, outfile):
+    thresholds = natsorted(set(data[x]))
     thresholds_color = sns.light_palette(bipal_dbgd[0], n_colors=len(thresholds)).as_hex()
 
-    df = {}
-    for c in set(data[groupby]):
-        df_ = data.query("{} == '{}'".format(groupby, c))
-
-        df[c] = {}
-        for t in thresholds:
-            if (sum(df_[y_true] == t) >= 5) and (len(set(df_[y_true])) > 1):
-                df[c][t] = roc_auc_score((df_[y_true] == t).astype(int), -df_[y_pred])
-
-    df = pd.DataFrame(df)
-    df = df.unstack().reset_index().dropna().rename(columns={'level_0': 'sample', 'level_1': 'cnv', 0: 'auc'})
-
     # Plot per sample
-    sns.boxplot('cnv', 'auc', data=df, sym='', order=thresholds, palette=thresholds_color, linewidth=.3)
-    sns.stripplot('cnv', 'auc', data=df, order=thresholds, palette=thresholds_color, edgecolor='white', linewidth=.1, size=3, jitter=.4)
+    sns.boxplot(x, y, data=data, sym='', order=thresholds, palette=thresholds_color, linewidth=.3)
+    sns.stripplot(x, y, data=data, order=thresholds, palette=thresholds_color, edgecolor='white', linewidth=.1, size=3, jitter=.4)
 
     plt.title('CRISPR/Cas9 copy-number amplification bias\nnon-expressed genes')
     plt.xlabel('Copy-number')
@@ -103,14 +92,20 @@ def copy_number_bias_arocs_per_sample(y_true, y_pred, groupby, hue, data, outfil
     plt.close('all')
 
     # Plot per sample hue by ploidy
-    sns.boxplot('cnv', 'fc', 'ploidy', data=plot_df, order=thresholds, palette=pal, linewidth=.3, fliersize=1, ax=ax, notch=True)
-    plt.axhline(0, lw=.3, c=bipal_dbgd[0], ls='-')
-    plt.xlabel('Copy-number')
-    plt.ylabel('CRISPR fold-change (log2)')
-    plt.title('Cell ploidy effect CRISPR/Cas9 bias\nnon-expressed genes')
+    hue_thresholds = natsorted(set(data[hue]))
+    hue_thresholds_color = sns.light_palette(bipal_dbgd[0], n_colors=len(hue_thresholds)).as_hex()
 
-    plt.legend(title='Ploidy', prop={'size': 6}).get_title().set_fontsize('6')
-    plt.gcf().set_size_inches(4, 3)
+    sns.boxplot(x, y, hue, data=data, sym='', order=thresholds, hue_order=hue_thresholds, palette=hue_thresholds_color, linewidth=.3)
+    sns.stripplot(x, y, hue, data=data, order=thresholds, hue_order=hue_thresholds, palette=hue_thresholds_color, edgecolor='white', linewidth=.1, size=1, jitter=.2, split=True)
+
+    handles = [mpatches.Circle([.0, .0], .25, facecolor=c, label=l) for c, l in zip(*(hue_thresholds_color, hue_thresholds))]
+    plt.legend(handles=handles, title='Ploidy', prop={'size': 6}).get_title().set_fontsize('6')
+    plt.title('Cell ploidy bias on CRISPR/Cas9\nnon-expressed genes')
+    plt.xlabel('Copy-number')
+    plt.ylabel('Copy-number AUC (cell lines)')
+    plt.axhline(0.5, ls='--', lw=.3, alpha=.5, c=bipal_dbgd[0])
+    plt.gcf().set_size_inches(3, 3)
+
     outfile_dir, outfile_exp = os.path.splitext(outfile)
     plt.savefig('{}_ploidy.png'.format(outfile_dir, outfile_exp), bbox_inches='tight', dpi=600)
     plt.close('all')
@@ -165,11 +160,22 @@ def main():
     ], axis=1).dropna()
     plot_df = plot_df.reset_index().rename(columns={'level_0': 'sample', 'level_1': 'gene'})
     plot_df = plot_df[~plot_df['cnv'].isin(['0', '1'])]
-    plot_df = plot_df.assign(ploidy=ploidy.loc[plot_df['sample']].values)
 
+    # Plot overall CNV bias
     copy_number_bias_arocs('cnv', 'fc', plot_df, 'reports/crispy/copynumber_bias.png')
 
-    copy_number_bias_arocs_per_sample('cnv', 'fc', 'sample', 'ploidy', plot_df, 'reports/crispy/copynumber_bias_per_sample.png')
+    # Plot CNV bias per samples
+    plot_df_aucs = pd.DataFrame({
+        c: {
+            t: roc_auc_score(
+                (plot_df.query("sample == '{}'".format(c))['cnv'] == t).astype(int), -plot_df.query("sample == '{}'".format(c))['fc']
+            ) for t in set(plot_df['cnv']) if (sum(plot_df.query("sample == '{}'".format(c))['cnv'] == t) >= 5) and (len(set(plot_df.query("sample == '{}'".format(c))['fc'])) > 1)
+        } for c in set(plot_df['sample'])
+    })
+    plot_df_aucs = plot_df_aucs.unstack().reset_index().dropna().rename(columns={'level_0': 'sample', 'level_1': 'cnv', 0: 'auc'})
+    plot_df_aucs = plot_df_aucs.assign(ploidy=ploidy.loc[plot_df_aucs['sample']].apply(lambda v: bin_cnv(v, 5)).values)
+
+    copy_number_bias_arocs_per_sample('cnv', 'auc', 'ploidy', plot_df_aucs, 'reports/crispy/copynumber_bias_per_sample.png')
 
 
 if __name__ == '__main__':
