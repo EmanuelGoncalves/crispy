@@ -126,7 +126,29 @@ def copy_number_bias_arocs_per_sample(x, y, hue, data, outfile):
     plt.gcf().set_size_inches(3, 3)
 
     outfile_dir, outfile_exp = os.path.splitext(outfile)
-    plt.savefig('{}_ploidy.png'.format(outfile_dir, outfile_exp), bbox_inches='tight', dpi=600)
+    plt.savefig('{}_ploidy.{}'.format(outfile_dir, outfile_exp), bbox_inches='tight', dpi=600)
+    plt.close('all')
+
+
+def copy_number_bias_arocs_per_chrm(x, y, hue, data, outfile):
+    # Copy-number bias per chromosome
+    order = natsorted(set(data[x]))
+
+    hue_order = natsorted(set(data[hue]))
+    hue_color = sns.light_palette(bipal_dbgd[0], n_colors=len(hue_order)).as_hex()
+
+    sns.boxplot(x, y, hue, data=data, hue_order=hue_order, order=order, sym='', palette=hue_color, linewidth=.3)
+    sns.stripplot(x, y, hue, data=data, hue_order=hue_order, order=order, palette=hue_color, edgecolor='white', size=.5, jitter=.2, split=True)
+
+    handles = [mpatches.Circle([.0, .0], .25, facecolor=c, label=l) for c, l in zip(*(hue_color, hue_order))]
+    plt.legend(handles=handles, title='Chr. copies', prop={'size': 5}).get_title().set_fontsize('5')
+
+    plt.title('CRISPR/Cas9 copy-number amplification bias\nnon-expressed genes')
+    plt.xlabel('Copy-number')
+    plt.ylabel('Copy-number AUC (chromossome)')
+    plt.axhline(0.5, ls='--', lw=.3, alpha=.5, c=bipal_dbgd[0])
+    plt.gcf().set_size_inches(3, 3)
+    plt.savefig(outfile, bbox_inches='tight', dpi=600)
     plt.close('all')
 
 
@@ -154,6 +176,9 @@ def main():
     essential = pd.read_csv('data/gene_sets/curated_BAGEL_essential.csv', sep='\t')['gene'].rename('essential')
     nessential = pd.read_csv('data/gene_sets/curated_BAGEL_nonEssential.csv', sep='\t')['gene'].rename('non-essential')
 
+    # CRISPR library
+    lib = pd.read_csv('data/crispr_libs/KY_Library_v1.1_updated.csv', index_col=0).groupby('gene')['chr'].first()
+
     # Samplesheet
     ss = pd.read_csv('data/gdsc/samplesheet.csv', index_col=0)
 
@@ -165,6 +190,9 @@ def main():
 
     # Ploidy
     ploidy = pd.read_csv('data/crispy_copy_number_ploidy_snp.csv', index_col=0, names=['sample', 'ploidy'])['ploidy']
+
+    # Chromosome copies
+    chrm = pd.read_csv('data/crispy_copy_number_chr_snp.csv', index_col=0)
 
     # CRISPR
     c_gdsc_fc = pd.read_csv('data/crispr_gdsc_logfc.csv', index_col=0)
@@ -207,6 +235,7 @@ def main():
     ], axis=1).dropna()
     plot_df = plot_df.reset_index().rename(columns={'level_0': 'sample', 'level_1': 'gene'})
     plot_df = plot_df[~plot_df['cnv'].isin(['0', '1'])]
+    plot_df = plot_df.assign(chr=lib.loc[plot_df['gene']].values)
 
     # Plot overall CNV bias
     copy_number_bias_arocs('cnv', 'fc', plot_df, 'reports/crispy/copynumber_bias.png')
@@ -218,6 +247,15 @@ def main():
 
     copy_number_bias_arocs_per_sample('cnv', 'auc', 'ploidy', plot_df_aucs, 'reports/crispy/copynumber_bias_per_sample.png')
 
+    # Plot CNV bias per chromosome
+    plot_df_aucs_chr = pd.DataFrame([
+        {'sample': s, 'chr': c, 'chr_cnv': bin_cnv(chrm.loc[c, s], 6), 'ploidy': ploidy[s], 'cnv': cn, 'auc': cn_auc}
+        for s in samples
+        for c in set(plot_df['chr'])
+        for cn, cn_auc in multilabel_roc_auc_score('cnv', 'fc', plot_df.query("(sample == '{}') & (chr == '{}')".format(s, c)), min_events=5).items()
+    ])
+    copy_number_bias_arocs_per_chrm('cnv', 'auc', 'chr_cnv', plot_df_aucs_chr.query("chr_cnv != '1'"), 'reports/crispy/copynumber_bias_per_chr.png')
+
     # - Plot: Copy-number bias in CORRECTED CRISPR fold-changes (AROCs)
     plot_df_crispy = pd.concat([
         pd.DataFrame({c: c_gdsc_crispy.reindex(nexp[c])[c] for c in samples if c in nexp}).unstack().rename('fc'),
@@ -225,7 +263,7 @@ def main():
     ], axis=1).dropna()
     plot_df_crispy = plot_df_crispy.reset_index().rename(columns={'level_0': 'sample', 'level_1': 'gene'})
     plot_df_crispy = plot_df_crispy[~plot_df_crispy['cnv'].isin(['0', '1'])]
-    plot_df_crispy = plot_df_crispy.assign(ploidy=ploidy.loc[plot_df_crispy['sample']].values)
+    plot_df_crispy = plot_df_crispy.assign(chr=lib.loc[plot_df_crispy['gene']].values)
 
     # Plot overall CNV bias
     copy_number_bias_arocs('cnv', 'fc', plot_df_crispy, 'reports/crispy/copynumber_bias_corrected.png')
@@ -236,6 +274,15 @@ def main():
     plot_df_crispy_aucs = plot_df_crispy_aucs.assign(ploidy=ploidy.loc[plot_df_crispy_aucs['sample']].apply(lambda v: bin_cnv(v, 5)).values)
 
     copy_number_bias_arocs_per_sample('cnv', 'auc', 'ploidy', plot_df_crispy_aucs, 'reports/crispy/copynumber_bias_corrected_per_sample.png')
+
+    # Plot CNV bias per chromosome
+    plot_df_aucs_chr_crispy = pd.DataFrame([
+        {'sample': s, 'chr': c, 'chr_cnv': bin_cnv(chrm.loc[c, s], 6), 'ploidy': ploidy[s], 'cnv': cn, 'auc': cn_auc}
+        for s in samples
+        for c in set(plot_df_crispy['chr'])
+        for cn, cn_auc in multilabel_roc_auc_score('cnv', 'fc', plot_df_crispy.query("(sample == '{}') & (chr == '{}')".format(s, c)), min_events=5).items()
+    ])
+    copy_number_bias_arocs_per_chrm('cnv', 'auc', 'chr_cnv', plot_df_aucs_chr_crispy.query("chr_cnv != '1'"), 'reports/crispy/copynumber_bias_corrected_per_chr.png')
 
     # - Compare AROCs before and after correction
     arocs_scatter('Original', 'Corrected', pd.concat([
