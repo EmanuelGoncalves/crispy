@@ -11,8 +11,8 @@ from sklearn.linear_model import LinearRegression
 Linear regression omiting NaNs in dependent variable (ys)
 
 """
-def lr(xs, ys, ws):
-    outputs = __lr(xs.values, ys.values, ws.values)
+def lr(xs, ys, ws=None):
+    outputs = __lr(xs.values, ys.values, ws.values if ws is not None else None)
     return {i: pd.DataFrame(outputs[i], index=xs.columns, columns=ys.columns) for i in outputs}
 
 
@@ -47,18 +47,16 @@ def __lr(xs, ys, ws):
         yy = yy[~yy_nans]
 
         # Linear regression only with covariates
-        covs = ws[~yy_nans]
+        if ws is not None:
+            covs = ws[~yy_nans]
 
-        lm_pred_covs = LinearRegression().fit(covs, yy).predict(covs)
+            lm_pred_covs = LinearRegression().fit(covs, yy).predict(covs)
 
-        lm_llog_covs = log_likelihood(yy, lm_pred_covs)
+            lm_llog_covs = log_likelihood(yy, lm_pred_covs)
 
         for x_idx in range(xs.shape[1]):
             # Build X matrix
             xx = xs[:, [x_idx]][~yy_nans]
-
-            # Build X matrix with covariates
-            xx_covs = np.concatenate([xx, covs], axis=1)
 
             # Linear regression
             lm = LinearRegression().fit(xx, yy)
@@ -77,19 +75,25 @@ def __lr(xs, ys, ws):
             f_stat[x_idx, y_idx] = f_stats[0]
             f_pval[x_idx, y_idx] = f_stats[1]
 
-            # Log-ratio test
-            lm_pred_xx_covs = LinearRegression().fit(xx_covs, yy).predict(xx_covs)
-            lm_llog_feat = log_likelihood(yy, lm_pred_xx_covs)
+            if ws is not None:
+                # Log-ratio test
+                xx_covs = np.concatenate([xx, covs], axis=1)
 
-            lr = 2 * (lm_llog_feat - lm_llog_covs)
-            lr_stat[x_idx, y_idx] = lr
-            lr_pval[x_idx, y_idx] = stats.chi2(1).sf(lr)
-            r2_scores_lr[x_idx, y_idx] = r_squared(yy, lm_pred_xx_covs)
+                lm_pred_xx_covs = LinearRegression().fit(xx_covs, yy).predict(xx_covs)
+                lm_llog_feat = log_likelihood(yy, lm_pred_xx_covs)
+
+                lr = 2 * (lm_llog_feat - lm_llog_covs)
+                lr_stat[x_idx, y_idx] = lr
+                lr_pval[x_idx, y_idx] = stats.chi2(1).sf(lr)
+                r2_scores_lr[x_idx, y_idx] = r_squared(yy, lm_pred_xx_covs)
 
     # Assemble outputs
     res = {
-        'beta': betas, 'r2': r2_scores, 'f_stat': f_stat, 'f_pval': f_pval, 'lr': lr_stat, 'lr_pval': lr_pval, 'lr_r2': r2_scores_lr
+        'beta': betas, 'r2': r2_scores, 'f_stat': f_stat, 'f_pval': f_pval
     }
+
+    if ws is not None:
+        res.update({'lr': lr_stat, 'lr_pval': lr_pval, 'lr_r2': r2_scores_lr})
 
     return res
 

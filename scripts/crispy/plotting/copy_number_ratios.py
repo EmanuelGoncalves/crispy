@@ -171,7 +171,7 @@ def main():
     # - Plot: Copy-number ratio vs CRISPR bias
     ratios_histogram('ratio', df, 'reports/crispy/copynumber_ratio_histogram.png')
     ratios_kmean('crispy', 'ratio_bin', df, 'reports/crispy/copynumber_ratio_kmean_boxplot.png')
-    ratios_arocs('ratio_bin', 'crispy', df, 'reports/crispy/copynumber_ratio_kmean_arocs.png', exclude_labels={'0'})
+    ratios_arocs('ratio_bin', 'crispy', df, 'reports/crispy/copynumber_ratio_kmean_arocs.png', exclude_labels={'0', '1'})
     ratios_heatmap('cnv_bin', 'chr_cnv_bin', 'ratio_bin', df, 'reports/crispy/copynumber_ratio_heatmap.png', z_bin='1')
 
     # - Plot: CRISPR bias correlation with copy-number and ratios
