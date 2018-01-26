@@ -94,3 +94,4 @@ data/*
 resources/*
 .idea/*
 .Rhistory
+ChangeLog
