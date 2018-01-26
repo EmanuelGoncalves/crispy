@@ -11,10 +11,10 @@ from crispy.biases_correction import CRISPRCorrection
 # Command line args parser
 parser = argparse.ArgumentParser(description='Run Crispy correction')
 
-parser.add_argument('crispr_file', nargs='?', default='data/crispr_gdsc_logfc.csv')
-parser.add_argument('crispr_lib_file', nargs='?', default='data/crispr_libs/KY_Library_v1.1_updated.csv')
-parser.add_argument('cnv_file', nargs='?', default='data/crispy_copy_number_gene_snp.csv')
-parser.add_argument('output_folder', nargs='?', default='data/crispy/gdsc/')
+parser.add_argument('-crispr_file', nargs='?', default='data/crispr_gdsc_logfc.csv')
+parser.add_argument('-crispr_lib_file', nargs='?', default='data/crispr_libs/KY_Library_v1.1_updated.csv')
+parser.add_argument('-cnv_file', nargs='?', default='data/crispy_copy_number_gene_snp.csv')
+parser.add_argument('-output_folder', nargs='?', default='data/crispy/gdsc/')
 
 parser.add_argument('-sample', nargs='?')
 
