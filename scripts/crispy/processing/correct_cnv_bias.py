@@ -58,7 +58,7 @@ def iterate_correction(crispr_file, crispr_lib_file, cnv_file, output_folder, bs
             jname = 'crispy_{}'.format(sample)
 
             # Define command
-            j_cmd = "python3.6.1 scripts/crispy/processing/correct_cnv_bias.py {} {} {} {} -sample '{}'"\
+            j_cmd = "python3.6.1 scripts/crispy/processing/correct_cnv_bias.py -crispr_file '{}' -crispr_lib_file '{}' -cnv_file '{}' -output_folder '{}' -sample '{}'"\
                 .format(crispr_file, crispr_lib_file, cnv_file, output_folder, sample)
 
             # Create bsub
@@ -94,6 +94,8 @@ def main():
     parser.add_argument('-bsub', action='store_true', default=False)
 
     args = parser.parse_args()
+
+    print(args)
 
     if args.sample is not None:
         print('[{}] Crispy: {}'.format(dt.now().strftime('%Y-%m-%d %H:%M:%S'), args.sample))
