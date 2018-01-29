@@ -98,17 +98,12 @@ def main():
     print(args)
 
     if args.sample is not None:
-        print('[{}] Crispy: {}'.format(dt.now().strftime('%Y-%m-%d %H:%M:%S'), args.sample))
-
-        run_correction(args.sample, args.crispr_file, args.crispr_lib_file, args.cnv_file, args.output_folder)
-
-        print('[{}] Crispy {}'.format(dt.now().strftime('%Y-%m-%d %H:%M:%S'), args.sample))
+        for sample in map(str.strip, args.sample.split(',')):
+            run_correction(sample, args.crispr_file, args.crispr_lib_file, args.cnv_file, args.output_folder)
+            print('[{}] Crispy {}'.format(dt.now().strftime('%Y-%m-%d %H:%M:%S'), sample))
 
     else:
-        print('[{}] Crispy: {}'.format(dt.now().strftime('%Y-%m-%d %H:%M:%S'), args.output_folder))
-
         iterate_correction(args.crispr_file, args.crispr_lib_file, args.cnv_file, args.output_folder, args.bsub)
-
         print('[{}] Crispy'.format(dt.now().strftime('%Y-%m-%d %H:%M:%S')))
 
 

@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # Copyright (C) 2018 Emanuel Goncalves
 
+import re
 import igraph
 import textwrap
 import numpy as np
@@ -70,6 +71,18 @@ def drug_target_distance(d, t):
 
 
 lm_df = lm_df.assign(target=[drug_target_distance(d, t) for d, t in lm_df[['DRUG_ID', 'GENES']].values])
+
+
+# - Export table
+g_info = pd.read_csv('data/resources/uniprot/uniprot-all.tab', sep='\t').dropna(subset=['Gene names', 'Function [CC]', 'Protein names'])
+g_info['Gene names'] = [set(i.split(' ')) for i in g_info['Gene names']]
+
+export_table = lm_df.query('lr_fdr < 0.05').sort_values('lr_fdr')
+export_table['Protein names'] = [' // '.join(g_info[g_info['Gene names'].apply(lambda x: g in x)]['Protein names']) for g in export_table['GENES']]
+export_table['Function'] = [' // '.join(g_info[g_info['Gene names'].apply(lambda x: g in x)]['Function [CC]']) for g in export_table['GENES']]
+export_table[
+    ['DRUG_ID', 'DRUG_NAME', 'VERSION', 'GENES', 'Protein names', 'Function', 'beta', 'r2', 'lr_fdr', 'target']
+].to_csv('data/drug/lm_drug_crispr_annotated.csv', index=False)
 
 
 # - Volcano

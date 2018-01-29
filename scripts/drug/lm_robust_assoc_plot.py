@@ -31,6 +31,9 @@ d_response.columns = d_response.columns.droplevel(0)
 mobems = pd.read_csv('data/gdsc/mobems/PANCAN_simple_MOBEM.rdata.annotated.csv', index_col=0)
 mobems.index.name = 'genomic'
 
+# MOBEMs ALL
+mobems_all = pd.read_csv('data/gdsc/mobems/PANCAN_simple_MOBEM.rdata.annotated.all.csv', index_col=0)
+
 
 # - Overlap
 samples = list(set(d_response).intersection(crispr).intersection(ss.index).intersection(growth.index).intersection(mobems))
@@ -78,7 +81,7 @@ for name in ['drug', 'crispr']:
 
 
 # - Plot
-i = 23
+i = 70
 
 drug_id, drug_name, drug_screen, crispr_gene, genomic = lm_robust.loc[i, ['drug_DRUG_ID', 'drug_DRUG_NAME', 'drug_VERSION', 'crispr_GENES', 'genomic']].values
 
@@ -122,3 +125,12 @@ plt.suptitle(genomic if z != 'msi' else 'MSI-H', y=1.05, fontsize=8)
 plt.gcf().set_size_inches(2, 2)
 plt.savefig('reports/drug/lmm_crispr_drug_genomic.png', bbox_inches='tight', dpi=600)
 plt.close('all')
+
+
+#
+samples_responding = list(set(plot_df.query("Microsatellite == 'MSI-H' & crispr < -2.5").index))
+samples_not_responding = list(set(plot_df.query("Microsatellite == 'MSI-H' & crispr > -2.5").index))
+
+(mobems[samples_responding].sum(1) - mobems[samples_not_responding].sum(1)).sort_values()
+
+mobems.loc['TP53_mut', plot_df.query("Microsatellite == 'MSI-H' & crispr < -2.5 & drug < 4").index]
