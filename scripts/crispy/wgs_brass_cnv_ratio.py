@@ -8,48 +8,59 @@ import matplotlib.pyplot as plt
 from crispy import bipal_dbgd
 from matplotlib.colors import rgb2hex
 from sklearn.metrics import roc_curve, auc
-from pyensembl import EnsemblRelease
 
 
 # - Import
-# Brass
+# Gene copy-number ratio
+cnv_ratios = pd.read_csv('data/crispy_copy_number_gene_ratio_wgs.csv', index_col=0).apply(np.log2)
+
+# Copy-number
+cnv = pd.read_csv('data/crispy_copy_number_gene_wgs.csv', index_col=0)
+
+# Ploidy
+ploidy = pd.read_csv('data/crispy_copy_number_ploidy_wgs.csv', index_col=0, names=['sample', 'ploidy'])['ploidy']
+
+# cnv_ratios = cnv.divide(ploidy).apply(np.log2)
+
+
+# -
+order = ['deletion', 'tandem-duplication', 'translocation', 'inversion']
+
+# Import
 brass_df = pd.read_csv('data/gdsc/wgs/wgs_brass_bedpe.csv')
 
-# Gene copy-number ratio
-cnv_ratios = pd.read_csv('data/crispy_copy_number_gene_ratio_snp.csv', index_col=0)
+# Parse sample
+brass_df['sample'] = brass_df['sample'].apply(lambda v: v.split(',')[0])
 
-# Pyensembl release 77: human reference genome GRCh37
-densembl = EnsemblRelease(75)
+# Filter
+brass_df = brass_df[brass_df['svclass'].isin(order)]
+
+brass_df = brass_df[brass_df['gene_id1'] == brass_df['gene_id2']]
+
+brass_df = brass_df.query("gene_id1 != '_'")
+
+brass_df = brass_df[brass_df['bkdist'] > 2500]
+
+brass_df = brass_df.groupby(['sample', 'gene_id1'])['svclass'].agg(lambda x: set(x)).to_dict()
+
+brass_df = {k: list(brass_df[k])[0] for k in brass_df if len(brass_df[k]) == 1}
+
+# -
+overlap = list({k[0] for k in brass_df}.intersection(cnv_ratios))
 
 
 # -
-sv_ratio = []
-for idx, row in brass_df.iterrows():
-    sample = row['sample'].split(',')[0]
-
-    if sample in cnv_ratios.columns:
-        genes1 = densembl.gene_names_at_locus(contig=row['chr1'], position=int(row['start1']), end=int(row['end1']))
-        genes2 = densembl.gene_names_at_locus(contig=row['chr2'], position=int(row['start2']), end=int(row['end2']))
-
-        for g in set(genes1).union(genes2).intersection(cnv_ratios.index):
-            sv_ratio.append({
-                'sample': sample, 'gene': g,
-                'svclass': row['svclass'], 'bkdist': row['bkdist'], 'assembly_score': row['assembly_score'],
-                'ratio': cnv_ratios.loc[g, sample],
-            })
-
-sv_ratio = pd.DataFrame(sv_ratio).dropna()
+sv_ratio = cnv_ratios[overlap].unstack().reset_index().dropna()
+sv_ratio = sv_ratio.rename(columns={'level_0': 'sample', 'level_1': 'gene', 0: 'ratio'})
+sv_ratio['svclass'] = [brass_df[(s, g)] if (s, g) in brass_df else '-' for s, g in sv_ratio[['sample', 'gene']].values]
 
 
 # -
-# plot_df = sv_ratio.query('bkdist > 2500')
+plot_df = sv_ratio[sv_ratio['ratio'].apply(np.isfinite)]
 
-order = ['deletion', 'inversion', 'translocation', 'tandem-duplication']
-
-#
 ax = plt.gca()
 for t, c in zip(order, map(rgb2hex, sns.light_palette(bipal_dbgd[0], len(order) + 1)[1:])):
-    fpr, tpr, _ = roc_curve((sv_ratio['svclass'] == t).astype(int), sv_ratio['ratio'])
+    fpr, tpr, _ = roc_curve((plot_df['svclass'] == t).astype(int), plot_df['ratio'])
     ax.plot(fpr, tpr, label='%s=%.2f (AUC)' % (t, auc(fpr, tpr)), lw=1., c=c)
 
 ax.plot((0, 1), (0, 1), 'k--', lw=.3, alpha=.5)

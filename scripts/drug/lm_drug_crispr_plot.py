@@ -47,7 +47,8 @@ d_targets = ds['Target Curated'].dropna().to_dict()
 d_targets = {k: {t.strip() for t in d_targets[k].split(';')} for k in d_targets}
 
 # Biogrid
-net_i = igraph.Graph.Read_Pickle('data/resources/igraph_string.pickle')
+# net_i = igraph.Graph.Read_Pickle('data/resources/igraph_string.pickle')
+net_i = igraph.Graph.Read_Pickle('data/resources/igraph_biogrid.pickle')
 net_i_genes = set(net_i.vs['name'])
 net_i_crispr = net_i_genes.intersection(set(lm_df['GENES']))
 
@@ -195,9 +196,8 @@ plot_df = plot_df.assign(thres=['Target' if i == 0 else ('%d' % i if i < 4 else 
 
 ax = plt.gca()
 for t, c in zip(*(['Target', '1', '2', '3', '>=4'], [bipal_dbgd[1]] + list(map(rgb2hex, sns.light_palette(bipal_dbgd[0], len(order) - 1, reverse=True))))):
-    if plot_df_.shape[0] > 0:
-        fpr, tpr, _ = roc_curve((plot_df['thres'] == t).astype(int), 1 - plot_df['lr_fdr'])
-        ax.plot(fpr, tpr, label='%s=%.2f (AUC)' % (t, auc(fpr, tpr)), lw=1., c=c)
+    fpr, tpr, _ = roc_curve((plot_df['thres'] == t).astype(int), 1 - plot_df['lr_fdr'])
+    ax.plot(fpr, tpr, label='%s=%.2f (AUC)' % (t, auc(fpr, tpr)), lw=1., c=c)
 
 ax.plot((0, 1), (0, 1), 'k--', lw=.3, alpha=.5)
 ax.set_xlim(0, 1)

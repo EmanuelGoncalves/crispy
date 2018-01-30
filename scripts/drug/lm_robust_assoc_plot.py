@@ -27,6 +27,19 @@ crispr = crispr.subtract(crispr.mean()).divide(crispr.std())
 d_response = pd.read_csv('data/gdsc/drug_single/drug_ic50_merged_matrix.csv', index_col=[0, 1, 2], header=[0, 1])
 d_response.columns = d_response.columns.droplevel(0)
 
+# Proteomics
+u_map = pd.read_csv('data/resources/uniprot/HUMAN_9606_idmapping.txt', sep='\t', names=['id', 'db', 'v']).query("db == 'Gene_Name'")
+
+u_map_counts = u_map['id'].value_counts()
+u_map = u_map[~u_map['id'].isin(u_map_counts[u_map_counts > 1].index)]
+
+u_map = u_map.groupby('id')['v'].first()
+
+proteomics = pd.read_csv('data/gdsc/proteomics/proteomics_coread_processed.csv', index_col=0)
+proteomics = proteomics[proteomics.index.isin(u_map.index)]
+proteomics = proteomics.rename(index=u_map)
+proteomics.columns = list(map(lambda x: x.split('_')[1], proteomics.columns))
+
 # MOBEMs
 mobems = pd.read_csv('data/gdsc/mobems/PANCAN_simple_MOBEM.rdata.annotated.csv', index_col=0)
 mobems.index.name = 'genomic'
@@ -134,3 +147,6 @@ samples_not_responding = list(set(plot_df.query("Microsatellite == 'MSI-H' & cri
 (mobems[samples_responding].sum(1) - mobems[samples_not_responding].sum(1)).sort_values()
 
 mobems.loc['TP53_mut', plot_df.query("Microsatellite == 'MSI-H' & crispr < -2.5 & drug < 4").index]
+
+proteomics.loc['TP53'].sort_values()
+plt.show()
