@@ -29,7 +29,7 @@ ss = pd.read_csv('data/gdsc/samplesheet.csv', index_col=0).dropna(subset=['Cance
 ds = pd.read_csv('data/gdsc/drug_samplesheet.csv', index_col=0)
 
 # Growth rate
-growth = pd.read_csv('data/gdsc/growth_rate.csv', index_col=0)
+growth = pd.read_csv('data/gdsc/growth/growth_rate.csv', index_col=0)
 
 
 # - Overlap
