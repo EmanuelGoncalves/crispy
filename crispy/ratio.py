@@ -14,6 +14,12 @@ GFF_FILE = 'data/gene_sets/gencode.gene.annotation.gff'
 GFF_HEADERS = ['chr', 'db', 'type', 'start', 'end', 'score', 'strand', 'frame', 'feature']
 
 
+def read_gff_dataframe(gff_file=None):
+    gff = BedTool(GFF_FILE if gff_file is None else gff_file).sort()
+    gff = gff.to_dataframe(names=GFF_HEADERS).set_index('feature')
+    return gff
+
+
 # TODO: Add Documentation
 def map_cn(bed_file, method='min,max,mean,median,collapse,count', cn_field_pos=4, null=np.nan):
     # - Imports

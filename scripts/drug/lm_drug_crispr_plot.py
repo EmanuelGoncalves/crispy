@@ -13,6 +13,7 @@ from matplotlib.colors import rgb2hex
 from matplotlib.gridspec import GridSpec
 from scipy.stats import pearsonr, uniform
 from sklearn.metrics import roc_curve, auc
+from scripts.drug.signed_interactions import ppi_omnipath
 
 
 # - Import
@@ -31,6 +32,9 @@ ss = pd.read_csv('data/gdsc/samplesheet.csv', index_col=0).dropna(subset=['Cance
 
 # Growth rate
 growth = pd.read_csv('data/gdsc/growth_rate.csv', index_col=0)
+
+# Omnipath signed interactions
+s_ppi = ppi_omnipath().set_index(['source', 'target'])
 
 
 # - Overlap
@@ -72,6 +76,23 @@ def drug_target_distance(d, t):
 
 
 lm_df = lm_df.assign(target=[drug_target_distance(d, t) for d, t in lm_df[['DRUG_ID', 'GENES']].values])
+
+
+# -
+print(pd.Series({
+    'genes': len(set(lm_df.query('lr_fdr < 0.05')['GENES'])),
+    'drugs': len(set(lm_df.query('lr_fdr < 0.05')['DRUG_NAME'])),
+    'targets': len(lm_df.query('lr_fdr < 0.05 & target == 0'))
+}))
+
+
+# -
+df = lm_df.query('lr_fdr < 0.05')
+df = df[df['DRUG_ID'].isin(d_targets)]
+
+did, cgene = df.loc[0, ['DRUG_ID', 'GENES']].values
+
+s_ppi.loc[[(t, cgene) for t in d_targets[1047]]]
 
 
 # - Export table
