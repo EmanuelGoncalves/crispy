@@ -1,9 +1,6 @@
 #!/usr/bin/env python
 # Copyright (C) 2018 Emanuel Goncalves
 
-import os
-import time
-import igraph
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -11,9 +8,9 @@ import scripts.drug as dc
 import matplotlib.pyplot as plt
 from crispy import bipal_dbgd
 from crispy.utils import qnorm
+from scipy.stats import uniform
 from matplotlib.colors import rgb2hex
 from crispy.regression.linear import lr
-from scipy.stats import pearsonr, uniform
 from sklearn.metrics import roc_curve, auc
 from sklearn.preprocessing import StandardScaler
 from statsmodels.stats.multitest import multipletests
@@ -21,7 +18,7 @@ from scripts.drug.assemble_ppi import import_ppi, BIOGRID_PICKLE
 
 
 def lm_drug_crispr(xs, ys, ws):
-    print('CRISPR genes: %d, Drug: %d' % (len(set(xs.index)), len(set(ys.index))))
+    print('CRISPR genes: %d, Drug: %d' % (len(set(xs.columns)), len(set(ys.columns))))
 
     # Standardize xs
     xs = pd.DataFrame(StandardScaler().fit_transform(xs), index=xs.index, columns=xs.columns)
@@ -200,9 +197,10 @@ if __name__ == '__main__':
         pd.get_dummies(ss[['Cancer Type']]),
         growth['growth_rate_median']
     ], axis=1).loc[samples]
+    covariates = covariates.loc[:, covariates.sum() != 0]
 
     # - Linear regression: drug ~ crispr + tissue
-    lm_res_df = lm_drug_crispr(crispr_qnorm[samples].T, d_response[samples].T, covariates[samples])
+    lm_res_df = lm_drug_crispr(crispr_qnorm[samples].T, d_response[samples].T, covariates.loc[samples])
 
     lm_res_df.sort_values('lr_fdr').to_csv('data/drug/lm_drug_crispr.csv', index=False)
     print(lm_res_df.query('lr_fdr < 0.05').sort_values('lr_fdr'))
@@ -225,7 +223,7 @@ if __name__ == '__main__':
     plot_volcano(lm_res_df)
 
     plt.gcf().set_size_inches(2., 4.)
-    plt.savefig('reports/drug/lmm_crispr_volcano.png', bbox_inches='tight', dpi=300)
+    plt.savefig('reports/drug/lmm_crispr_volcano.png', bbox_inches='tight', dpi=600)
     plt.close('all')
 
     # Barplot count number of significant associations

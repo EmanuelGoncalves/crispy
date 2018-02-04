@@ -21,6 +21,9 @@ CRISPR_GENE_FC_CORRECTED = 'data/gdsc/crispr/corrected_logFCs.tsv'
 # DRUG-RESPONSE
 DRUG_RESPONSE_FILE = 'data/gdsc/drug_single/drug_ic50_merged_matrix.csv'
 
+# GENOMIC
+MOBEM_FILE = 'data/gdsc/mobems/PANCAN_simple_MOBEM.rdata.annotated.csv'
+
 
 def crispr_genes(file=None, samples_thres=5, type_thres=3):
     file = CRISPR_GENES_FILE if file is None else file
@@ -41,6 +44,11 @@ def filter_drug_response(df, percentage_measurements=0.85, ic50_samples=5, iqr_t
 
     df = df.loc[[iqr(values, nan_policy='omit') > iqr_thres for idx, values in df.iterrows()]]
 
+    return df
+
+
+def filter_mobem(df, n_events=5):
+    df = df[df.sum(1) >= n_events]
     return df
 
 
