@@ -18,7 +18,7 @@ from scripts.drug.signed_interactions import ppi_omnipath
 
 # - Import
 # CRISPR
-crispr = pd.read_csv('data/gdsc/crispr/crisprcleanr_gene.csv', index_col=0).dropna()
+crispr = pd.read_csv('data/gdsc/crispr/corrected_logFCs.tsv', index_col=0, sep='\t').dropna()
 
 # Drug response
 d_response = pd.read_csv('data/gdsc/drug_single/drug_ic50_merged_matrix.csv', index_col=[0, 1, 2], header=[0, 1])
@@ -38,7 +38,7 @@ s_ppi = ppi_omnipath().set_index(['source', 'target'])
 
 
 # - Overlap
-samples = list(set(d_response).intersection(crispr).intersection(ss.index).intersection(growth.index))
+samples = list(set(d_response).intersection(crispr).intersection(growth.index))
 print('Samples: %d' % len(samples))
 
 
@@ -54,7 +54,7 @@ d_targets = {k: {t.strip() for t in d_targets[k].split(';')} for k in d_targets}
 # net_i = igraph.Graph.Read_Pickle('data/resources/igraph_string.pickle')
 net_i = igraph.Graph.Read_Pickle('data/resources/igraph_biogrid.pickle')
 net_i_genes = set(net_i.vs['name'])
-net_i_crispr = net_i_genes.intersection(set(lm_df['GENES']))
+net_i_crispr = net_i_genes.intersection(set(lm_df['Gene']))
 
 # Distance to drug target
 d_targets_dist = pd.DataFrame({
@@ -75,24 +75,15 @@ def drug_target_distance(d, t):
     return dst
 
 
-lm_df = lm_df.assign(target=[drug_target_distance(d, t) for d, t in lm_df[['DRUG_ID', 'GENES']].values])
+lm_df = lm_df.assign(target=[drug_target_distance(d, t) for d, t in lm_df[['DRUG_ID', 'Gene']].values])
 
 
 # -
 print(pd.Series({
-    'genes': len(set(lm_df.query('lr_fdr < 0.05')['GENES'])),
+    'genes': len(set(lm_df.query('lr_fdr < 0.05')['Gene'])),
     'drugs': len(set(lm_df.query('lr_fdr < 0.05')['DRUG_NAME'])),
     'targets': len(lm_df.query('lr_fdr < 0.05 & target == 0'))
 }))
-
-
-# -
-df = lm_df.query('lr_fdr < 0.05')
-df = df[df['DRUG_ID'].isin(d_targets)]
-
-did, cgene = df.loc[0, ['DRUG_ID', 'GENES']].values
-
-s_ppi.loc[[(t, cgene) for t in d_targets[1047]]]
 
 
 # - Export table
@@ -100,10 +91,10 @@ g_info = pd.read_csv('data/resources/uniprot/uniprot-all.tab', sep='\t').dropna(
 g_info['Gene names'] = [set(i.split(' ')) for i in g_info['Gene names']]
 
 export_table = lm_df.query('lr_fdr < 0.05').sort_values('lr_fdr')
-export_table['Protein names'] = [' // '.join(g_info[g_info['Gene names'].apply(lambda x: g in x)]['Protein names']) for g in export_table['GENES']]
-export_table['Function'] = [' // '.join(g_info[g_info['Gene names'].apply(lambda x: g in x)]['Function [CC]']) for g in export_table['GENES']]
+export_table['Protein names'] = [' // '.join(g_info[g_info['Gene names'].apply(lambda x: g in x)]['Protein names']) for g in export_table['Gene']]
+export_table['Function'] = [' // '.join(g_info[g_info['Gene names'].apply(lambda x: g in x)]['Function [CC]']) for g in export_table['Gene']]
 export_table[
-    ['DRUG_ID', 'DRUG_NAME', 'VERSION', 'GENES', 'Protein names', 'Function', 'beta', 'r2', 'lr_fdr', 'target']
+    ['DRUG_ID', 'DRUG_NAME', 'VERSION', 'Gene', 'Protein names', 'Function', 'beta', 'r2', 'lr_fdr', 'target']
 ].to_csv('data/drug/lm_drug_crispr_annotated.csv', index=False)
 
 
@@ -238,12 +229,12 @@ plt.close('all')
 order = lm_df.query('lr_fdr < 0.05').groupby(['DRUG_NAME'])['lr_fdr'].min().sort_values()
 
 plot_df = lm_df.query('lr_fdr < 0.05').copy().sort_values('lr_fdr')
-plot_df = plot_df.groupby(['DRUG_NAME', 'GENES']).first().reset_index().sort_values('lr_fdr')
+plot_df = plot_df.groupby(['DRUG_NAME', 'Gene']).first().reset_index().sort_values('lr_fdr')
 plot_df = plot_df.groupby('DRUG_NAME').head(10).set_index('DRUG_NAME')
 
 plot_df__, n_top, xpos = [], 10, 0
-for drug_name in order.iloc[10:20].index:
-    plot_df_ = plot_df.loc[drug_name]
+for drug_name in order.head(10).index:
+    plot_df_ = plot_df.loc[[drug_name]]
     plot_df_ = plot_df_.assign(y=-np.log10(plot_df_['lr_fdr']))
 
     plot_df_ = plot_df_.assign(xpos=np.arange(xpos, xpos + plot_df_.shape[0]))
@@ -268,7 +259,7 @@ plt.ylim(ymax=4)
 for k, v in plot_df.groupby('DRUG_NAME')['xpos'].mean().sort_values().to_dict().items():
     plt.text(v, 4 - .5, textwrap.fill(k, 15), ha='center', fontsize=6)
 
-plt.xticks(plot_df['xpos'], plot_df['GENES'], rotation=90, fontsize=5)
+plt.xticks(plot_df['xpos'], plot_df['Gene'], rotation=90, fontsize=5)
 
 plt.ylabel('Log-ratio FDR (-log10)')
 plt.title('Top significant Drug ~ CRISPR associations')
@@ -280,7 +271,7 @@ plt.close('all')
 
 # - Corrplot
 idx = 14
-d_id, d_name, d_screen, gene = lm_df.loc[idx, ['DRUG_ID', 'DRUG_NAME', 'VERSION', 'GENES']].values
+d_id, d_name, d_screen, gene = lm_df.loc[idx, ['DRUG_ID', 'DRUG_NAME', 'VERSION', 'Gene']].values
 
 # Build data-frame
 plot_df = pd.DataFrame({

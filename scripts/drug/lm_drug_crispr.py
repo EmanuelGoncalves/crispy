@@ -5,6 +5,7 @@ import time
 import numpy as np
 import pandas as pd
 from scipy.stats import iqr
+from crispy.utils import qnorm
 from crispy.regression.linear import lr
 from sklearn.preprocessing import StandardScaler
 from statsmodels.stats.multitest import multipletests
@@ -15,8 +16,8 @@ from statsmodels.stats.multitest import multipletests
 essential = list(pd.read_csv('data/resources/curated_BAGEL_essential.csv', sep='\t')['gene'])
 
 # CRISPR
-crispr = pd.read_csv('data/gdsc/crispr/crisprcleanr_gene.csv', index_col=0).dropna()
-crispr = crispr.subtract(crispr.mean()).divide(crispr.std())
+crispr = pd.read_csv('data/gdsc/crispr/corrected_logFCs.tsv', index_col=0, sep='\t').dropna()
+crispr = pd.DataFrame({c: qnorm(crispr[c].values) for c in crispr}, index=crispr.index)
 
 # Drug response
 d_response = pd.read_csv('data/gdsc/drug_single/drug_ic50_merged_matrix.csv', index_col=[0, 1, 2], header=[0, 1])
@@ -33,6 +34,10 @@ growth = pd.read_csv('data/gdsc/growth/growth_rate.csv', index_col=0)
 
 
 # - Overlap
+cgenes = pd.read_csv('data/gdsc/crispr/_00_Genes_for_panCancer_assocStudies.txt', sep='\t', index_col=0)
+cgenes = cgenes[cgenes.drop('n. vulnerable cell lines', axis=1).sum(1) <= 3]
+cgenes = cgenes[cgenes['n. vulnerable cell lines'] >= 5]
+
 samples = list(set(d_response).intersection(crispr).intersection(ss.index).intersection(growth.index))
 d_response, crispr = d_response[samples], crispr[samples]
 print('Samples: %d' % len(samples))
@@ -45,8 +50,7 @@ d_response = d_response.loc[(d_response < d_response.mean().mean()).sum(1) >= 5]
 d_response = d_response.loc[[iqr(values, nan_policy='omit') > 1 for idx, values in d_response.iterrows()]]
 
 # CRISPR
-crispr = crispr[(crispr < crispr.loc[essential].mean().mean()).sum(1) < (crispr.shape[1] * .5)]
-crispr = crispr[(crispr.abs() >= 2).sum(1) >= 5]
+crispr = crispr.reindex(cgenes.index).dropna()
 
 
 # - lmm: drug ~ crispr + tissue
@@ -54,7 +58,7 @@ print('CRISPR genes: %d, Drug: %d' % (len(set(crispr.index)), len(set(d_response
 
 # Build matricies
 xs, ys = crispr[samples].T, d_response[samples].T
-ws = pd.concat([pd.get_dummies(ss[['Cancer Type']]), growth['NC1_ratio_mean']], axis=1).loc[samples]
+ws = pd.concat([pd.get_dummies(ss[['Cancer Type']]), growth['growth_rate_median']], axis=1).loc[samples]
 
 # Standardize xs
 xs = pd.DataFrame(StandardScaler().fit_transform(xs), index=xs.index, columns=xs.columns)

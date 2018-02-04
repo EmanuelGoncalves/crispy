@@ -15,7 +15,7 @@ from crispy.ratio import BRASS_HEADERS, GFF_FILE, GFF_HEADERS
 from scripts.crispy.processing.correct_cnv_bias import assemble_matrix
 
 
-def import_brass_bedpe(bedpe_file, same_chr=True, bkdist=2500, splitreads=True):
+def import_brass_bedpe(bedpe_file, same_chr, bkdist, splitreads):
     # Import BRASS bedpe
     bedpe_df = pd.read_csv(bedpe_file, sep='\t', names=BRASS_HEADERS, comment='#')
 
@@ -54,13 +54,13 @@ def annotate_bed(bed_file, methods='collapse,count'):
     return genes_sv
 
 
-def annotate_brass_bedpe(bedpe_dir):
+def annotate_brass_bedpe(bedpe_dir, same_chr=True, bkdist=2500, splitreads=True):
     bed_dfs = []
     for bedpe_file in map(lambda f: '{}/{}'.format(bedpe_dir, f), filter(lambda f: f.endswith('.brass.annot.bedpe'), os.listdir(bedpe_dir))):
         print('[INFO] {}'.format(bedpe_file))
 
         # Import and filter bedpe
-        bed_df = import_brass_bedpe(bedpe_file)
+        bed_df = import_brass_bedpe(bedpe_file, same_chr, bkdist, splitreads)
 
         if bed_df.shape[0] > 0:
             bed_file = '{}/{}.bed'.format(bedpe_dir, os.path.splitext(os.path.basename(bedpe_file))[0])
@@ -154,7 +154,7 @@ if __name__ == '__main__':
     bedpe_dir = 'data/gdsc/wgs/brass_bedpe'
 
     # Annotate BRASS bedpes
-    bed_dfs = annotate_brass_bedpe(bedpe_dir)
+    bed_dfs = annotate_brass_bedpe(bedpe_dir, splitreads=False)
     bed_dfs.to_csv('{}/{}'.format(os.path.dirname(bedpe_dir), 'brass.genes.gff.tab'), index=False, sep='\t')
 
     # - Append information of copy-number ratio

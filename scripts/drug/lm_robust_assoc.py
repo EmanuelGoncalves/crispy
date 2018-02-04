@@ -2,6 +2,7 @@
 # Copyright (C) 2018 Emanuel Goncalves
 
 import pandas as pd
+from crispy.utils import qnorm
 from crispy.regression.linear import lr
 from statsmodels.stats.multitest import multipletests
 
@@ -17,8 +18,8 @@ ss = pd.read_csv('data/gdsc/samplesheet.csv', index_col=0).dropna(subset=['Cance
 growth = pd.read_csv('data/gdsc/growth_rate.csv', index_col=0)
 
 # CRISPR
-crispr = pd.read_csv('data/gdsc/crispr/crisprcleanr_gene.csv', index_col=0).dropna()
-crispr = crispr.subtract(crispr.mean()).divide(crispr.std())
+crispr = pd.read_csv('data/gdsc/crispr/corrected_logFCs.tsv', index_col=0, sep='\t').dropna()
+crispr = pd.DataFrame({c: qnorm(crispr[c].values) for c in crispr}, index=crispr.index)
 
 # Drug response
 d_response = pd.read_csv('data/gdsc/drug_single/drug_ic50_merged_matrix.csv', index_col=[0, 1, 2], header=[0, 1])
