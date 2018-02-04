@@ -23,22 +23,6 @@ def multilabel_roc_auc_score(y_true, y_pred, data, min_events=1, invert=-1):
 
 
 def qnorm(x):
-    """ Quantile normalisation function imported from limix scipy-sugar:
-    https://github.com/limix/scipy-sugar
-    """
-
-    x = np.asarray(x, float).copy()
-
-    ok = np.isfinite(x)
-
-    x[ok] *= -1
-
-    y = np.empty_like(x)
-
-    y[ok] = st.rankdata(x[ok])
-
-    y[ok] = st.norm.isf(y[ok] / (sum(ok) + 1))
-
-    y[~ok] = x[~ok]
-
+    y = st.rankdata(x)
+    y = -st.norm.isf(y / (len(x) + 1))
     return y

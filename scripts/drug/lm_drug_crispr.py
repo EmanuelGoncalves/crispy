@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # Copyright (C) 2018 Emanuel Goncalves
 
+import os
 import time
 import numpy as np
 import pandas as pd
@@ -11,76 +12,83 @@ from sklearn.preprocessing import StandardScaler
 from statsmodels.stats.multitest import multipletests
 
 
-# - Imports
-# Essential genes
-essential = list(pd.read_csv('data/resources/curated_BAGEL_essential.csv', sep='\t')['gene'])
-
-# CRISPR
-crispr = pd.read_csv('data/gdsc/crispr/corrected_logFCs.tsv', index_col=0, sep='\t').dropna()
-crispr = pd.DataFrame({c: qnorm(crispr[c].values) for c in crispr}, index=crispr.index)
-
-# Drug response
-d_response = pd.read_csv('data/gdsc/drug_single/drug_ic50_merged_matrix.csv', index_col=[0, 1, 2], header=[0, 1])
-d_response.columns = d_response.columns.droplevel(0)
-
-# Samplesheet
-ss = pd.read_csv('data/gdsc/samplesheet.csv', index_col=0).dropna(subset=['Cancer Type'])
-
-# Drug samplesheet
-ds = pd.read_csv('data/gdsc/drug_samplesheet.csv', index_col=0)
-
-# Growth rate
-growth = pd.read_csv('data/gdsc/growth/growth_rate.csv', index_col=0)
+CRISPR_GENES_FILE = 'data/gdsc/crispr/_00_Genes_for_panCancer_assocStudies.txt'
 
 
-# - Overlap
-cgenes = pd.read_csv('data/gdsc/crispr/_00_Genes_for_panCancer_assocStudies.txt', sep='\t', index_col=0)
-cgenes = cgenes[cgenes.drop('n. vulnerable cell lines', axis=1).sum(1) <= 3]
-cgenes = cgenes[cgenes['n. vulnerable cell lines'] >= 5]
+def crispr_genes(file=None, samples_thres=5, type_thres=3):
+    file = CRISPR_GENES_FILE if file is None else file
 
-samples = list(set(d_response).intersection(crispr).intersection(ss.index).intersection(growth.index))
-d_response, crispr = d_response[samples], crispr[samples]
-print('Samples: %d' % len(samples))
+    c_genes = pd.read_csv(file, sep='\t', index_col=0)
 
+    c_genes = c_genes[c_genes.drop('n. vulnerable cell lines', axis=1).sum(1) <= type_thres]
 
-# - Filter
-# Drug response
-d_response = d_response[d_response.count(1) > d_response.shape[1] * .85]
-d_response = d_response.loc[(d_response < d_response.mean().mean()).sum(1) >= 5]
-d_response = d_response.loc[[iqr(values, nan_policy='omit') > 1 for idx, values in d_response.iterrows()]]
+    c_genes = c_genes[c_genes['n. vulnerable cell lines'] >= samples_thres]
 
-# CRISPR
-crispr = crispr.reindex(cgenes.index).dropna()
+    return set(c_genes.index)
 
 
-# - lmm: drug ~ crispr + tissue
-print('CRISPR genes: %d, Drug: %d' % (len(set(crispr.index)), len(set(d_response.index))))
+def filter_drug_response(df, percentage_measurements=0.85, ic50_samples=5, iqr_thres=1):
+    df = df[df.count(1) > df.shape[1] * percentage_measurements]
 
-# Build matricies
-xs, ys = crispr[samples].T, d_response[samples].T
-ws = pd.concat([pd.get_dummies(ss[['Cancer Type']]), growth['growth_rate_median']], axis=1).loc[samples]
+    df = df.loc[(df < df.mean().mean()).sum(1) >= ic50_samples]
 
-# Standardize xs
-xs = pd.DataFrame(StandardScaler().fit_transform(xs), index=xs.index, columns=xs.columns)
+    df = df.loc[[iqr(values, nan_policy='omit') > iqr_thres for idx, values in df.iterrows()]]
 
-# Linear regression
-time_start = time.time()
-
-lm_res = lr(xs, ys, ws)
-
-time_elapsed = time.time() - time_start
-
-time_per_run = time_elapsed / (xs.shape[1] * ys.shape[1])
-
-print('Total run time: %.5f; Time per run: %.5f' % (time_elapsed, time_per_run))
-print('Total run time (0.5M tests): %.2f mins' % (time_per_run * 5e5 / 60))
+    return df
 
 
-# - Export results
-lm_res_df = pd.concat([lm_res[i].unstack().rename(i) for i in lm_res], axis=1).reset_index()
+def lm_drug_crispr(xs, ys, ws):
+    print('CRISPR genes: %d, Drug: %d' % (len(set(xs.index)), len(set(ys.index))))
 
-lm_res_df = lm_res_df.assign(f_fdr=multipletests(lm_res_df['f_pval'], method='fdr_bh')[1])
-lm_res_df = lm_res_df.assign(lr_fdr=multipletests(lm_res_df['lr_pval'], method='fdr_bh')[1])
+    # Standardize xs
+    xs = pd.DataFrame(StandardScaler().fit_transform(xs), index=xs.index, columns=xs.columns)
 
-lm_res_df.sort_values('lr_fdr').to_csv('data/drug/lm_drug_crispr.csv', index=False)
-print(lm_res_df.sort_values('lr_fdr'))
+    # Regression
+    res = lr(xs, ys, ws)
+
+    # - Export results
+    res_df = pd.concat([res[i].unstack().rename(i) for i in res], axis=1).reset_index()
+
+    res_df = res_df.assign(f_fdr=multipletests(res_df['f_pval'], method='fdr_bh')[1])
+    res_df = res_df.assign(lr_fdr=multipletests(res_df['lr_pval'], method='fdr_bh')[1])
+
+    return lm_res_df
+
+
+if __name__ == '__main__':
+    # - Imports
+    # Samplesheet
+    ss = pd.read_csv('data/gdsc/samplesheet.csv', index_col=0).dropna(subset=['Cancer Type'])
+
+    # Growth rate
+    growth = pd.read_csv('data/gdsc/growth/growth_rate.csv', index_col=0)
+
+    # CRISPR gene-level corrected fold-changes
+    crispr = pd.read_csv('data/gdsc/crispr/corrected_logFCs.tsv', index_col=0, sep='\t').dropna()
+
+    # Drug response
+    d_response = pd.read_csv('data/gdsc/drug_single/drug_ic50_merged_matrix.csv', index_col=[0, 1, 2], header=[0, 1])
+    d_response.columns = d_response.columns.droplevel(0)
+
+    # - Overlap
+    samples = list(set(d_response).intersection(crispr).intersection(ss.index).intersection(growth.index))
+    d_response, crispr = d_response[samples], crispr[samples]
+    print('Samples: %d' % len(samples))
+
+    # - Transform and filter
+    d_response = filter_drug_response(d_response)
+
+    crispr_qnorm = pd.DataFrame({c: qnorm(crispr[c]) for c in crispr}, index=crispr.index)
+    crispr_qnorm = crispr_qnorm.reindex(crispr_genes()).dropna()
+
+    # - Covariates
+    ws = pd.concat([
+        pd.get_dummies(ss[['Cancer Type']]),
+        growth['growth_rate_median']
+    ], axis=1).loc[samples]
+
+    # - Linear regression: drug ~ crispr + tissue
+    lm_res_df = lm_drug_crispr(crispr_qnorm[samples].T, d_response[samples].T, ws[samples])
+
+    lm_res_df.sort_values('lr_fdr').to_csv('data/drug/lm_drug_crispr.csv', index=False)
+    print(lm_res_df.query('lr_fdr < 0.05').sort_values('lr_fdr'))
