@@ -6,8 +6,10 @@ import pandas as pd
 import seaborn as sns
 import scripts.drug as dc
 import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
 from crispy import bipal_dbgd
 from crispy.utils import qnorm
+from scipy.stats import pearsonr
 from crispy.regression.linear import lr
 from statsmodels.stats.multitest import multipletests
 
@@ -79,6 +81,44 @@ def plot_volcano(lm_res):
         plt.close('all')
 
 
+def marginal_boxplot(a, xs=None, ys=None, zs=None, vertical=False, **kws):
+    ax = sns.boxplot(x=zs, y=ys, orient='v', **kws) if vertical else sns.boxplot(x=xs, y=zs, orient='h', **kws)
+    ax.set_ylabel('')
+    ax.set_xlabel('')
+
+
+def plot_corr_discrete(x, y, z):
+    scatter_kws = {'s': 20, 'edgecolor': 'w', 'linewidth': .5, 'alpha': .8}
+
+    plot_df = pd.concat([x, y, z], axis=1)
+
+    g = sns.JointGrid(x.name, y.name, plot_df, space=0, ratio=8)
+
+    g.plot_marginals(
+        marginal_boxplot, palette=bipal_dbgd, data=plot_df, linewidth=.3, fliersize=1, notch=False, saturation=1.0,
+        xs=x.name, ys=y.name, zs=z.name
+    )
+
+    sns.regplot(
+        x=x.name, y=y.name, data=plot_df, color=bipal_dbgd[0], truncate=True, fit_reg=True, scatter_kws=scatter_kws, line_kws={'linewidth': .5}, ax=g.ax_joint
+    )
+    sns.regplot(
+        x=x.name, y=y.name, data=plot_df[plot_df[z.name] == 1], color=bipal_dbgd[1], truncate=True, fit_reg=False, scatter_kws=scatter_kws, ax=g.ax_joint
+    )
+
+    g.annotate(pearsonr, template='Pearson={val:.2g}, p={p:.1e}', loc=4)
+
+    g.ax_joint.axhline(0, ls='-', lw=0.3, c='black', alpha=.2)
+    g.ax_joint.axvline(0, ls='-', lw=0.3, c='black', alpha=.2)
+
+    g.set_axis_labels('{} (log10 FC)'.format(x.name), '{} (ln IC50)'.format(y.name))
+
+    handles = [mpatches.Circle([.0, .0], .25, facecolor=c, label='Yes' if t else 'No') for t, c in bipal_dbgd.items()]
+    g.ax_marg_y.legend(handles=handles, title='', loc='center left', bbox_to_anchor=(1, 0.5))
+
+    plt.suptitle(z.name, y=1.05, fontsize=8)
+
+
 if __name__ == '__main__':
     # - Imports
     # Crispr ~ Drug associations
@@ -128,7 +168,21 @@ if __name__ == '__main__':
 
     lm_res_df.sort_values('crispr_lr_fdr').to_csv('data/drug/lm_drug_crispr_genomic.csv', index=False)
     print(lm_res_df.query('crispr_lr_fdr < 0.05').sort_values('crispr_lr_fdr'))
+    # lm_res_df = pd.read_csv('data/drug/lm_drug_crispr_genomic.csv')
 
     # - Plot
     # Volcanos
     plot_volcano(lm_res_df)
+
+    # Corr plot
+    idx = 0
+    d_id, d_name, d_screen, gene, genomic = lm_res_df.loc[idx, ['drug_DRUG_ID', 'drug_DRUG_NAME', 'drug_VERSION', 'crispr_Gene', 'genomic']].values
+
+    plot_corr_discrete(
+        x=crispr.loc[gene].rename('{} CRISPR'.format(gene)),
+        y=d_response.loc[(d_id, d_name, d_screen)].rename('{} {} Drug'.format(d_name, d_screen)),
+        z=mobems.loc[genomic].rename(genomic)
+    )
+    plt.gcf().set_size_inches(2, 2)
+    plt.savefig('reports/drug/lm_crispr_drug_genomic.png', bbox_inches='tight', dpi=600)
+    plt.close('all')

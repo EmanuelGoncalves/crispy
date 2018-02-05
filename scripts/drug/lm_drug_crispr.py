@@ -229,7 +229,7 @@ def drug_interaction_signed_ppi(ppi, drug_targets):
 
         for target in d_targets[drug].intersection(ppi.vs['name']):
 
-            for edge in ppi.es[ppi.incident(target, mode='out')]:
+            for edge in ppi.es[ppi.incident(target, mode='all')]:
 
                 for edge_id, edge_name in zip(*([edge.source, edge.target], ppi.vs[[edge.source, edge.target]]['name'])):
 
@@ -300,7 +300,7 @@ if __name__ == '__main__':
     plot_volcano(lm_res_df)
 
     plt.gcf().set_size_inches(2., 4.)
-    plt.savefig('reports/drug/lmm_crispr_volcano.png', bbox_inches='tight', dpi=600)
+    plt.savefig('reports/drug/lm_crispr_volcano.png', bbox_inches='tight', dpi=600)
     plt.close('all')
 
     # Barplot count number of significant associations
@@ -361,7 +361,7 @@ if __name__ == '__main__':
 
     d_interactions = drug_interaction_signed_ppi(omnipath, d_targets)
 
-    fdr_thres = 0.10
+    fdr_thres = .25
 
     plot_df = lm_res_df[lm_res_df['lr_fdr'] < fdr_thres]
     plot_df = plot_df.assign(interaction=[
