@@ -182,7 +182,7 @@ def plot_corrplot(x, y):
     g.set_axis_labels('{} (log10 FC)'.format(x.name), '{} (ln IC50)'.format(y.name))
 
 
-def plot_drug_associations_barplot(plot_df, order, ppi_text_offset=0.075, drug_name_offset=1., ylim_offset=1.1):
+def plot_drug_associations_barplot(plot_df, order, ppi_text_offset=0.075, drug_name_offset=1., ylim_offset=1.1, fdr_line=0.05):
     # Group Drug ~ Gene associations
     df = plot_df.groupby(['DRUG_NAME', 'Gene']).first().reset_index().sort_values('lr_fdr')
 
@@ -201,20 +201,24 @@ def plot_drug_associations_barplot(plot_df, order, ppi_text_offset=0.075, drug_n
 
     df = pd.concat(df__).reset_index()
 
+    # Significant line
+    if fdr_line is not None:
+        plt.axhline(-np.log10(0.05), ls='--', lw=.1, c=bipal_dbgd[0], alpha=.3, zorder=0)
+
     # Barplot
-    plt.bar(df.query('target != 0')['xpos'], df.query('target != 0')['y'], .8, color=bipal_dbgd[0], align='center')
-    plt.bar(df.query('target == 0')['xpos'], df.query('target == 0')['y'], .8, color=bipal_dbgd[1], align='center')
+    plt.bar(df.query('target != 0')['xpos'], df.query('target != 0')['y'], .8, color=bipal_dbgd[0], align='center', zorder=5)
+    plt.bar(df.query('target == 0')['xpos'], df.query('target == 0')['y'], .8, color=bipal_dbgd[1], align='center', zorder=5)
 
     # Distance to target text
     for x, y, t in df[['xpos', 'y', 'target']].values:
         l = '-' if np.isnan(t) or np.isposinf(t) else ('T' if t == 0 else str(int(t)))
-        plt.text(x, y - (df['y'].max() * ppi_text_offset), l, color='white', ha='center', fontsize=6)
+        plt.text(x, y - (df['y'].max() * ppi_text_offset), l, color='white', ha='center', fontsize=6, zorder=10)
 
     plt.ylim(ymax=df['y'].max() * ylim_offset)
 
     # Name drugs
     for k, v in df.groupby('DRUG_NAME')['xpos'].mean().sort_values().to_dict().items():
-        plt.text(v, df['y'].max() * drug_name_offset, textwrap.fill(k, 15), ha='center', fontsize=6)
+        plt.text(v, df['y'].max() * drug_name_offset, textwrap.fill(k, 15), ha='center', fontsize=6, zorder=10)
 
     plt.xticks(df['xpos'], df['Gene'], rotation=90, fontsize=5)
     plt.ylabel('Log-ratio FDR (-log10)')
@@ -237,6 +241,26 @@ def drug_interaction_signed_ppi(ppi, drug_targets):
                         d_interactions[drug][edge_name] = ppi.es[edge_id]['interaction']
 
     return d_interactions
+
+
+def plot_count_associations(lm_res, fdr_thres=0.05, min_nevents=5):
+    df = lm_res[lm_res_df['lr_fdr'] < fdr_thres]
+
+    df = df.groupby('DRUG_NAME')['lr_fdr'].count().sort_values(ascending=False).reset_index()
+
+    df.columns = ['drug', 'counts']
+
+    if min_nevents is not None:
+        df = df[df['counts'] >= min_nevents]
+
+    ax = sns.barplot('drug', 'counts', data=df, color=bipal_dbgd[0], linewidth=.8)
+
+    for item in ax.get_xticklabels():
+        item.set_rotation(90)
+
+    plt.xlabel('')
+    plt.ylabel('# associations')
+    plt.title('Drug number of significant associations (FDR<{}%)'.format(int(fdr_thres * 100)))
 
 
 if __name__ == '__main__':
@@ -331,18 +355,6 @@ if __name__ == '__main__':
     plt.savefig('reports/drug/ppi_signif_roc.png', bbox_inches='tight', dpi=600)
     plt.close('all')
 
-    # Plot Drug ~ CRISPR corrplot
-    idx = 0
-    d_id, d_name, d_screen, gene = lm_res_df.loc[idx, ['DRUG_ID', 'DRUG_NAME', 'VERSION', 'Gene']].values
-
-    plot_corrplot(
-        crispr.loc[gene].rename('{} CRISPR'.format(gene)), d_response.loc[(d_id, d_name, d_screen)].rename('{} {} Drug'.format(d_name, d_screen))
-    )
-
-    plt.gcf().set_size_inches(3., 3.)
-    plt.savefig('reports/drug/crispr_drug_corrplot.png', bbox_inches='tight', dpi=600)
-    plt.close('all')
-
     # Drug associations barplot
     fdr_thres = 0.05
 
@@ -356,7 +368,26 @@ if __name__ == '__main__':
     plt.savefig('reports/drug/drug_associations_barplot.png', bbox_inches='tight', dpi=600)
     plt.close('all')
 
-    # -
+    # Number of significant associations per drug
+    plot_count_associations(lm_res_df, fdr_thres)
+
+    plt.gcf().set_size_inches(7, 3)
+    plt.savefig('reports/drug/drug_associations_count.png', bbox_inches='tight', dpi=600)
+    plt.close('all')
+
+    # Plot Drug ~ CRISPR corrplot
+    idx = 0
+    d_id, d_name, d_screen, gene = lm_res_df.loc[idx, ['DRUG_ID', 'DRUG_NAME', 'VERSION', 'Gene']].values
+
+    plot_corrplot(
+        crispr.loc[gene].rename('{} CRISPR'.format(gene)), d_response.loc[(d_id, d_name, d_screen)].rename('{} {} Drug'.format(d_name, d_screen))
+    )
+
+    plt.gcf().set_size_inches(3., 3.)
+    plt.savefig('reports/drug/crispr_drug_corrplot.png', bbox_inches='tight', dpi=600)
+    plt.close('all')
+
+    # - Signed inteactions
     omnipath = build_omnipath_ppi()
 
     d_interactions = drug_interaction_signed_ppi(omnipath, d_targets)

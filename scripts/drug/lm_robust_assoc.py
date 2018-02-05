@@ -12,6 +12,7 @@ from crispy.utils import qnorm
 from scipy.stats import pearsonr
 from crispy.regression.linear import lr
 from statsmodels.stats.multitest import multipletests
+from scripts.drug.lm_drug_crispr import plot_corrplot, plot_drug_associations_barplot
 
 
 def lm_drugcrispr_mobem(xs, ys_1, ys_2, ws, pairs):
@@ -174,9 +175,30 @@ if __name__ == '__main__':
     # Volcanos
     plot_volcano(lm_res_df)
 
+    # Plot Drug barplot
+    plot_drug_associations_barplot(lm_df[lm_df['lr_fdr'] < 0.15], ['Linsitinib'])
+    plt.title('Top significant associations')
+    plt.gcf().set_size_inches(2, 1.5)
+    plt.savefig('reports/drug/drug_associations_barplot_single.png', bbox_inches='tight', dpi=600)
+    plt.close('all')
+
     # Corr plot
+    idx = 2332
+    d_id, d_name, d_screen, gene = lm_df.loc[idx, ['DRUG_ID', 'DRUG_NAME', 'VERSION', 'Gene']].values
+    d_id, d_name, d_screen, gene = 1510, 'Linsitinib', 'RS', 'FURIN'
+
+    plot_corrplot(
+        crispr.loc[gene].rename('{} CRISPR'.format(gene)), d_response.loc[(d_id, d_name, d_screen)].rename('{} {} Drug'.format(d_name, d_screen))
+    )
+
+    plt.gcf().set_size_inches(2., 2.)
+    plt.savefig('reports/drug/crispr_drug_corrplot.png', bbox_inches='tight', dpi=600)
+    plt.close('all')
+
+    # Corr plot discrete
     idx = 0
     d_id, d_name, d_screen, gene, genomic = lm_res_df.loc[idx, ['drug_DRUG_ID', 'drug_DRUG_NAME', 'drug_VERSION', 'crispr_Gene', 'genomic']].values
+    d_id, d_name, d_screen, gene, genomic = 1560, 'Alpelisib', 'RS', 'FOXA1', 'gain:cnaPANCAN301 (CDK12,ERBB2,MED24)'
 
     plot_corr_discrete(
         x=crispr.loc[gene].rename('{} CRISPR'.format(gene)),
@@ -184,5 +206,5 @@ if __name__ == '__main__':
         z=mobems.loc[genomic].rename(genomic)
     )
     plt.gcf().set_size_inches(2, 2)
-    plt.savefig('reports/drug/lm_crispr_drug_genomic.png', bbox_inches='tight', dpi=600)
+    plt.savefig('reports/drug/crispr_drug_genomic_corrplot.png', bbox_inches='tight', dpi=600)
     plt.close('all')
