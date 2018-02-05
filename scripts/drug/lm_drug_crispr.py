@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # Copyright (C) 2018 Emanuel Goncalves
 
+import textwrap
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -14,7 +15,7 @@ from crispy.regression.linear import lr
 from sklearn.metrics import roc_curve, auc
 from sklearn.preprocessing import StandardScaler
 from statsmodels.stats.multitest import multipletests
-from scripts.drug.assemble_ppi import import_ppi, BIOGRID_PICKLE
+from scripts.drug.assemble_ppi import import_ppi, build_omnipath_ppi, BIOGRID_PICKLE
 
 
 def lm_drug_crispr(xs, ys, ws):
@@ -48,6 +49,7 @@ def dist_drugtarget_genes(drug_targets, genes, ppi):
             dmatrix[drug] = dict(zip(*(genes, np.min(ppi.shortest_paths(source=drug_genes, target=genes), axis=0))))
 
     return dmatrix
+
 
 
 def plot_volcano(lm_res_df):
@@ -180,8 +182,68 @@ def plot_corrplot(x, y):
     g.set_axis_labels('{} (log10 FC)'.format(x.name), '{} (ln IC50)'.format(y.name))
 
 
+def plot_drug_associations_barplot(plot_df, order, ppi_text_offset=0.075, drug_name_offset=1., ylim_offset=1.1):
+    # Group Drug ~ Gene associations
+    df = plot_df.groupby(['DRUG_NAME', 'Gene']).first().reset_index().sort_values('lr_fdr')
+
+    # Pick top 10 associations for each drug
+    df = df.groupby('DRUG_NAME').head(10).set_index('DRUG_NAME')
+
+    df__, xpos = [], 0
+    for drug_name in order:
+        df_ = df.loc[[drug_name]]
+        df_ = df_.assign(y=-np.log10(df_['lr_fdr']))
+
+        df_ = df_.assign(xpos=np.arange(xpos, xpos + df_.shape[0]))
+        xpos += (df_.shape[0] + 2)
+
+        df__.append(df_)
+
+    df = pd.concat(df__).reset_index()
+
+    # Barplot
+    plt.bar(df.query('target != 0')['xpos'], df.query('target != 0')['y'], .8, color=bipal_dbgd[0], align='center')
+    plt.bar(df.query('target == 0')['xpos'], df.query('target == 0')['y'], .8, color=bipal_dbgd[1], align='center')
+
+    # Distance to target text
+    for x, y, t in df[['xpos', 'y', 'target']].values:
+        l = '-' if np.isnan(t) or np.isposinf(t) else ('T' if t == 0 else str(int(t)))
+        plt.text(x, y - (df['y'].max() * ppi_text_offset), l, color='white', ha='center', fontsize=6)
+
+    plt.ylim(ymax=df['y'].max() * ylim_offset)
+
+    # Name drugs
+    for k, v in df.groupby('DRUG_NAME')['xpos'].mean().sort_values().to_dict().items():
+        plt.text(v, df['y'].max() * drug_name_offset, textwrap.fill(k, 15), ha='center', fontsize=6)
+
+    plt.xticks(df['xpos'], df['Gene'], rotation=90, fontsize=5)
+    plt.ylabel('Log-ratio FDR (-log10)')
+    plt.title('Top significant Drug ~ CRISPR associations')
+
+
+def drug_interaction_signed_ppi(ppi, drug_targets):
+    d_interactions = {}
+
+    for drug in drug_targets:
+        d_interactions[drug] = {}
+
+        for target in d_targets[drug].intersection(ppi.vs['name']):
+
+            for edge in ppi.es[ppi.incident(target, mode='out')]:
+
+                for edge_id, edge_name in zip(*([edge.source, edge.target], ppi.vs[[edge.source, edge.target]]['name'])):
+
+                    if edge_name != target:
+                        d_interactions[drug][edge_name] = ppi.es[edge_id]['interaction']
+
+    return d_interactions
+
+
 if __name__ == '__main__':
     # - Imports
+    # Drug target
+    d_targets = dc.drug_targets()
+
     # Samplesheet
     ss = pd.read_csv(dc.SAMPLESHEET_FILE, index_col=0).dropna(subset=['Cancer Type'])
 
@@ -217,7 +279,7 @@ if __name__ == '__main__':
     lm_res_df = lm_drug_crispr(crispr_qnorm[samples].T, d_response[samples].T, covariates.loc[samples])
 
     # - PPI annotation
-    ppi, d_targets = import_ppi(BIOGRID_PICKLE), dc.drug_targets()
+    ppi = import_ppi(BIOGRID_PICKLE)
 
     # Calculate distance between drugs and CRISPR genes in PPI
     d_drug_genes = dist_drugtarget_genes(d_targets, set(lm_res_df['Gene']), ppi)
@@ -230,7 +292,7 @@ if __name__ == '__main__':
     )
 
     lm_res_df.sort_values('lr_fdr').to_csv('data/drug/lm_drug_crispr.csv', index=False)
-    print(lm_res_df.query('lr_fdr < 0.05').head(60).sort_values('lr_fdr'))
+    print(lm_res_df.query('lr_fdr < 0.05').sort_values('lr_fdr').head(60))
     # lm_res_df = pd.read_csv('data/drug/lm_drug_crispr.csv')
 
     # - Plot
@@ -281,6 +343,28 @@ if __name__ == '__main__':
     plt.savefig('reports/drug/crispr_drug_corrplot.png', bbox_inches='tight', dpi=600)
     plt.close('all')
 
+    # Drug associations barplot
+    fdr_thres = 0.05
 
+    plot_df = lm_res_df[lm_res_df['lr_fdr'] < fdr_thres]
 
+    drug_list = list(plot_df.groupby('DRUG_NAME')['lr_fdr'].min().sort_values().head(10).index)
 
+    plot_drug_associations_barplot(plot_df, drug_list)
+
+    plt.gcf().set_size_inches(8, 1.5)
+    plt.savefig('reports/drug/drug_associations_barplot.png', bbox_inches='tight', dpi=600)
+    plt.close('all')
+
+    # -
+    omnipath = build_omnipath_ppi()
+
+    d_interactions = drug_interaction_signed_ppi(omnipath, d_targets)
+
+    fdr_thres = 0.10
+
+    plot_df = lm_res_df[lm_res_df['lr_fdr'] < fdr_thres]
+    plot_df = plot_df.assign(interaction=[
+        d_interactions[d][g] if d in d_interactions and g in d_interactions[d] else np.nan for d, g in plot_df[['DRUG_ID', 'Gene']].values
+    ])
+    plot_df = plot_df.dropna(subset=['interaction'])

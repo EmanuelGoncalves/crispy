@@ -12,9 +12,41 @@ STRING_PICKLE = 'data/igraph_string.pickle'
 BIOGRID_FILE = 'data/resources/biogrid/BIOGRID-ALL-3.4.145.tab2.txt'
 BIOGRID_PICKLE = 'data/igraph_biogrid.pickle'
 
+OMNIPATH_FILE = 'data/resources/omnipath/omnipathdb.org.txt'
+
 
 def import_ppi(ppi_pickle):
     return igraph.Graph.Read_Pickle(ppi_pickle)
+
+
+def build_omnipath_ppi(is_directed=True, is_signed=True):
+    df = pd.read_csv(OMNIPATH_FILE, sep='\t')
+
+    if is_directed:
+        df = df.query('is_directed == 1')
+
+    if is_signed:
+        df = df[df[['is_stimulation', 'is_inhibition']].sum(1) == 1]
+
+    # igraph network
+    net_i = igraph.Graph(directed=is_directed)
+
+    # Initialise network lists
+    edges = [(px, py) for px, py in df[['source_genesymbol', 'target_genesymbol']].values]
+    vertices = list({p for p1, p2 in edges for p in [p1, p2]})
+
+    # Add nodes
+    net_i.add_vertices(vertices)
+
+    # Add edges
+    net_i.add_edges(edges)
+    net_i.es['interaction'] = list(df['is_stimulation'].replace(0, -1))
+
+    # Simplify
+    net_i = net_i.simplify(combine_edges=max)
+    print(net_i.summary())
+
+    return net_i
 
 
 def build_biogrid_ppi(exp_type=None, missing_interactions=None):
@@ -70,6 +102,8 @@ def build_biogrid_ppi(exp_type=None, missing_interactions=None):
     # Export
     net_i.write_pickle(BIOGRID_PICKLE)
 
+    return net_i
+
 
 def build_string_ppi(score_thres=900):
     # ENSP map to gene symbol
@@ -113,6 +147,8 @@ def build_string_ppi(score_thres=900):
 
     # Export
     net_i.write_pickle(STRING_PICKLE)
+
+    return net_i
 
 
 if __name__ == '__main__':
