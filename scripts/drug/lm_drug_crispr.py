@@ -166,6 +166,20 @@ def plot_ppi_arocs(lm_res_df, thres=0.1):
     ax.legend(loc=4, prop={'size': 6})
 
 
+def plot_corrplot(x, y):
+    plot_df = pd.concat([x, y], axis=1)
+
+    g = sns.jointplot(
+        x.name, y.name, data=plot_df, kind='reg', space=0, color=bipal_dbgd[0], annot_kws=dict(stat='r'),
+        marginal_kws={'kde': False}, joint_kws={'scatter_kws': {'edgecolor': 'w', 'lw': .3, 's': 12}, 'line_kws': {'lw': 1.}}
+    )
+
+    g.ax_joint.axhline(0, ls='-', lw=0.1, c=bipal_dbgd[0])
+    g.ax_joint.axvline(0, ls='-', lw=0.1, c=bipal_dbgd[0])
+
+    g.set_axis_labels('{} (log10 FC)'.format(x.name), '{} (ln IC50)'.format(y.name))
+
+
 if __name__ == '__main__':
     # - Imports
     # Samplesheet
@@ -190,7 +204,7 @@ if __name__ == '__main__':
     d_response = dc.filter_drug_response(d_response)
 
     crispr_qnorm = pd.DataFrame({c: qnorm(crispr[c]) for c in crispr}, index=crispr.index)
-    crispr_qnorm = crispr_qnorm.reindex(dc.crispr_genes()).dropna()
+    crispr_qnorm = crispr_qnorm.reindex(dc.filter_crispr(crispr, value_thres=1.5, value_nevents=5).index)
 
     # - Covariates
     covariates = pd.concat([
@@ -201,9 +215,6 @@ if __name__ == '__main__':
 
     # - Linear regression: drug ~ crispr + tissue
     lm_res_df = lm_drug_crispr(crispr_qnorm[samples].T, d_response[samples].T, covariates.loc[samples])
-
-    lm_res_df.sort_values('lr_fdr').to_csv('data/drug/lm_drug_crispr.csv', index=False)
-    print(lm_res_df.query('lr_fdr < 0.05').sort_values('lr_fdr'))
 
     # - PPI annotation
     ppi, d_targets = import_ppi(BIOGRID_PICKLE), dc.drug_targets()
@@ -217,6 +228,10 @@ if __name__ == '__main__':
             d_drug_genes[d][g] if d in d_drug_genes and g in d_drug_genes[d] else np.nan for d, g in lm_res_df[['DRUG_ID', 'Gene']].values
         ]
     )
+
+    lm_res_df.sort_values('lr_fdr').to_csv('data/drug/lm_drug_crispr.csv', index=False)
+    print(lm_res_df.query('lr_fdr < 0.05').head(60).sort_values('lr_fdr'))
+    # lm_res_df = pd.read_csv('data/drug/lm_drug_crispr.csv')
 
     # - Plot
     # Volcano
@@ -253,4 +268,19 @@ if __name__ == '__main__':
     plt.gcf().set_size_inches(3, 3)
     plt.savefig('reports/drug/ppi_signif_roc.png', bbox_inches='tight', dpi=600)
     plt.close('all')
+
+    # Plot Drug ~ CRISPR corrplot
+    idx = 0
+    d_id, d_name, d_screen, gene = lm_res_df.loc[idx, ['DRUG_ID', 'DRUG_NAME', 'VERSION', 'Gene']].values
+
+    plot_corrplot(
+        crispr.loc[gene].rename('{} CRISPR'.format(gene)), d_response.loc[(d_id, d_name, d_screen)].rename('{} {} Drug'.format(d_name, d_screen))
+    )
+
+    plt.gcf().set_size_inches(3., 3.)
+    plt.savefig('reports/drug/crispr_drug_corrplot.png', bbox_inches='tight', dpi=600)
+    plt.close('all')
+
+
+
 
