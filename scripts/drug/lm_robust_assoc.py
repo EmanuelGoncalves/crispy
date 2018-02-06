@@ -8,7 +8,6 @@ import scripts.drug as dc
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 from crispy import bipal_dbgd
-from crispy.utils import qnorm
 from scipy.stats import pearsonr
 from crispy.regression.linear import lr
 from statsmodels.stats.multitest import multipletests
@@ -133,7 +132,6 @@ if __name__ == '__main__':
 
     # CRISPR gene-level corrected fold-changes
     crispr = pd.read_csv(dc.CRISPR_GENE_FC_CORRECTED, index_col=0, sep='\t').dropna()
-    crispr_qnorm = pd.DataFrame({c: qnorm(crispr[c]) for c in crispr}, index=crispr.index)
 
     # Drug response
     d_response = pd.read_csv(dc.DRUG_RESPONSE_FILE, index_col=[0, 1, 2], header=[0, 1])
@@ -164,7 +162,7 @@ if __name__ == '__main__':
     ppairs = lm_df.query('lr_fdr < {}'.format(a_thres))[['Gene', 'DRUG_ID', 'DRUG_NAME', 'VERSION']].values
 
     lm_res_df = lm_drugcrispr_mobem(
-        mobems[samples].T, crispr_qnorm[samples].T, d_response[samples].T, covariates.loc[samples], ppairs
+        mobems[samples].T, crispr[samples].T, d_response[samples].T, covariates.loc[samples], ppairs
     )
 
     lm_res_df.sort_values('crispr_lr_fdr').to_csv('data/drug/lm_drug_crispr_genomic.csv', index=False)

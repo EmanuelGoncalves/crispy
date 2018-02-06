@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # Copyright (C) 2018 Emanuel Goncalves
 
+import numpy as np
 import pandas as pd
 from scipy.stats import iqr
 from scripts.drug.assemble_ppi import STRING_PICKLE, BIOGRID_PICKLE
@@ -26,6 +27,27 @@ DRUG_RESPONSE_FILE = 'data/gdsc/drug_single/drug_ic50_merged_matrix.csv'
 
 # GENOMIC
 MOBEM_FILE = 'data/gdsc/mobems/PANCAN_simple_MOBEM.rdata.annotated.csv'
+
+
+"""
+Function adapted from CERES (https://github.com/cancerdatasci/ceres, http://dx.doi.org/10.1038/ng.3984).
+"""
+def scale_crispr(df, essential=None, non_essential=None, metric=np.median):
+    if essential is None:
+        essential = set(pd.read_csv(HART_ESSENTIAL)['gene'])
+
+    if non_essential is None:
+        non_essential = set(pd.read_csv(HART_NON_ESSENTIAL)['gene'])
+
+    assert len(essential.intersection(df.index)) !=0, 'DataFrame has no index overlapping with essential list'
+    assert len(non_essential.intersection(df.index)) != 0, 'DataFrame has no index overlapping with non essential list'
+
+    essential_metric = metric(df.reindex(essential).dropna(), axis=0)
+    non_essential_metric = metric(df.reindex(non_essential).dropna(), axis=0)
+
+    df = df.subtract(non_essential_metric).divide(non_essential_metric - essential_metric)
+
+    return df
 
 
 def crispr_genes(file=None, samples_thres=5, type_thres=3):
@@ -83,4 +105,8 @@ def check_in_list(gene_list, test_list=None):
     if test_list is None:
         test_list = {'TP53', 'PTEN', 'EGFR', 'ERBB2', 'IGF1R', 'MDM2', 'MDM4', 'BRAF', 'MAPK1'}
 
-    assert len(test_list.intersection(gene_list)) != len(test_list), 'Genes missing: {}'.format(';'.join(test_list.difference(gene_list)))
+    list_difference = test_list.difference(gene_list)
+
+    assert len(list_difference) == 0, 'Genes missing: {}'.format(';'.join(list_difference))
+
+    return True

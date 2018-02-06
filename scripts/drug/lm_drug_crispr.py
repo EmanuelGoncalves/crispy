@@ -8,7 +8,6 @@ import seaborn as sns
 import scripts.drug as dc
 import matplotlib.pyplot as plt
 from crispy import bipal_dbgd
-from crispy.utils import qnorm
 from scipy.stats import uniform
 from matplotlib.colors import rgb2hex
 from crispy.regression.linear import lr
@@ -49,7 +48,6 @@ def dist_drugtarget_genes(drug_targets, genes, ppi):
             dmatrix[drug] = dict(zip(*(genes, np.min(ppi.shortest_paths(source=drug_genes, target=genes), axis=0))))
 
     return dmatrix
-
 
 
 def plot_volcano(lm_res_df):
@@ -276,6 +274,7 @@ if __name__ == '__main__':
 
     # CRISPR gene-level corrected fold-changes
     crispr = pd.read_csv(dc.CRISPR_GENE_FC_CORRECTED, index_col=0, sep='\t').dropna()
+    crispr_scaled = dc.scale_crispr(crispr)
 
     # Drug response
     d_response = pd.read_csv(dc.DRUG_RESPONSE_FILE, index_col=[0, 1, 2], header=[0, 1])
@@ -288,9 +287,10 @@ if __name__ == '__main__':
 
     # - Transform and filter
     d_response = dc.filter_drug_response(d_response)
+    crispr_scaled = dc.filter_crispr(crispr_scaled, value_thres=.75, value_nevents=5)
 
-    crispr_qnorm = pd.DataFrame({c: qnorm(crispr[c]) for c in crispr}, index=crispr.index)
-    crispr_qnorm = crispr_qnorm.reindex(dc.filter_crispr(crispr, value_thres=1.5, value_nevents=5).index)
+    # - Check list
+    dc.check_in_list(crispr_scaled.index)
 
     # - Covariates
     covariates = pd.concat([
@@ -300,7 +300,7 @@ if __name__ == '__main__':
     covariates = covariates.loc[:, covariates.sum() != 0]
 
     # - Linear regression: drug ~ crispr + tissue
-    lm_res_df = lm_drug_crispr(crispr_qnorm[samples].T, d_response[samples].T, covariates.loc[samples])
+    lm_res_df = lm_drug_crispr(crispr_scaled[samples].T, d_response[samples].T, covariates.loc[samples])
 
     # - PPI annotation
     ppi = import_ppi(BIOGRID_PICKLE)
@@ -378,12 +378,13 @@ if __name__ == '__main__':
     # Plot Drug ~ CRISPR corrplot
     idx = 0
     d_id, d_name, d_screen, gene = lm_res_df.loc[idx, ['DRUG_ID', 'DRUG_NAME', 'VERSION', 'Gene']].values
+    # d_id, d_name, d_screen, gene = 1510, 'Linsitinib', 'RS', 'FURIN'
 
     plot_corrplot(
         crispr.loc[gene].rename('{} CRISPR'.format(gene)), d_response.loc[(d_id, d_name, d_screen)].rename('{} {} Drug'.format(d_name, d_screen))
     )
 
-    plt.gcf().set_size_inches(3., 3.)
+    plt.gcf().set_size_inches(2., 2.)
     plt.savefig('reports/drug/crispr_drug_corrplot.png', bbox_inches='tight', dpi=600)
     plt.close('all')
 
@@ -392,10 +393,15 @@ if __name__ == '__main__':
 
     d_interactions = drug_interaction_signed_ppi(omnipath, d_targets)
 
-    fdr_thres = .25
+    fdr_thres = .15
 
     plot_df = lm_res_df[lm_res_df['lr_fdr'] < fdr_thres]
     plot_df = plot_df.assign(interaction=[
         d_interactions[d][g] if d in d_interactions and g in d_interactions[d] else np.nan for d, g in plot_df[['DRUG_ID', 'Gene']].values
     ])
     plot_df = plot_df.dropna(subset=['interaction'])
+
+    sns.boxplot('interaction', 'beta', data=plot_df, color=bipal_dbgd[0], linewidth=.3, fliersize=2)
+    plt.gcf().set_size_inches(1., 3.)
+    plt.savefig('reports/drug/signed_interactions_beta.png', bbox_inches='tight', dpi=600)
+    plt.close('all')
