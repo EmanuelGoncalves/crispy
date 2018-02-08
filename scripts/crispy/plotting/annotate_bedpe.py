@@ -15,21 +15,18 @@ from crispy.ratio import BRASS_HEADERS, GFF_FILE, GFF_HEADERS
 from scripts.crispy.processing.correct_cnv_bias import assemble_matrix
 
 
-def import_brass_bedpe(bedpe_file, same_chr, bkdist, splitreads):
+def import_brass_bedpe(bedpe_file, bkdist, splitreads):
+    # bedpe_file = 'data/gdsc/wgs/brass_bedpe/BB65-RCC.brass.annot.bedpe'
     # Import BRASS bedpe
     bedpe_df = pd.read_csv(bedpe_file, sep='\t', names=BRASS_HEADERS, comment='#')
 
     # Correct sample name
     bedpe_df['sample'] = bedpe_df['sample'].apply(lambda v: v.split(',')[0])
 
-    # Same chromossome SV
-    if same_chr:
-        bedpe_df = bedpe_df[bedpe_df['chr1'] == bedpe_df['chr2']]
-
     # SV larger than threshold
     bedpe_df = bedpe_df[bedpe_df['bkdist'] > bkdist]
 
-    # BRASS 2 annotated SV
+    # BRASS2 annotated SV
     if splitreads:
         bedpe_df = bedpe_df.query("assembly_score != '_'")
 
@@ -54,13 +51,13 @@ def annotate_bed(bed_file, methods='collapse,count'):
     return genes_sv
 
 
-def annotate_brass_bedpe(bedpe_dir, same_chr=True, bkdist=2500, splitreads=True):
+def annotate_brass_bedpe(bedpe_dir, bkdist, splitreads):
     bed_dfs = []
     for bedpe_file in map(lambda f: '{}/{}'.format(bedpe_dir, f), filter(lambda f: f.endswith('.brass.annot.bedpe'), os.listdir(bedpe_dir))):
         print('[INFO] {}'.format(bedpe_file))
 
         # Import and filter bedpe
-        bed_df = import_brass_bedpe(bedpe_file, same_chr, bkdist, splitreads)
+        bed_df = import_brass_bedpe(bedpe_file, bkdist, splitreads)
 
         if bed_df.shape[0] > 0:
             bed_file = '{}/{}.bed'.format(bedpe_dir, os.path.splitext(os.path.basename(bedpe_file))[0])
@@ -127,7 +124,7 @@ def plot_sv_ratios_arocs_per_sample(plot_df, groupby, x='ratio', y='collapse', o
     ax = plt.gca()
 
     sns.boxplot('auc', 'svclass', data=y_aucs, orient='h', order=order, palette=order_color, notch=True, linewidth=.5, fliersize=1, ax=ax)
-    sns.stripplot('auc', 'svclass', data=y_aucs, orient='h', order=order, palette=order_color, edgecolor='white', linewidth=.1, size=3, jitter=.4, ax=ax)
+    # sns.stripplot('auc', 'svclass', data=y_aucs, orient='h', order=order, palette=order_color, edgecolor='white', linewidth=.1, size=3, jitter=.4, ax=ax)
     plt.axvline(.5, lw=.3, c=bipal_dbgd[0])
     plt.title('Structural rearrangements relation with\ncopy-number ratio')
     plt.xlabel('Structural rearrangements ~ Copy-number ratio (AUC)')
@@ -154,7 +151,7 @@ if __name__ == '__main__':
     bedpe_dir = 'data/gdsc/wgs/brass_bedpe'
 
     # Annotate BRASS bedpes
-    bed_dfs = annotate_brass_bedpe(bedpe_dir, splitreads=False)
+    bed_dfs = annotate_brass_bedpe(bedpe_dir, bkdist=2500, splitreads=True)
     bed_dfs.to_csv('{}/{}'.format(os.path.dirname(bedpe_dir), 'brass.genes.gff.tab'), index=False, sep='\t')
 
     # - Append information of copy-number ratio
@@ -168,8 +165,13 @@ if __name__ == '__main__':
     # Append ratios
     brass = bed_dfs.assign(ratio=[cnv_ratios.loc[g, s] for s, g in bed_dfs[['sample', 'feature']].values])
 
+    # - Exclude samples
+    brass = brass[~brass['sample'].isin(['HCC1954'])]
+
     # - Plot: Copy-number ratio
     plot_df = brass.query('count == 1').dropna().sort_values('ratio', ascending=False)
+    # plot_df = plot_df[['chr', 'collapse', 'sample', 'ratio']].drop_duplicates()
+    print(plot_df)
 
     # AROCs
     ax = plot_sv_ratios_arocs(plot_df)
@@ -192,38 +194,38 @@ if __name__ == '__main__':
     plt.savefig('reports/crispy/brass_sv_ratio_boxplot_auc.png', bbox_inches='tight', dpi=600)
     plt.close('all')
 
-    # - Plot: CRISPR fold-change
-    # CRISPR
-    c_gdsc_fc = pd.read_csv('data/crispr_gdsc_logfc.csv', index_col=0)
-    # c_gdsc_crispy_kmean = assemble_matrix('data/crispy/gdsc/', 'k_mean')
-
-    # Overlap
-    samples = list(set(cnv_ratios).intersection(bed_dfs['sample']).intersection(c_gdsc_fc))
-    print('Samples: {}'.format(len(samples)))
-
-    # Append ratios
-    brass_crispr = bed_dfs.assign(crispr=[c_gdsc_fc.loc[g, s] if s in samples and g in c_gdsc_fc.index else np.nan for s, g in bed_dfs[['sample', 'feature']].values]).dropna()
-
-    # Plot
-    plot_df = brass_crispr.query('count == 1').dropna().sort_values('crispr', ascending=False)
-
-    # AROCs
-    ax = plot_sv_ratios_arocs(plot_df, x='crispr')
-
-    plt.gcf().set_size_inches(3, 3)
-    plt.savefig('reports/crispy/brass_crispr_sv_ratio_cumdist.png', bbox_inches='tight', dpi=600)
-    plt.close('all')
-
-    # Boxplots
-    ax = plot_sv_ratios_boxplots(plot_df, x='crispr')
-
-    plt.gcf().set_size_inches(3, 1)
-    plt.savefig('reports/crispy/brass_crispr_sv_ratio_boxplot.png', bbox_inches='tight', dpi=600)
-    plt.close('all')
-
-    # SV enrichment per sample
-    plot_sv_ratios_arocs_per_sample(plot_df, 'sample', x='crispr')
-
-    plt.gcf().set_size_inches(3, 1)
-    plt.savefig('reports/crispy/brass_crispr_sv_ratio_boxplot_auc.png', bbox_inches='tight', dpi=600)
-    plt.close('all')
+    # # - Plot: CRISPR fold-change
+    # # CRISPR
+    # c_gdsc_fc = pd.read_csv('data/crispr_gdsc_logfc.csv', index_col=0)
+    # # c_gdsc_crispy_kmean = assemble_matrix('data/crispy/gdsc/', 'k_mean')
+    #
+    # # Overlap
+    # samples = list(set(cnv_ratios).intersection(bed_dfs['sample']).intersection(c_gdsc_fc))
+    # print('Samples: {}'.format(len(samples)))
+    #
+    # # Append ratios
+    # brass_crispr = bed_dfs.assign(crispr=[c_gdsc_fc.loc[g, s] if s in samples and g in c_gdsc_fc.index else np.nan for s, g in bed_dfs[['sample', 'feature']].values]).dropna()
+    #
+    # # Plot
+    # plot_df = brass_crispr.query('count == 1').dropna().sort_values('crispr', ascending=False)
+    #
+    # # AROCs
+    # ax = plot_sv_ratios_arocs(plot_df, x='crispr')
+    #
+    # plt.gcf().set_size_inches(3, 3)
+    # plt.savefig('reports/crispy/brass_crispr_sv_ratio_cumdist.png', bbox_inches='tight', dpi=600)
+    # plt.close('all')
+    #
+    # # Boxplots
+    # ax = plot_sv_ratios_boxplots(plot_df, x='crispr')
+    #
+    # plt.gcf().set_size_inches(3, 1)
+    # plt.savefig('reports/crispy/brass_crispr_sv_ratio_boxplot.png', bbox_inches='tight', dpi=600)
+    # plt.close('all')
+    #
+    # # SV enrichment per sample
+    # plot_sv_ratios_arocs_per_sample(plot_df, 'sample', x='crispr')
+    #
+    # plt.gcf().set_size_inches(3, 1)
+    # plt.savefig('reports/crispy/brass_crispr_sv_ratio_boxplot_auc.png', bbox_inches='tight', dpi=600)
+    # plt.close('all')

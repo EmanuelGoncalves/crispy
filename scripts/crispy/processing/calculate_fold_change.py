@@ -60,10 +60,13 @@ def foldchange_gdsc(
     # Average replicates
     fc = fc.groupby(manifest.loc[fc.columns, 'name'], axis=1).mean()
 
+    # Export - sgRNA level
+    fc.round(5).to_csv('data/crispr_gdsc_sgrna_logfc.csv')
+
     # Average gene level
     fc = fc.groupby(sgrna_lib.reindex(fc.index)['gene']).mean().dropna()
 
-    # Export
+    # Export - gene level
     fc.round(5).to_csv('data/crispr_gdsc_logfc.csv')
 
 
@@ -118,6 +121,9 @@ def foldchange_ccle(
 
     # Average replicates
     fc = fc.groupby(manifest.loc[fc.columns, 'CellLine'], axis=1).mean()
+
+    # Export - sgRNA level
+    fc.round(5).to_csv('data/crispr_achiles_sgrna_logfc.csv')
 
     # Average gene level
     fc = fc.loc[sgrna_lib['Guide']].groupby(sgrna_lib['Gene'].values).mean().dropna()
