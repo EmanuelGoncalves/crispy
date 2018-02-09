@@ -171,12 +171,12 @@ if __name__ == '__main__':
     # lm_res_df = pd.read_csv('data/drug/lm_drug_crispr_genomic.csv')
 
     # -
-    fdr_thres, beta_thres = .05, .5
+    fdr_thres, beta_thres = .1, .5
 
     lm_res_df[
-        ((lm_res_df['crispr_lr_fdr'] < fdr_thres) | (lm_res_df['drug_lr_fdr'] < fdr_thres)) &
+        ((lm_res_df['crispr_lr_fdr'] < fdr_thres) & (lm_res_df['drug_lr_fdr'] < fdr_thres)) &
         ((lm_res_df['crispr_beta'].abs() > beta_thres) & (lm_res_df['drug_beta'].abs() > beta_thres))
-    ].sort_values('crispr_r2')
+    ].sort_values('drug_lr_fdr')
 
     # - Plot
     # Volcanos
@@ -195,7 +195,7 @@ if __name__ == '__main__':
     # d_id, d_name, d_screen, gene = 1058, 'Pictilisib', 'RS', 'RICTOR'
 
     plot_corrplot(
-        crispr.loc[gene].rename('{} CRISPR'.format(gene)), d_response.loc[(d_id, d_name, d_screen)].rename('{} {} Drug'.format(d_name, d_screen))
+        crispr_scaled.loc[gene].rename('{} CRISPR'.format(gene)), d_response.loc[(d_id, d_name, d_screen)].rename('{} {} Drug'.format(d_name, d_screen))
     )
 
     plt.gcf().set_size_inches(2., 2.)
@@ -203,12 +203,12 @@ if __name__ == '__main__':
     plt.close('all')
 
     # Corr plot discrete
-    idx = 2
+    idx = 43
     d_id, d_name, d_screen, gene, genomic = lm_res_df.loc[idx, ['drug_DRUG_ID', 'drug_DRUG_NAME', 'drug_VERSION', 'crispr_Gene', 'genomic']].values
     # d_id, d_name, d_screen, gene, genomic = 1560, 'Alpelisib', 'RS', 'FOXA1', 'gain:cnaPANCAN301 (CDK12,ERBB2,MED24)'
 
     plot_corr_discrete(
-        x=crispr.loc[gene].rename('{} CRISPR'.format(gene)),
+        x=crispr_scaled.loc[gene].rename('{} CRISPR'.format(gene)),
         y=d_response.loc[(d_id, d_name, d_screen)].rename('{} {} Drug'.format(d_name, d_screen)),
         z=mobems.loc[genomic].rename(genomic)
     )
