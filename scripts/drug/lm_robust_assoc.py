@@ -132,6 +132,7 @@ if __name__ == '__main__':
 
     # CRISPR gene-level corrected fold-changes
     crispr = pd.read_csv(dc.CRISPR_GENE_FC_CORRECTED, index_col=0, sep='\t').dropna()
+    crispr_scaled = dc.scale_crispr(crispr)
 
     # Drug response
     d_response = pd.read_csv(dc.DRUG_RESPONSE_FILE, index_col=[0, 1, 2], header=[0, 1])
@@ -156,34 +157,42 @@ if __name__ == '__main__':
     ], axis=1).loc[samples]
     covariates = covariates.loc[:, covariates.sum() != 0]
 
+    # - Significant Drug ~ CRISPR
+    fdr_thres, beta_thres = 0.05, 0.5
+    ppairs = lm_df[(lm_df['beta'].abs() > beta_thres) & (lm_df['lr_fdr'] < fdr_thres)][['Gene', 'DRUG_ID', 'DRUG_NAME', 'VERSION']].values
+
     # - Rosbut pharmacogenomic associations
-    a_thres = 0.05
-
-    ppairs = lm_df.query('lr_fdr < {}'.format(a_thres))[['Gene', 'DRUG_ID', 'DRUG_NAME', 'VERSION']].values
-
     lm_res_df = lm_drugcrispr_mobem(
-        mobems[samples].T, crispr[samples].T, d_response[samples].T, covariates.loc[samples], ppairs
+        mobems[samples].T, crispr_scaled[samples].T, d_response[samples].T, covariates.loc[samples], ppairs
     )
 
     lm_res_df.sort_values('crispr_lr_fdr').to_csv('data/drug/lm_drug_crispr_genomic.csv', index=False)
     print(lm_res_df.query('crispr_lr_fdr < 0.05').sort_values('crispr_lr_fdr'))
     # lm_res_df = pd.read_csv('data/drug/lm_drug_crispr_genomic.csv')
 
+    # -
+    fdr_thres, beta_thres = .05, .5
+
+    lm_res_df[
+        ((lm_res_df['crispr_lr_fdr'] < fdr_thres) | (lm_res_df['drug_lr_fdr'] < fdr_thres)) &
+        ((lm_res_df['crispr_beta'].abs() > beta_thres) & (lm_res_df['drug_beta'].abs() > beta_thres))
+    ].sort_values('crispr_r2')
+
     # - Plot
     # Volcanos
     plot_volcano(lm_res_df)
 
-    # Plot Drug barplot
-    plot_drug_associations_barplot(lm_df[lm_df['lr_fdr'] < 0.15], ['Linsitinib'])
-    plt.title('Top significant associations')
-    plt.gcf().set_size_inches(2, 1.5)
-    plt.savefig('reports/drug/drug_associations_barplot_single.png', bbox_inches='tight', dpi=600)
-    plt.close('all')
+    # # Plot Drug barplot
+    # plot_drug_associations_barplot(lm_df[lm_df['lr_fdr'] < 0.15], ['Linsitinib'])
+    # plt.title('Top significant associations')
+    # plt.gcf().set_size_inches(2, 1.5)
+    # plt.savefig('reports/drug/drug_associations_barplot_single.png', bbox_inches='tight', dpi=600)
+    # plt.close('all')
 
     # Corr plot
-    idx = 2332
+    idx = 2
     d_id, d_name, d_screen, gene = lm_df.loc[idx, ['DRUG_ID', 'DRUG_NAME', 'VERSION', 'Gene']].values
-    d_id, d_name, d_screen, gene = 1510, 'Linsitinib', 'RS', 'FURIN'
+    # d_id, d_name, d_screen, gene = 1058, 'Pictilisib', 'RS', 'RICTOR'
 
     plot_corrplot(
         crispr.loc[gene].rename('{} CRISPR'.format(gene)), d_response.loc[(d_id, d_name, d_screen)].rename('{} {} Drug'.format(d_name, d_screen))
@@ -194,9 +203,9 @@ if __name__ == '__main__':
     plt.close('all')
 
     # Corr plot discrete
-    idx = 0
+    idx = 2
     d_id, d_name, d_screen, gene, genomic = lm_res_df.loc[idx, ['drug_DRUG_ID', 'drug_DRUG_NAME', 'drug_VERSION', 'crispr_Gene', 'genomic']].values
-    d_id, d_name, d_screen, gene, genomic = 1560, 'Alpelisib', 'RS', 'FOXA1', 'gain:cnaPANCAN301 (CDK12,ERBB2,MED24)'
+    # d_id, d_name, d_screen, gene, genomic = 1560, 'Alpelisib', 'RS', 'FOXA1', 'gain:cnaPANCAN301 (CDK12,ERBB2,MED24)'
 
     plot_corr_discrete(
         x=crispr.loc[gene].rename('{} CRISPR'.format(gene)),

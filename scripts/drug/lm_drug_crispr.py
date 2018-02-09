@@ -11,10 +11,10 @@ from crispy import bipal_dbgd
 from scipy.stats import uniform
 from matplotlib.colors import rgb2hex
 from crispy.regression.linear import lr
-from sklearn.metrics import roc_curve, auc
 from sklearn.preprocessing import StandardScaler
 from statsmodels.stats.multitest import multipletests
 from scripts.drug.assemble_ppi import import_ppi, build_omnipath_ppi, BIOGRID_PICKLE
+from sklearn.metrics import roc_curve, auc, precision_recall_curve, average_precision_score
 
 
 def lm_drug_crispr(xs, ys, ws):
@@ -50,9 +50,9 @@ def dist_drugtarget_genes(drug_targets, genes, ppi):
     return dmatrix
 
 
-def plot_volcano(lm_res_df):
+def plot_volcano(lm_res_df, fdr_thres, beta_thres):
     plot_df = lm_res_df.copy()
-    plot_df['signif'] = ['*' if i < 0.05 else '-' for i in plot_df['lr_fdr']]
+    plot_df['signif'] = ['*' if f < fdr_thres and abs(b) > beta_thres else '-' for f, b in plot_df[['lr_fdr', 'beta']].values]
     plot_df['log10_qvalue'] = -np.log10(plot_df['lr_pval'])
 
     pal = dict(zip(*(['*', '-'], sns.light_palette(bipal_dbgd[0], 3, reverse=True).as_hex()[:-1])))
@@ -60,12 +60,21 @@ def plot_volcano(lm_res_df):
     # Scatter
     for i in ['*', '-']:
         plot_df_ = plot_df.query("(signif == '%s')" % i)
-        plt.scatter(plot_df_['beta'], plot_df_['log10_qvalue'], edgecolor='white', lw=.1, s=3, alpha=.5, c=pal[i])
+
+        plt.scatter(
+            plot_df_['beta'], plot_df_['log10_qvalue'], edgecolor='white', lw=.1 if i == '*' else 0.05, s=3, c=pal[i],
+            alpha=.5 if i == '*' else 0.3
+        )
 
     # Add FDR threshold lines
     yy = plot_df.loc[(plot_df['lr_fdr'] - 0.05).abs().sort_values().index[0], 'lr_pval']
+
     plt.text(plt.xlim()[0] * .98, -np.log10(yy) * 1.01, 'FDR 5%', ha='left', color=pal['*'], alpha=0.65, fontsize=5)
-    plt.axhline(-np.log10(yy), c=pal['*'], ls='--', lw=.3, alpha=.7)
+    plt.axhline(-np.log10(yy), c=pal['*'], ls='--', lw=.1, alpha=.3)
+
+    # Add beta lines
+    plt.axvline(-beta_thres, c=pal['*'], ls='--', lw=.1, alpha=.3)
+    plt.axvline(beta_thres, c=pal['*'], ls='--', lw=.1, alpha=.3)
 
     # Add axis lines
     plt.axvline(0, c=bipal_dbgd[0], lw=.1, ls='-', alpha=.3)
@@ -76,13 +85,13 @@ def plot_volcano(lm_res_df):
     plt.ylabel('Log-ratio test p-value (-log10)', fontsize=8, fontname='sans-serif')
 
 
-def plot_barplot_signif_assoc(lm_res_df, a_thres=0.05):
+def plot_barplot_signif_assoc(lm_res_df, fdr_thres, beta_thres):
     plot_df = pd.DataFrame({
         'ypos': [0, 1],
         'type': ['positive', 'negative'],
         'count': [
-            sum(lm_res_df.query('lr_fdr < {}'.format(a_thres))['beta'] > 0),
-            sum(lm_res_df.query('lr_fdr < {}'.format(a_thres))['beta'] < 0)
+            sum(lm_res_df.query('lr_fdr < {}'.format(fdr_thres))['beta'] > beta_thres),
+            sum(lm_res_df.query('lr_fdr < {}'.format(fdr_thres))['beta'] < -beta_thres)
         ]
     })
 
@@ -144,8 +153,8 @@ def plot_target_boxplot(lm_res_df):
     plt.xlabel('Drug ~ Drug-target CRISPR p-value')
 
 
-def plot_ppi_arocs(lm_res_df, thres=0.1):
-    plot_df = lm_res_df.query('lr_fdr < {}'.format(thres)).dropna()
+def plot_ppi_arocs(lm_res_df, fdr_thres, beta_thres):
+    plot_df = lm_res_df[(lm_res_df['beta'].abs() > beta_thres) & (lm_res_df['lr_fdr'] < fdr_thres)].copy()
     plot_df = plot_df.assign(thres=['Target' if i == 0 else ('%d' % i if i < 4 else '>=4') for i in plot_df['target']])
 
     order = ['Target', '1', '2', '3', '>=4']
@@ -161,9 +170,33 @@ def plot_ppi_arocs(lm_res_df, thres=0.1):
     ax.set_ylim(0, 1)
     ax.set_xlabel('False positive rate')
     ax.set_ylabel('True positive rate')
-    ax.set_title('Protein-protein interactions\nDrug ~ CRISPR (FDR < {}%)'.format(thres * 100))
+    ax.set_title('Protein-protein interactions\nDrug ~ CRISPR (FDR<{}%, |b|>{})'.format(fdr_thres * 100, beta_thres))
 
     ax.legend(loc=4, prop={'size': 6})
+
+
+def plot_ppi_prc(lm_res_df, fdr_thres, beta_thres):
+    plot_df = lm_res_df[(lm_res_df['beta'].abs() > beta_thres) & (lm_res_df['lr_fdr'] < fdr_thres)].copy()
+    plot_df = plot_df.assign(thres=['Target' if i == 0 else ('%d' % i if i < 4 else '>=4') for i in plot_df['target']])
+
+    order = ['Target', '1', '2', '3', '>=4']
+    order_color = [bipal_dbgd[1]] + list(map(rgb2hex, sns.light_palette(bipal_dbgd[0], len(order) - 1, reverse=True)))
+
+    ax = plt.gca()
+    for t, c in zip(*(order, order_color)):
+        y_true, y_pred = (plot_df['thres'] == t).astype(int), 1 - plot_df['lr_fdr']
+
+        precision, recall, _ = precision_recall_curve(y_true, y_pred)
+        ax.plot(precision, recall, label='%s=%.2f (AP)' % (t, average_precision_score(y_true, y_pred)), lw=1., c=c)
+
+    ax.plot((0, 1), (0, 1), 'k--', lw=.3, alpha=.5)
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
+    ax.set_xlabel('Recall')
+    ax.set_ylabel('Precision')
+    ax.set_title('Protein-protein interactions\nDrug ~ CRISPR (FDR<{}%, |b|>{})'.format(fdr_thres * 100, beta_thres))
+
+    ax.legend(loc=1, prop={'size': 6})
 
 
 def plot_corrplot(x, y):
@@ -241,8 +274,8 @@ def drug_interaction_signed_ppi(ppi, drug_targets):
     return d_interactions
 
 
-def plot_count_associations(lm_res, fdr_thres=0.05, min_nevents=5):
-    df = lm_res[lm_res_df['lr_fdr'] < fdr_thres]
+def plot_count_associations(lm_res_df, fdr_thres, beta_thres, min_nevents=5):
+    df = lm_res_df[(lm_res_df['beta'].abs() > beta_thres) & (lm_res_df['lr_fdr'] < fdr_thres)].copy()
 
     df = df.groupby('DRUG_NAME')['lr_fdr'].count().sort_values(ascending=False).reset_index()
 
@@ -258,7 +291,7 @@ def plot_count_associations(lm_res, fdr_thres=0.05, min_nevents=5):
 
     plt.xlabel('')
     plt.ylabel('# associations')
-    plt.title('Drug number of significant associations (FDR<{}%)'.format(int(fdr_thres * 100)))
+    plt.title('Drug number of significant associations (FDR<{}%, |b|>{})'.format(fdr_thres * 100, beta_thres))
 
 
 if __name__ == '__main__':
@@ -316,19 +349,21 @@ if __name__ == '__main__':
     )
 
     lm_res_df.sort_values('lr_fdr').to_csv('data/drug/lm_drug_crispr.csv', index=False)
-    print(lm_res_df.query('lr_fdr < 0.05').sort_values('lr_fdr').head(60))
+    print(lm_res_df[(lm_res_df['beta'].abs() > .5) & (lm_res_df['lr_fdr'] < 0.05)].sort_values('lr_fdr'))
     # lm_res_df = pd.read_csv('data/drug/lm_drug_crispr.csv')
 
     # - Plot
+    fdr_thres, beta_thres = 0.05, 0.5
+
     # Volcano
-    plot_volcano(lm_res_df)
+    plot_volcano(lm_res_df, fdr_thres, beta_thres)
 
     plt.gcf().set_size_inches(2., 4.)
     plt.savefig('reports/drug/lm_crispr_volcano.png', bbox_inches='tight', dpi=600)
     plt.close('all')
 
     # Barplot count number of significant associations
-    plot_barplot_signif_assoc(lm_res_df)
+    plot_barplot_signif_assoc(lm_res_df, fdr_thres, beta_thres)
 
     plt.gcf().set_size_inches(3, 1.5)
     plt.savefig('reports/drug/signif_assoc_count.png', bbox_inches='tight', dpi=600)
@@ -349,18 +384,23 @@ if __name__ == '__main__':
     plt.close('all')
 
     # PPI AROCs significant associations
-    plot_ppi_arocs(lm_res_df)
+    plot_ppi_arocs(lm_res_df, fdr_thres, beta_thres)
 
     plt.gcf().set_size_inches(3, 3)
     plt.savefig('reports/drug/ppi_signif_roc.png', bbox_inches='tight', dpi=600)
     plt.close('all')
 
+    # PPI AUPRs significant associations
+    plot_ppi_prc(lm_res_df, fdr_thres, beta_thres)
+
+    plt.gcf().set_size_inches(3, 3)
+    plt.savefig('reports/drug/ppi_signif_prc.png', bbox_inches='tight', dpi=600)
+    plt.close('all')
+
     # Drug associations barplot
-    fdr_thres = 0.05
+    plot_df = lm_res_df[(lm_res_df['beta'].abs() > beta_thres) & (lm_res_df['lr_fdr'] < fdr_thres)]
 
-    plot_df = lm_res_df[lm_res_df['lr_fdr'] < fdr_thres]
-
-    drug_list = list(plot_df.groupby('DRUG_NAME')['lr_fdr'].min().sort_values().head(10).index)
+    drug_list = list(plot_df.groupby('DRUG_NAME')['lr_fdr'].min().sort_values().index)[10:20]
 
     plot_drug_associations_barplot(plot_df, drug_list)
 
@@ -369,19 +409,19 @@ if __name__ == '__main__':
     plt.close('all')
 
     # Number of significant associations per drug
-    plot_count_associations(lm_res_df, fdr_thres)
+    plot_count_associations(lm_res_df, fdr_thres, beta_thres)
 
     plt.gcf().set_size_inches(7, 3)
     plt.savefig('reports/drug/drug_associations_count.png', bbox_inches='tight', dpi=600)
     plt.close('all')
 
     # Plot Drug ~ CRISPR corrplot
-    idx = 0
+    idx = 1857
     d_id, d_name, d_screen, gene = lm_res_df.loc[idx, ['DRUG_ID', 'DRUG_NAME', 'VERSION', 'Gene']].values
     # d_id, d_name, d_screen, gene = 1510, 'Linsitinib', 'RS', 'FURIN'
 
     plot_corrplot(
-        crispr.loc[gene].rename('{} CRISPR'.format(gene)), d_response.loc[(d_id, d_name, d_screen)].rename('{} {} Drug'.format(d_name, d_screen))
+        crispr_scaled.loc[gene].rename('{} CRISPR'.format(gene)), d_response.loc[(d_id, d_name, d_screen)].rename('{} {} Drug'.format(d_name, d_screen))
     )
 
     plt.gcf().set_size_inches(2., 2.)

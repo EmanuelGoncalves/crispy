@@ -63,42 +63,31 @@ def import_brass_bedpe(bedpe_file, bkdist, splitreads):
     return bedpe_df
 
 
-if __name__ == '__main__':
-    #
-    bedpe = import_brass_bedpe('data/gdsc/wgs/brass_bedpe/HCC1187.brass.annot.bedpe', bkdist=None, splitreads=False)
-    bedpe = bedpe.assign(chr1=bedpe['chr1'].apply(lambda x: 'chr{}'.format(x)).values)
-    bedpe = bedpe.assign(chr2=bedpe['chr2'].apply(lambda x: 'chr{}'.format(x)).values)
+def plot_rearrangements(brass, crispr, ngsc, chrm, winsize=1e5, chrm_size=None):
+    chrm_size = CHR_SIZES_HG19 if chrm_size is None else chrm_size
 
     #
-    ngsc = pd.read_csv(
-        'data/gdsc/wgs/brass_intermediates/HCC1187.ngscn.abs_cn.bg', sep='\t', header=None,
-        names=['chr', 'start', 'end', 'absolute_cn', 'norm_logratio'], dtype={'chr': str, 'start': int, 'end': int, 'cn': float, 'score': float}
-    )
-    ngsc = ngsc.assign(chr=ngsc['chr'].apply(lambda x: 'chr{}'.format(x)).values)
+    intervals = np.arange(1, chrm_size[chrm] + winsize, winsize)
 
-    #
-    sgrna_lib = pd.read_csv('data/crispr_libs/KY_Library_v1.1_updated.csv', index_col=0)
+    # BRASS
+    brass_ = brass[(brass['chr1'] == chrm) | (brass['chr2'] == chrm)]
 
-    crispr_sgrna = pd.read_csv('data/crispr_gdsc_sgrna_logfc.csv', index_col=0)
-
-    # -
-    sample, chrm, winsize = 'HCC1187', 'chr18', 1e5
-
-    intervals = np.arange(1, CHR_SIZES_HG19[chrm] + winsize, winsize)
-
-    bedpe_ = bedpe[(bedpe['chr1'] == chrm) | (bedpe['chr2'] == chrm)]
-
+    # NGSC
     ngsc_ = ngsc[ngsc['chr'] == chrm]
     ngsc_ = ngsc_[ngsc_['norm_logratio'] <= 2]
     ngsc_ = ngsc_.assign(location=ngsc_[['start', 'end']].mean(1))
     ngsc_ = ngsc_.assign(interval=pd.cut(ngsc_['location'], intervals, include_lowest=True, right=False))
     ngsc_ = ngsc_.groupby('interval').mean()
 
-    crispr_sgrna_ = crispr_sgrna[sample]
-    crispr_sgrna_ = pd.concat([crispr_sgrna_.rename('crispr'), sgrna_lib[sgrna_lib['chr'] == chrm]], axis=1).dropna()
-    crispr_sgrna_ = crispr_sgrna_.assign(location=crispr_sgrna_[['start', 'end']].mean(1))
-    crispr_sgrna_ = crispr_sgrna_.assign(interval=pd.cut(crispr_sgrna_['location'], intervals, include_lowest=True, right=False))
-    crispr_sgrna_ = crispr_sgrna_.groupby('interval').mean()
+    # CRISPR
+    crispr_ = crispr[crispr['chr'] == chrm]
+    crispr_ = crispr_.assign(location=crispr_[['start', 'end']].mean(1))
+    # crispr_ = crispr_.assign(interval=pd.cut(crispr_['location'], intervals, include_lowest=True, right=False))
+    # crispr_ = crispr_.groupby('interval').mean()
+
+    #
+    if brass_.shape[0] == 0:
+        return None
 
     # -
     f, (ax1, ax2) = plt.subplots(2, 1, sharex=True, sharey=False)
@@ -108,10 +97,10 @@ if __name__ == '__main__':
     ax1.set_ylim(0.0, np.ceil(ngsc_['absolute_cn'].quantile(0.99)))
 
     #
-    ax2.scatter(crispr_sgrna_[['start', 'end']].mean(1), crispr_sgrna_['crispr'], s=2, alpha=.5, c=bipal_dbgd[1], label='crispr')
+    ax2.scatter(crispr_[['start', 'end']].mean(1), crispr_['crispr'], s=2, alpha=.5, c=bipal_dbgd[1], label='crispr')
 
     #
-    for c1, s1, e1, c2, s2, e2, st1, st2, sv in bedpe_[['chr1', 'start1', 'end1', 'chr2', 'start2', 'end2', 'strand1', 'strand2', 'svclass']].values:
+    for c1, s1, e1, c2, s2, e2, st1, st2, sv in brass_[['chr1', 'start1', 'end1', 'chr2', 'start2', 'end2', 'strand1', 'strand2', 'svclass']].values:
         stype = svtype(st1, st2, sv)
         stype_col = PALETTE[stype]
 
@@ -128,17 +117,54 @@ if __name__ == '__main__':
                 )
 
     #
-    plt.xlim(-winsize, CHR_SIZES_HG19[chrm] + winsize)
+    plt.xlim(-winsize, chrm_size[chrm] + winsize)
 
     #
     by_label = {l: p for ax in [ax1, ax2] for p, l in zip(*(ax.get_legend_handles_labels()))}
     plt.legend(by_label.values(), by_label.keys(), loc='center left', bbox_to_anchor=(1.04, 0.5))
 
     #
-    plt.suptitle('{}'.format(sample))
     plt.xlabel('{}'.format(chrm))
 
-    #
-    plt.gcf().set_size_inches(6, 3)
-    plt.savefig('reports/crispy/svplot.png', bbox_inches='tight', dpi=600)
-    plt.close('all')
+    return plt.gcf()
+
+
+if __name__ == '__main__':
+    # - Import CRISPR
+    sgrna_lib = pd.read_csv('data/crispr_libs/KY_Library_v1.1_updated.csv', index_col=0)
+    crispr_sgrna = pd.read_csv('data/crispr_gdsc_sgrna_logfc.csv', index_col=0)
+
+    samples = ['NCI-H2087', 'LS-1034', 'HCC1954', 'HCC1143', 'HCC38', 'HCC1187', 'HCC1937', 'HCC1395']
+
+    # sample, chrm, = 'HCC38', 'chr1'
+    for sample in samples:
+        #
+        bedpe = import_brass_bedpe('data/gdsc/wgs/brass_bedpe/HCC1187.brass.annot.bedpe', bkdist=None, splitreads=False)
+        bedpe = bedpe.assign(chr1=bedpe['chr1'].apply(lambda x: 'chr{}'.format(x)).values)
+        bedpe = bedpe.assign(chr2=bedpe['chr2'].apply(lambda x: 'chr{}'.format(x)).values)
+
+        #
+        ngsc = pd.read_csv(
+            'data/gdsc/wgs/brass_intermediates/HCC1187.ngscn.abs_cn.bg', sep='\t', header=None,
+            names=['chr', 'start', 'end', 'absolute_cn', 'norm_logratio'], dtype={'chr': str, 'start': int, 'end': int, 'cn': float, 'score': float}
+        )
+        ngsc = ngsc.assign(chr=ngsc['chr'].apply(lambda x: 'chr{}'.format(x)).values)
+
+        # -
+        for chrm in set(bedpe['chr1']):
+            print('Sample: {}; Chrm: {}'.format(sample, chrm))
+
+            crispr = pd.concat([crispr_sgrna[sample].rename('crispr'), sgrna_lib], axis=1).dropna()
+            # crispr = crispr.groupby('gene').agg({'start': np.min, 'end': np.max, 'chr': 'first', 'crispr': np.mean})
+
+            svp = plot_rearrangements(bedpe, crispr, ngsc, chrm)
+
+            plt.xlim(0.25e8, 0.5e8)
+
+            if svp is not None:
+                plt.suptitle('{}'.format(sample))
+
+                #
+                plt.gcf().set_size_inches(6, 3)
+                plt.savefig('reports/crispy/svplots/svplot_{}_{}.png'.format(sample, chrm), bbox_inches='tight', dpi=600)
+                plt.close('all')
