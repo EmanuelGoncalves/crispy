@@ -69,10 +69,6 @@ def plot_rearrangements(brass, crispr, ngsc, chrm, winsize=1e5, chrm_size=None, 
     chrm_size = CHR_SIZES_HG19 if chrm_size is None else chrm_size
 
     #
-    winsize /= scale
-    chrm_size = {k: v / scale for k, v in chrm_size.items()}
-
-    #
     xlim = (0, chrm_size[chrm]) if xlim is None else xlim
 
     #
@@ -80,24 +76,16 @@ def plot_rearrangements(brass, crispr, ngsc, chrm, winsize=1e5, chrm_size=None, 
 
     # BRASS
     brass_ = brass[(brass['chr1'] == chrm) | (brass['chr2'] == chrm)]
-    brass_['start1'] /= scale
-    brass_['start2'] /= scale
-    brass_['end1'] /= scale
-    brass_['end2'] /= scale
 
     # NGSC
     ngsc_ = ngsc[ngsc['chr'] == chrm]
     ngsc_ = ngsc_[ngsc_['norm_logratio'] <= 2]
-    ngsc_['start'] /= scale
-    ngsc_['end'] /= scale
     ngsc_ = ngsc_.assign(location=ngsc_[['start', 'end']].mean(1))
     ngsc_ = ngsc_.assign(interval=pd.cut(ngsc_['location'], intervals, include_lowest=True, right=False))
     ngsc_ = ngsc_.groupby('interval').mean()
 
     # CRISPR
     crispr_ = crispr[crispr['chr'] == chrm]
-    crispr_['start'] /= scale
-    crispr_['end'] /= scale
     crispr_ = crispr_.assign(location=crispr_[['start', 'end']].mean(1))
     # crispr_ = crispr_.assign(interval=pd.cut(crispr_['location'], intervals, include_lowest=True, right=False))
     # crispr_ = crispr_.groupby('interval').mean()
@@ -114,14 +102,17 @@ def plot_rearrangements(brass, crispr, ngsc, chrm, winsize=1e5, chrm_size=None, 
     ax1.set_ylim(-1, 1)
 
     #
-    ax2.scatter(ngsc_['location'], ngsc_['absolute_cn'], s=2, alpha=.5, c=bipal_dbgd[0], label='copy-number')
+    ax2.scatter(ngsc_['location'] / scale, ngsc_['absolute_cn'], s=2, alpha=.5, c=bipal_dbgd[0], label='copy-number')
     ax2.set_ylim(0.0, np.ceil(ngsc_['absolute_cn'].quantile(0.99)))
 
     #
-    ax3.scatter(crispr_[['start', 'end']].mean(1), crispr_['crispr'], s=2, alpha=.5, c=bipal_dbgd[1], label='crispr')
+    ax3.scatter(crispr_[['start', 'end']].mean(1) / scale, crispr_['crispr'], s=2, alpha=.5, c=bipal_dbgd[1], label='crispr')
 
     #
     for c1, s1, e1, c2, s2, e2, st1, st2, sv in brass_[['chr1', 'start1', 'end1', 'chr2', 'start2', 'end2', 'strand1', 'strand2', 'svclass']].values:
+        if c1 != c2:
+            print(c1, s1, e1, c2, s2, e2, st1, st2, sv)
+
         stype = svtype(st1, st2, sv)
         stype_col = PALETTE[stype]
 
@@ -131,34 +122,39 @@ def plot_rearrangements(brass, crispr, ngsc, chrm, winsize=1e5, chrm_size=None, 
         if c1 == c2:
             angle = 0 if stype in ['tandem-duplication', 'deletion'] else 180
 
-            xy = (np.mean([x1_mean, x2_mean]), 0)
+            xy = (np.mean([x1_mean, x2_mean]) / scale, 0)
 
-            ax1.add_patch(Arc(xy, x2_mean - x1_mean, 1., angle=angle, theta1=0, theta2=180, edgecolor=stype_col))
+            ax1.add_patch(Arc(xy, (x2_mean - x1_mean) / scale, 1., angle=angle, theta1=0, theta2=180, edgecolor=stype_col))
 
         # Plot segments
         for ymin, ymax, ax in [(-1, 0.5, ax1), (-1, 1, ax2), (0, 1, ax3)]:
             if (c1 == chrm) and (xlim[0] <= x1_mean <= xlim[1]):
                 ax.axvline(
-                    x=x1_mean, ymin=ymin, ymax=ymax, c=stype_col, linewidth=.3, zorder=0, clip_on=False, label=stype
+                    x=x1_mean / scale, ymin=ymin, ymax=ymax, c=stype_col, linewidth=.3, zorder=0, clip_on=False, label=stype
                 )
 
-            if (c2 == chrm) and (xlim[0] <= x1_mean <= xlim[1]):
+            if (c2 == chrm) and (xlim[0] <= x2_mean <= xlim[1]):
                 ax.axvline(
-                    x=x2_mean, ymin=ymin, ymax=ymax, c=stype_col, linewidth=.3, zorder=0, clip_on=False, label=stype
+                    x=x2_mean / scale, ymin=ymin, ymax=ymax, c=stype_col, linewidth=.3, zorder=0, clip_on=False, label=stype
                 )
 
-    #
-    plt.xlim(-winsize, chrm_size[chrm] + winsize)
+        # Translocation label
+        if stype == 'translocation':
+            if (c1 == chrm) and (xlim[0] <= x1_mean <= xlim[1]):
+                ax1.text(x1_mean / scale, 0, '{} {}'.format(c2, st1), color=stype_col, ha='center', fontsize=5, rotation=90, va='bottom')
+
+            if (c2 == chrm) and (xlim[0] <= x2_mean <= xlim[1]):
+                ax1.text(x2_mean / scale, 0, '{} {}'.format(c1, st2), color=stype_col, ha='center', fontsize=5, rotation=90, va='bottom')
 
     #
     by_label = {l: p for ax in [ax2, ax3] for p, l in zip(*(ax.get_legend_handles_labels()))}
     ax2.legend(by_label.values(), by_label.keys(), loc='center left', bbox_to_anchor=(1.04, 0.5))
 
     #
-    plt.xlabel('{}'.format(chrm))
+    plt.xlabel('{} Mb'.format(chrm))
 
     #
-    plt.xlim(xlim[0], xlim[1])
+    plt.xlim(xlim[0] / scale, xlim[1] / scale)
 
     return plt.gcf()
 
