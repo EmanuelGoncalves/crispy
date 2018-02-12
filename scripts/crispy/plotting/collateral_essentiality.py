@@ -14,13 +14,6 @@ from statsmodels.stats.multitest import multipletests
 
 def main():
     # - Import
-    # (non)essential genes
-    essential = pd.read_csv('data/gene_sets/curated_BAGEL_essential.csv', sep='\t')['gene'].rename('essential')
-    nessential = pd.read_csv('data/gene_sets/curated_BAGEL_nonEssential.csv', sep='\t')['gene'].rename('non-essential')
-
-    # CRISPR library
-    lib = pd.read_csv('data/crispr_libs/KY_Library_v1.1_updated.csv', index_col=0).groupby('gene')['chr'].first()
-
     # Samplesheet
     ss = pd.read_csv('data/gdsc/samplesheet.csv', index_col=0)
 
@@ -33,9 +26,6 @@ def main():
 
     # Ploidy
     ploidy = pd.read_csv('data/crispy_copy_number_ploidy_snp.csv', index_col=0, names=['sample', 'ploidy'])['ploidy']
-
-    # Chromosome copies
-    chrm = pd.read_csv('data/crispy_copy_number_chr_snp.csv', index_col=0)
 
     # Copy-number ratios
     cnv_ratios = pd.read_csv('data/crispy_copy_number_gene_ratio_snp.csv', index_col=0)

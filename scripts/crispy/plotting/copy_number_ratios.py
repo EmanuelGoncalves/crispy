@@ -176,11 +176,11 @@ def main():
     ratios_heatmap('cnv_bin', 'chr_cnv_bin', 'ratio_bin', df, 'reports/crispy/copynumber_ratio_heatmap.png', z_bin='1')
 
     # - Plot: CRISPR bias correlation with copy-number and ratios
-    genes = list(set(c_gdsc_crispy_kmean.index).intersection(cnv.index).intersection(cnv_ratios.index))
+    genes = list(set(c_gdsc_fc[samples].dropna(how='all').index).intersection(cnv[samples].dropna(how='all').index).intersection(cnv_ratios[samples].dropna(how='all').index))
 
     plot_df = pd.concat([
-        c_gdsc_crispy_kmean.loc[genes, samples].T.corrwith(cnv.loc[genes, samples].T).rename('Copy-number'),
-        c_gdsc_crispy_kmean.loc[genes, samples].T.corrwith(cnv_ratios.loc[genes, samples].T).rename('Ratio'),
+        c_gdsc_fc.loc[genes, samples].T.corrwith(cnv.loc[genes, samples].T).rename('Copy-number'),
+        c_gdsc_fc.loc[genes, samples].T.corrwith(cnv_ratios.loc[genes, samples].T).rename('Ratio'),
     ], axis=1)
 
     copynumber_kmean_corr('Copy-number', 'Ratio', plot_df, 'reports/crispy/copynumber_ratio_corr_histogram.png')

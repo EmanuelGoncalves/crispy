@@ -151,7 +151,7 @@ if __name__ == '__main__':
     bedpe_dir = 'data/gdsc/wgs/brass_bedpe'
 
     # Annotate BRASS bedpes
-    bed_dfs = annotate_brass_bedpe(bedpe_dir, bkdist=2500, splitreads=True)
+    bed_dfs = annotate_brass_bedpe(bedpe_dir, bkdist=-2, splitreads=True)
     bed_dfs.to_csv('{}/{}'.format(os.path.dirname(bedpe_dir), 'brass.genes.gff.tab'), index=False, sep='\t')
 
     # - Append information of copy-number ratio

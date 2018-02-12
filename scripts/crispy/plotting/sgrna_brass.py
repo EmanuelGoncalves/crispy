@@ -36,14 +36,14 @@ if __name__ == '__main__':
         print('[INFO] {}'.format(bedpe_file))
 
         # Import and filter bedpe
-        bed_df = import_brass_bedpe(bedpe_file, bkdist=0, splitreads=True)
+        bed_df = import_brass_bedpe(bedpe_file, bkdist=-2, splitreads=True)
 
         # Append df
         bed_df = bed_df.assign(sample=os.path.splitext(os.path.basename(bedpe_file))[0].split('.')[0])
         bed_dfs.append(bed_df)
 
     # Assemble annotated bed dataframes
-    bed_dfs = pd.concat(bed_dfs)
+    bed_dfs = pd.concat(bed_dfs).reset_index(drop=True)
 
     # - CRISPR/Cas9 sgRNA
     crispr_sgrna = pd.read_csv('data/crispr_gdsc_sgrna_logfc.csv', index_col=0)
@@ -53,14 +53,6 @@ if __name__ == '__main__':
     print('Samples: {}'.format(len(samples)))
 
     # -
-    bedpe = import_brass_bedpe('data/gdsc/wgs/brass_bedpe/HCC1187.brass.annot.bedpe', bkdist=0, splitreads=True)
-    ngsc = pd.read_csv(
-        'data/gdsc/wgs/brass_intermediates/HCC1187.ngscn.abs_cn.bg', sep='\t', header=None,
-        names=['chr', 'start', 'end', 'cn', 'score'], dtype={'chr': str, 'start': int, 'end': int, 'cn': float, 'score': float}
-    )
+    sample = 'NCI-H2087'
 
-    chrm = '13'
-
-    ngsc_ = ngsc[ngsc['chr'] == chrm]
-    bedpe_ = bedpe[bedpe['chr1'] == chrm]
-
+    bed_dfs[(bed_dfs['sample'] == sample) & (bed_dfs['svclass'] == 'translocation')]

@@ -1,15 +1,18 @@
 #!/usr/bin/env python
 # Copyright (C) 2018 Emanuel Goncalves
 
+import pickle
 import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
+import matplotlib.ticker as plticker
 from matplotlib.gridspec import GridSpec
 from crispy import bipal_dbgd
 from matplotlib.patches import Arc
 from collections import OrderedDict
 from crispy.ratio import BRASS_HEADERS
+from scripts.crispy.processing.correct_cnv_bias import assemble_matrix
 
 
 PALETTE = {
@@ -62,6 +65,10 @@ def import_brass_bedpe(bedpe_file, bkdist, splitreads):
     if splitreads:
         bedpe_df = bedpe_df.query("assembly_score != '_'")
 
+    # Parse chromosome name
+    bedpe_df = bedpe_df.assign(chr1=bedpe_df['chr1'].apply(lambda x: 'chr{}'.format(x)).values)
+    bedpe_df = bedpe_df.assign(chr2=bedpe_df['chr2'].apply(lambda x: 'chr{}'.format(x)).values)
+
     return bedpe_df
 
 
@@ -102,11 +109,18 @@ def plot_rearrangements(brass, crispr, ngsc, chrm, winsize=1e5, chrm_size=None, 
     ax1.set_ylim(-1, 1)
 
     #
-    ax2.scatter(ngsc_['location'] / scale, ngsc_['absolute_cn'], s=2, alpha=.5, c=bipal_dbgd[0], label='copy-number')
+    ax2.scatter(ngsc_['location'] / scale, ngsc_['absolute_cn'], s=2, alpha=.5, c=bipal_dbgd[0], label='copy-number', zorder=1)
     ax2.set_ylim(0.0, np.ceil(ngsc_['absolute_cn'].quantile(0.99)))
 
     #
-    ax3.scatter(crispr_[['start', 'end']].mean(1) / scale, crispr_['crispr'], s=2, alpha=.5, c=bipal_dbgd[1], label='crispr')
+    ax3.scatter(crispr_['location'] / scale, crispr_['crispr'], s=2, alpha=.5, c=bipal_dbgd[1], label='crispr', zorder=1)
+
+    #
+    if 'snp' in crispr.columns:
+        ax2.scatter(crispr_['location'] / scale, crispr_['snp'], s=4, alpha=.5, c='#d9d9d9', zorder=2, label='SNP6')
+
+    if 'kmean' in crispr.columns:
+        ax3.scatter(crispr_['location'] / scale, crispr_['kmean'], s=4, alpha=.5, c='#d9d9d9', zorder=2, label='Crispy')
 
     #
     for c1, s1, e1, c2, s2, e2, st1, st2, sv in brass_[['chr1', 'start1', 'end1', 'chr2', 'start2', 'end2', 'strand1', 'strand2', 'svclass']].values:
@@ -121,55 +135,77 @@ def plot_rearrangements(brass, crispr, ngsc, chrm, winsize=1e5, chrm_size=None, 
 
             xy = (np.mean([x1_mean, x2_mean]) / scale, 0)
 
-            ax1.add_patch(Arc(xy, (x2_mean - x1_mean) / scale, 1., angle=angle, theta1=0, theta2=180, edgecolor=stype_col))
+            ax1.add_patch(Arc(xy, (x2_mean - x1_mean) / scale, 1., angle=angle, theta1=0, theta2=180, edgecolor=stype_col, lw=.1))
 
         # Plot segments
         for ymin, ymax, ax in [(-1, 0.5, ax1), (-1, 1, ax2), (0, 1, ax3)]:
             if (c1 == chrm) and (xlim[0] <= x1_mean <= xlim[1]):
                 ax.axvline(
-                    x=x1_mean / scale, ymin=ymin, ymax=ymax, c=stype_col, linewidth=.3, zorder=0, clip_on=False, label=stype
+                    x=x1_mean / scale, ymin=ymin, ymax=ymax, c=stype_col, linewidth=.1, zorder=0, clip_on=False, label=stype
                 )
 
             if (c2 == chrm) and (xlim[0] <= x2_mean <= xlim[1]):
                 ax.axvline(
-                    x=x2_mean / scale, ymin=ymin, ymax=ymax, c=stype_col, linewidth=.3, zorder=0, clip_on=False, label=stype
+                    x=x2_mean / scale, ymin=ymin, ymax=ymax, c=stype_col, linewidth=.1, zorder=0, clip_on=False, label=stype
                 )
 
         # Translocation label
         if stype == 'translocation':
             if (c1 == chrm) and (xlim[0] <= x1_mean <= xlim[1]):
-                ax1.text(x1_mean / scale, 0, '{} {}'.format(c2, st1), color=stype_col, ha='center', fontsize=5, rotation=90, va='bottom')
+                ax1.text(x1_mean / scale, 0, ' to {}'.format(c2), color=stype_col, ha='center', fontsize=3, rotation=90, va='bottom')
 
             if (c2 == chrm) and (xlim[0] <= x2_mean <= xlim[1]):
-                ax1.text(x2_mean / scale, 0, '{} {}'.format(c1, st2), color=stype_col, ha='center', fontsize=5, rotation=90, va='bottom')
+                ax1.text(x2_mean / scale, 0, ' to {}'.format(c1), color=stype_col, ha='center', fontsize=3, rotation=90, va='bottom')
 
     #
-    by_label = {l: p for ax in [ax2, ax3] for p, l in zip(*(ax.get_legend_handles_labels()))}
-    ax2.legend(by_label.values(), by_label.keys(), loc='center left', bbox_to_anchor=(1.04, 0.5))
+    by_label = {l: p for p, l in zip(*(ax2.get_legend_handles_labels())) if l in PALETTE}
+    ax1.legend(by_label.values(), by_label.keys(), loc='center left', bbox_to_anchor=(1.02, 0.5), prop={'size': 4})
+
+    by_label = {l: p for p, l in zip(*(ax2.get_legend_handles_labels())) if l not in PALETTE}
+    ax2.legend(by_label.values(), by_label.keys(), loc='center left', bbox_to_anchor=(1.02, 0.5), prop={'size': 4})
+
+    by_label = {l: p for p, l in zip(*(ax3.get_legend_handles_labels())) if l not in PALETTE}
+    ax3.legend(by_label.values(), by_label.keys(), loc='center left', bbox_to_anchor=(1.02, 0.5), prop={'size': 4})
 
     #
-    plt.xlabel('{} Mb'.format(chrm))
+    ax1.axis('off')
+
+    #
+    ax2.yaxis.set_major_locator(plticker.MultipleLocator(base=2.))
+    ax3.yaxis.set_major_locator(plticker.MultipleLocator(base=2.))
+
+    #
+    ax1.set_ylabel('SV')
+    ax2.set_ylabel('Copy-number')
+    ax3.set_ylabel('CRISPR')
+
+    #
+    plt.xlabel('Position on chromosome {} (Mb)'.format(chrm.replace('chr', '')))
 
     #
     plt.xlim(xlim[0] / scale, xlim[1] / scale)
 
-    return plt.gcf()
+    return ax1, ax2, ax3
 
 
 if __name__ == '__main__':
     # - Import CRISPR
+    cnv = pd.read_csv('data/crispy_copy_number_gene_snp.csv', index_col=0)
+    kmean = assemble_matrix('data/crispy/gdsc/', 'k_mean')
     sgrna_lib = pd.read_csv('data/crispr_libs/KY_Library_v1.1_updated.csv', index_col=0)
     crispr_sgrna = pd.read_csv('data/crispr_gdsc_sgrna_logfc.csv', index_col=0)
+    nexp = pickle.load(open('data/gdsc/nexp_pickle.pickle', 'rb'))
+    ss = pd.read_csv('data/gdsc/samplesheet.csv', index_col=0)
 
     samples = ['NCI-H2087', 'LS-1034', 'HCC1954', 'HCC1143', 'HCC38', 'HCC1187', 'HCC1937', 'HCC1395']
+    # samples = ['LS-1034', 'HCC1143', 'HCC38', 'HCC1187', 'HCC1937', 'HCC1395']
+    # samples = set(samples).intersection(nexp)
 
     #
-    sample, chrm, = 'HCC1143', 'chr9'
+    sample, chrm, = 'HCC1937', 'chr11'
 
     #
-    bedpe = import_brass_bedpe('data/gdsc/wgs/brass_bedpe/{}.brass.annot.bedpe'.format(sample), bkdist=None, splitreads=False)
-    bedpe = bedpe.assign(chr1=bedpe['chr1'].apply(lambda x: 'chr{}'.format(x)).values)
-    bedpe = bedpe.assign(chr2=bedpe['chr2'].apply(lambda x: 'chr{}'.format(x)).values)
+    bedpe = import_brass_bedpe('data/gdsc/wgs/brass_bedpe/{}.brass.annot.bedpe'.format(sample), bkdist=None, splitreads=True)
 
     #
     ngsc = pd.read_csv(
@@ -182,13 +218,16 @@ if __name__ == '__main__':
     print('Sample: {}; Chrm: {}'.format(sample, chrm))
 
     crispr = pd.concat([crispr_sgrna[sample].rename('crispr'), sgrna_lib], axis=1).dropna()
-    crispr = crispr.groupby('gene').agg({'start': np.min, 'end': np.max, 'chr': 'first', 'crispr': np.mean})
+    # crispr = crispr[crispr['gene'].isin(nexp[sample])]
+    crispr = crispr.assign(snp=cnv[sample].reindex(crispr['gene']).values)
+    crispr = crispr.assign(kmean=kmean[sample].reindex(crispr['gene']).values)
+    # crispr = crispr.groupby('gene').agg({'start': np.min, 'end': np.max, 'chr': 'first', 'crispr': np.mean})
 
-    svp = plot_rearrangements(bedpe, crispr, ngsc, chrm)
+    ax1, ax2, ax3 = plot_rearrangements(bedpe, crispr, ngsc, chrm)
 
     plt.suptitle('{}'.format(sample))
 
     #
-    plt.gcf().set_size_inches(6, 3)
-    plt.savefig('reports/crispy/svplot.png', bbox_inches='tight', dpi=600)
+    plt.gcf().set_size_inches(8, 3)
+    plt.savefig('reports/crispy/svplot.pdf', bbox_inches='tight')
     plt.close('all')

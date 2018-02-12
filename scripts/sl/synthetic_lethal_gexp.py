@@ -53,7 +53,7 @@ def plot_nfit(lmm_df, n=10):
 
 
 def lm_crispr_gexp(xs, ys, ws):
-    print('CRISPR genes: %d, Drug: %d' % (len(set(xs.columns)), len(set(ys.columns))))
+    print('CRISPR genes: %d, RNA-Seq genes: %d' % (len(set(xs.columns)), len(set(ys.columns))))
 
     # Standardize xs
     xs = pd.DataFrame(StandardScaler().fit_transform(xs), index=xs.index, columns=xs.columns)
@@ -88,7 +88,7 @@ if __name__ == '__main__':
 
     # - Overlap + Filter
     # Filter
-    samples = list(set(crispr_scaled).intersection(gexp).intersection(ss.index))
+    samples = list(set(crispr_scaled).intersection(gexp).intersection(ss.index).intersection(growth.index))
     crispr_scaled, gexp = crispr_scaled[samples], gexp[samples]
 
     # CRISPR
