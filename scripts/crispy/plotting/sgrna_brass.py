@@ -27,16 +27,38 @@ def import_brass_bedpe(bedpe_file, bkdist, splitreads):
     return bedpe_df
 
 
+def bin_bkdist(distance):
+    if 1 < distance < 10e3:
+        bin_distance = '1-10 kb'
+
+    elif 10e3 < distance < 100e3:
+        bin_distance = '1-100 kb'
+
+    elif 100e3 < distance < 1e6:
+        bin_distance = '0.1-1 Mb'
+
+    elif 1e6 < distance < 10e6:
+        bin_distance = '1-10 Mb'
+
+    else:
+        bin_distance = '>10 Mb'
+
+    return bin_distance
+
+
 if __name__ == '__main__':
     bedpe_dir = 'data/gdsc/wgs/brass_bedpe'
 
+    samples = ['HCC1954', 'HCC1143', 'HCC38', 'HCC1187', 'HCC1937', 'HCC1395']
+
     # - BRASS
     bed_dfs = []
-    for bedpe_file in map(lambda f: '{}/{}'.format(bedpe_dir, f), filter(lambda f: f.endswith('.brass.annot.bedpe'), os.listdir(bedpe_dir))):
+    for s in samples:
+        bedpe_file = '{}/{}.brass.annot.bedpe'.format(bedpe_dir, s)
         print('[INFO] {}'.format(bedpe_file))
 
         # Import and filter bedpe
-        bed_df = import_brass_bedpe(bedpe_file, bkdist=-2, splitreads=True)
+        bed_df = import_brass_bedpe(bedpe_file, bkdist=-2, splitreads=False)
 
         # Append df
         bed_df = bed_df.assign(sample=os.path.splitext(os.path.basename(bedpe_file))[0].split('.')[0])
@@ -46,13 +68,12 @@ if __name__ == '__main__':
     bed_dfs = pd.concat(bed_dfs).reset_index(drop=True)
 
     # - CRISPR/Cas9 sgRNA
-    crispr_sgrna = pd.read_csv('data/crispr_gdsc_sgrna_logfc.csv', index_col=0)
-
-    # - Overlap
-    samples = list(set(crispr_sgrna).intersection(bed_dfs['sample']))
-    print('Samples: {}'.format(len(samples)))
+    crispr_sgrna = pd.read_csv('data/crispr_gdsc_sgrna_logfc.csv', index_col=0)[samples].dropna()
 
     # -
-    sample = 'NCI-H2087'
+    plot_df = bed_dfs[bed_dfs['bkdist'] > -1]
+    plot_df = plot_df.assign(binbkdist=plot_df['bkdist'].map(bin_bkdist).values)
+    plot_df = plot_df.groupby(['sample', 'svclass', 'binbkdist'])['bkdist'].count().reset_index()
 
-    bed_dfs[(bed_dfs['sample'] == sample) & (bed_dfs['svclass'] == 'translocation')]
+    sns.barplot('svclass', 'bkdist', 'binbkdist', data=plot_df, hue_order=['1-10 kb', '1-100 kb', '0.1-1 Mb', '1-10 Mb', '>10 Mb'], palette='Blues', ci=None)
+    plt.show()

@@ -16,7 +16,7 @@ from scripts.crispy.processing.correct_cnv_bias import assemble_matrix
 
 
 def import_brass_bedpe(bedpe_file, bkdist, splitreads):
-    # bedpe_file = 'data/gdsc/wgs/brass_bedpe/BB65-RCC.brass.annot.bedpe'
+    # bedpe_file = 'data/gdsc/wgs/brass_bedpe/HCC1143.brass.annot.bedpe'
     # Import BRASS bedpe
     bedpe_df = pd.read_csv(bedpe_file, sep='\t', names=BRASS_HEADERS, comment='#')
 
@@ -33,8 +33,8 @@ def import_brass_bedpe(bedpe_file, bkdist, splitreads):
     # Assemble bed file
     bed_df = pd.concat([
         bedpe_df['chr1'].rename('#chr').apply(lambda x: 'chr{}'.format(x)),
-        bedpe_df['start1'].rename('start'),
-        bedpe_df['end2'].rename('end'),
+        bedpe_df[['start1', 'end1']].mean(1).astype(int).rename('start'),
+        bedpe_df[['start2', 'end2']].mean(1).astype(int).rename('end'),
         bedpe_df['svclass'].rename('svclass')
     ], axis=1)
 
@@ -51,9 +51,16 @@ def annotate_bed(bed_file, methods='collapse,count'):
     return genes_sv
 
 
-def annotate_brass_bedpe(bedpe_dir, bkdist, splitreads):
+def annotate_brass_bedpe(bedpe_dir, bkdist, splitreads, samples=None):
     bed_dfs = []
+
     for bedpe_file in map(lambda f: '{}/{}'.format(bedpe_dir, f), filter(lambda f: f.endswith('.brass.annot.bedpe'), os.listdir(bedpe_dir))):
+        # Sample name
+        sample = os.path.splitext(os.path.basename(bedpe_file))[0].split('.')[0]
+
+        if (samples is not None) and (sample not in samples):
+            continue
+
         print('[INFO] {}'.format(bedpe_file))
 
         # Import and filter bedpe
@@ -71,7 +78,7 @@ def annotate_brass_bedpe(bedpe_dir, bkdist, splitreads):
             bed_annot_df.to_csv(bed_annot_file, sep='\t', index=False)
 
             # Append df
-            bed_annot_df = bed_annot_df.assign(sample=os.path.splitext(os.path.basename(bedpe_file))[0].split('.')[0])
+            bed_annot_df = bed_annot_df.assign(sample=sample)
             bed_dfs.append(bed_annot_df)
 
     # Assemble annotated bed dataframes
@@ -151,11 +158,14 @@ if __name__ == '__main__':
     bedpe_dir = 'data/gdsc/wgs/brass_bedpe'
 
     # Annotate BRASS bedpes
-    bed_dfs = annotate_brass_bedpe(bedpe_dir, bkdist=-2, splitreads=True)
+    bed_dfs = annotate_brass_bedpe(bedpe_dir, bkdist=-1, splitreads=False)
     bed_dfs.to_csv('{}/{}'.format(os.path.dirname(bedpe_dir), 'brass.genes.gff.tab'), index=False, sep='\t')
 
+    # - CRISPR
+    c_gdsc_fc = pd.read_csv('data/crispr_gdsc_logfc.csv', index_col=0)
+
     # - Append information of copy-number ratio
-    # Import copy-number
+    # Copy-number
     cnv_ratios = pd.read_csv('data/crispy_copy_number_gene_ratio_wgs.csv', index_col=0)
 
     # Overlap

@@ -197,12 +197,12 @@ if __name__ == '__main__':
     nexp = pickle.load(open('data/gdsc/nexp_pickle.pickle', 'rb'))
     ss = pd.read_csv('data/gdsc/samplesheet.csv', index_col=0)
 
-    samples = ['NCI-H2087', 'LS-1034', 'HCC1954', 'HCC1143', 'HCC38', 'HCC1187', 'HCC1937', 'HCC1395']
+    samples = ['HCC1954', 'HCC1143', 'HCC38', 'HCC1187', 'HCC1937', 'HCC1395']
     # samples = ['LS-1034', 'HCC1143', 'HCC38', 'HCC1187', 'HCC1937', 'HCC1395']
     # samples = set(samples).intersection(nexp)
 
     #
-    sample, chrm, = 'HCC1937', 'chr11'
+    sample, chrm, = 'HCC1143', 'chr11'
 
     #
     bedpe = import_brass_bedpe('data/gdsc/wgs/brass_bedpe/{}.brass.annot.bedpe'.format(sample), bkdist=None, splitreads=True)
