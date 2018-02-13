@@ -110,7 +110,8 @@ def plot_rearrangements(brass, crispr, ngsc, chrm, winsize=1e5, chrm_size=None, 
 
     #
     ax2.scatter(ngsc_['location'] / scale, ngsc_['absolute_cn'], s=2, alpha=.5, c=bipal_dbgd[0], label='copy-number', zorder=1)
-    ax2.set_ylim(0.0, np.ceil(ngsc_['absolute_cn'].quantile(0.99)))
+    # ax2.set_ylim(0.0, np.ceil(ngsc_['absolute_cn'].quantile(0.99)))
+    # ax2.set_ylim(0.0, np.max(ngsc_['absolute_cn']))
 
     #
     ax3.scatter(crispr_['location'] / scale, crispr_['crispr'], s=2, alpha=.5, c=bipal_dbgd[1], label='crispr', zorder=1)
@@ -202,7 +203,7 @@ if __name__ == '__main__':
     # samples = set(samples).intersection(nexp)
 
     #
-    sample, chrm, = 'HCC1143', 'chr11'
+    sample, chrm, = 'HCC1143', 'chr12'
 
     #
     bedpe = import_brass_bedpe('data/gdsc/wgs/brass_bedpe/{}.brass.annot.bedpe'.format(sample), bkdist=None, splitreads=True)

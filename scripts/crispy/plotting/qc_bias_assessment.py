@@ -210,7 +210,6 @@ def main():
         'reports/crispy/cancer_types_histogram.png'
     )
 
-
     # - Plot: QC Gene-sets AUCs
     auc_stats_fc_ess = auc_curves(c_gdsc_fc[samples], essential, 'reports/crispy/qc_aucs_fc_essential.png')
     auc_stats_fc_ness = auc_curves(c_gdsc_fc[samples], nessential, 'reports/crispy/qc_aucs_fc_nonessential.png')
@@ -229,7 +228,6 @@ def main():
         pd.concat([pd.Series(auc_stats_fc_ness['auc'], name='Original'), pd.Series(auc_stats_crispy_ness['auc'], name='Corrected')], axis=1),
         'reports/crispy/qc_aucs_nonessential.png', 'Non-essential genes'
     )
-
 
     # - Plot: Copy-number bias in ORIGINAL CRISPR fold-changes (AROCs)
     plot_df = pd.concat([
