@@ -31,7 +31,7 @@ def plot_cumsum_auc(X, index_set, ax=None, palette=None, legend=True, plot_mean=
         'auc': {}
     }
 
-    palette = sns.color_palette('viridis', X.shape[1]).as_hex() if None else palette
+    palette = sns.color_palette('viridis', X.shape[1]).as_hex() if palette is None else palette
 
     for c, f in zip(palette, list(X)):
         # Build data-frame

@@ -22,6 +22,13 @@ def multilabel_roc_auc_score(y_true, y_pred, data, min_events=1, invert=-1):
     }
 
 
+def multilabel_roc_auc_score_array(y_true, y_pred, min_events=1, invert=-1):
+    return {
+        t: roc_auc_score((y_true == t).astype(int), invert * y_pred)
+        for t in set(y_true) if ((y_true == t).sum() >= min_events) and (len(set(y_true)) > 1)
+    }
+
+
 def qnorm(x):
     y = st.rankdata(x)
     y = -st.norm.isf(y / (len(x) + 1))

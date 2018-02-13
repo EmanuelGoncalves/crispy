@@ -67,7 +67,7 @@ class CRISPRCorrection(GaussianProcessRegressor):
             y = pd.Series(self.y_train_, index=self.index, name=self.y_name)
 
         res = pd.concat([X, y], axis=1)\
-            .assign(k_mean=self.predict(X, return_std=False) - self.y_train_mean)\
+            .assign(k_mean=self.predict(X, return_std=False) - self.y_train_.mean())\
             .assign(fit_by=self.fit_by_value)
 
         res = res.assign(regressed_out=res[self.y_name] - res['k_mean'])
@@ -133,18 +133,18 @@ if __name__ == '__main__':
     print('Crispy bias correction test: {}'.format(sample))
 
     # Import sgRNA library
-    lib = pd.read_csv('data/gencode.v27lift37.annotation.sorted.gff', sep='\t', names=GFF_HEADERS, index_col='feature')['chr']
+    lib = pd.read_csv('data/crispr_libs/KY_Library_v1.1_updated.csv', index_col=0).groupby('gene')['chr'].first().dropna()
 
     # CRISPR fold-changes
     crispr = pd.read_csv('data/crispr_gdsc_logfc.csv', index_col=0)[sample]
 
     # Copy-number
-    cnv = pd.read_csv('data/crispy_gene_copy_number_snp.csv', index_col=0)[sample]
+    cnv = pd.read_csv('data/crispy_copy_number_gene_snp.csv', index_col=0)[sample]
 
     # Build data-frame
     df = pd.concat([crispr.rename('fc'), cnv.rename('cnv'), lib.rename('chr')], axis=1).dropna()
     df = df[df['chr'].isin(['chr1', 'chr17'])]
-    assert df.shape > 0, 'Empty data-frame'
+    assert df.shape[0] > 0, 'Empty data-frame'
 
     # Correction
     crispy = CRISPRCorrection().rename(sample).fit_by(by=df['chr'], X=df[['cnv']], y=df['fc'])

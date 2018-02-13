@@ -65,8 +65,6 @@ if __name__ == '__main__':
 
         svmatrix = svmatrix.assign(cnv=cnv[sample].reindex(svmatrix.index).values)
 
-        svmatrix = svmatrix.assign(cnv_bin=svmatrix['cnv'].apply(lambda v: bin_cnv(v, 10)).values)
-
         svmatrix = svmatrix.dropna()
 
         # Correction
@@ -81,4 +79,4 @@ if __name__ == '__main__':
             by=svmatrix['chr'], X=svmatrix.drop(['chr', 'crispr'], axis=1), y=svmatrix['crispr']
         )
         crispy_svs = pd.concat([v.to_dataframe() for k, v in crispy_svs.items()])
-        crispy_cnv.to_csv('data/crispy/gdsc_brass/{}.svs.csv'.format(sample))
+        crispy_svs.to_csv('data/crispy/gdsc_brass/{}.svs.csv'.format(sample))
