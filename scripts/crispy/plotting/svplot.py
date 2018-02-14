@@ -27,8 +27,6 @@ CHR_SIZES_HG19 = {
 
 
 def svtype(strand1, strand2, svclass):
-    svtype = None
-
     if svclass == 'translocation':
         svtype = 'translocation'
 
@@ -110,18 +108,18 @@ def plot_rearrangements(brass, crispr, ngsc, chrm, winsize=1e5, chrm_size=None, 
 
     #
     ax2.scatter(ngsc_['location'] / scale, ngsc_['absolute_cn'], s=2, alpha=.5, c=bipal_dbgd[0], label='copy-number', zorder=1)
-    # ax2.set_ylim(0.0, np.ceil(ngsc_['absolute_cn'].quantile(0.99)))
-    # ax2.set_ylim(0.0, np.max(ngsc_['absolute_cn']))
+    ax2.set_ylim(0.0, np.ceil(ngsc_['absolute_cn'].quantile(0.99)))
 
     #
     ax3.scatter(crispr_['location'] / scale, crispr_['crispr'], s=2, alpha=.5, c=bipal_dbgd[1], label='crispr', zorder=1)
+    ax3.axhline(0.0, lw=.3, color=bipal_dbgd[0])
 
     #
-    if 'snp' in crispr.columns:
-        ax2.scatter(crispr_['location'] / scale, crispr_['snp'], s=4, alpha=.5, c='#d9d9d9', zorder=2, label='SNP6')
+    if 'cnv' in crispr.columns:
+        ax2.scatter(crispr_['location'] / scale, crispr_['cnv'], s=3, alpha=.5, c='#d9d9d9', zorder=2, label='ASCAT')
 
-    if 'kmean' in crispr.columns:
-        ax3.scatter(crispr_['location'] / scale, crispr_['kmean'], s=4, alpha=.5, c='#d9d9d9', zorder=2, label='Crispy')
+    if 'k_mean' in crispr.columns:
+        ax3.scatter(crispr_['location'] / scale, crispr_['k_mean'], s=3, alpha=.5, c='#d9d9d9', zorder=2, label='Crispy')
 
     #
     for c1, s1, e1, c2, s2, e2, st1, st2, sv in brass_[['chr1', 'start1', 'end1', 'chr2', 'start2', 'end2', 'strand1', 'strand2', 'svclass']].values:
@@ -203,7 +201,7 @@ if __name__ == '__main__':
     # samples = set(samples).intersection(nexp)
 
     #
-    sample, chrm, = 'HCC1143', 'chr12'
+    sample, chrm, = 'HCC1187', 'chr1'
 
     #
     bedpe = import_brass_bedpe('data/gdsc/wgs/brass_bedpe/{}.brass.annot.bedpe'.format(sample), bkdist=None, splitreads=True)
@@ -230,5 +228,5 @@ if __name__ == '__main__':
 
     #
     plt.gcf().set_size_inches(8, 3)
-    plt.savefig('reports/crispy/svplot.pdf', bbox_inches='tight')
+    plt.savefig('reports/crispy/svplot_{}_{}.pdf'.format(sample, chrm), bbox_inches='tight')
     plt.close('all')

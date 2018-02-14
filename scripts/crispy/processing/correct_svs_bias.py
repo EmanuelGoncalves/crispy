@@ -67,16 +67,23 @@ if __name__ == '__main__':
 
         svmatrix = svmatrix.dropna()
 
-        # Correction
-        crispy_cnv = CRISPRCorrection().rename(sample).fit_by(
+        # Correction only with copy-number
+        crispy_cnv_only = CRISPRCorrection().rename(sample).fit_by(
             by=svmatrix['chr'], X=svmatrix[['cnv']], y=svmatrix['crispr']
         )
-        crispy_cnv = pd.concat([v.to_dataframe() for k, v in crispy_cnv.items()])
-        crispy_cnv.to_csv('data/crispy/gdsc_brass/{}.copynumber.csv'.format(sample))
+        crispy_cnv_only = pd.concat([v.to_dataframe() for k, v in crispy_cnv_only.items()])
+        crispy_cnv_only.to_csv('data/crispy/gdsc_brass/{}.copynumber.csv'.format(sample))
 
-        # Correction
-        crispy_svs = CRISPRCorrection().rename(sample).fit_by(
+        # Correction only with SV features
+        crispy_svs_only = CRISPRCorrection().rename(sample).fit_by(
+            by=svmatrix['chr'], X=svmatrix.drop(['chr', 'crispr', 'cnv'], axis=1), y=svmatrix['crispr']
+        )
+        crispy_svs_only = pd.concat([v.to_dataframe() for k, v in crispy_svs_only.items()])
+        crispy_svs_only.to_csv('data/crispy/gdsc_brass/{}.svs.csv'.format(sample))
+
+        # Correction with all the features
+        crispy_all = CRISPRCorrection().rename(sample).fit_by(
             by=svmatrix['chr'], X=svmatrix.drop(['chr', 'crispr'], axis=1), y=svmatrix['crispr']
         )
-        crispy_svs = pd.concat([v.to_dataframe() for k, v in crispy_svs.items()])
-        crispy_svs.to_csv('data/crispy/gdsc_brass/{}.svs.csv'.format(sample))
+        crispy_all = pd.concat([v.to_dataframe() for k, v in crispy_all.items()])
+        crispy_all.to_csv('data/crispy/gdsc_brass/{}.all.csv'.format(sample))
