@@ -6,32 +6,43 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
 from crispy import bipal_dbgd
 from natsort import natsorted
 from crispy.utils import bin_cnv
 from crispy.regression.linear import lr
+from matplotlib.legend_handler import HandlerPatch
 from statsmodels.stats.multitest import multipletests
 
 
-def recurrent_amplified_genes(cnv, cnv_ratios, ploidy, genelist, min_events=3):
+class HandlerEllipse(HandlerPatch):
+    def create_artists(self, legend, orig_handle, xdescent, ydescent, width, height, fontsize, trans):
+        center = 0.5 * width - 0.5 * xdescent, 0.5 * height - 0.5 * ydescent
+        p = mpatches.Ellipse(xy=center, width=height + xdescent, height=height + ydescent)
+        self.update_prop(p, orig_handle, legend)
+        p.set_transform(trans)
+        return [p]
+
+
+def recurrent_amplified_genes(cnv, cnv_ratios, ploidy, min_events=3):
     g_amp = pd.DataFrame({s: (cnv[s] > 8 if ploidy[s] > 2.7 else cnv[s] > 4).astype(int) for s in cnv})
-    g_amp = g_amp.loc[g_amp.index.isin(cnv_ratios.index) & g_amp.index.isin(genelist)]
+    g_amp = g_amp.loc[g_amp.index.isin(cnv_ratios.index)]
     g_amp = g_amp[g_amp.sum(1) >= min_events]
     return list(g_amp.index)
 
 
-def recurrent_non_expressed_genes(nexp, min_events=3.):
+def recurrent_non_expressed_genes(nexp, min_events=3):
     g_nexp = nexp[nexp.sum(1) >= min_events]
     return list(g_nexp.index)
 
 
-def filter_low_var_essential(crispr_fc, abs_thres=2, min_events=3):
+def filter_low_var_essential(crispr_fc, abs_thres=1, min_events=3):
     genes_thres = (crispr_fc.abs() > abs_thres).sum(1)
     genes_thres = genes_thres[genes_thres >= min_events]
     return list(genes_thres.index)
 
 
-def lr_ess(xs, ys, non_expressed):
+def lr_ess(xs, ys, non_expressed, ratio_thres=1.5):
     # Run fit
     lm = lr(xs, ys)
 
@@ -42,9 +53,13 @@ def lr_ess(xs, ys, non_expressed):
     # Discard same gene associations
     lm_res = lm_res[lm_res['gene_crispr'] != lm_res['gene_ratios']]
 
-    # Count genes that display high copy-number ratios and are not expressed for associations
-    ratio_nexp_ov = (xs > 1.5).T.dot(non_expressed.loc[ys.columns, xs.index].T)
-    lm_res = lm_res.assign(overlap=[ratio_nexp_ov.loc[x, y] for x, y in lm_res[['gene_ratios', 'gene_crispr']].values])
+    # Calculate the percentages of cell lines in which X is amplified and Y is not expressed
+    ratio_nexp_ov = (xs > ratio_thres).T.dot(non_expressed.loc[ys.columns, xs.index].T).T
+    ratio_nexp_ov = (ratio_nexp_ov.divide((xs > ratio_thres).sum()) * 100).round(1)
+
+    lm_res = lm_res.assign(
+        overlap=[ratio_nexp_ov.loc[x, y] for x, y in lm_res[['gene_crispr', 'gene_ratios']].values]
+    )
 
     # FDR
     lm_res = lm_res.assign(f_fdr=multipletests(lm_res['f_pval'], method='fdr_bh')[1]).sort_values('f_fdr')
@@ -101,16 +116,46 @@ def association_boxplot(idx, lm_res, c_gdsc_fc, cnv, cnv_ratios, nexp, cnv_bin_t
     return y_feat, x_feat
 
 
-# def plot_count_associations():
-#     plt.barh(plot_df['ypos'], plot_df['count'], .8, color=bipal_dbgd[0], align='center')
-#
-#     for x, y in plot_df[['ypos', 'count']].values:
-#         plt.text(y - .5, x, str(y), color='white', ha='right' if y != 1 else 'center', va='center', fontsize=10)
-#
-#     plt.yticks(plot_df['ypos'])
-#     plt.yticks(plot_df['ypos'], plot_df['type'])
-#
-#     plt.xlabel('# significant associations (FDR < 5% and B < -0.5)')
+def plot_volcano(lm_res):
+    # - Plot
+    pal = dict(zip(*([0, 1], sns.light_palette(bipal_dbgd[0], 3).as_hex()[1:])))
+
+    # Scatter dot sizes
+    lm_res = lm_res.assign(
+        bin_overlap=pd.cut(lm_res['overlap'], [0, 50, 80, 90, 100], labels=['0-50', '50-80', '80-90', '90-100'], include_lowest=True)
+    )
+    bin_order = natsorted(set(lm_res['bin_overlap']))
+    bin_sizes = dict(zip(*(bin_order, np.arange(1, len(bin_order) * 4, 4))))
+
+    # Scatter
+    for i in pal:
+        plt.scatter(
+            x=lm_res.query('signif == {}'.format(i))['beta'], y=-np.log10(lm_res.query('signif == {}'.format(i))['f_fdr']),
+            s=lm_res.query('signif == {}'.format(i))['bin_overlap'].apply(lambda v: bin_sizes[v]),
+            c=pal[i], linewidths=.05, edgecolors='white', alpha=.5 if i == 1 else 0.3, label='Significant' if i == 1 else 'Non-significant'
+        )
+
+    # Add FDR threshold lines
+    plt.axhline(-np.log10(0.05), c=pal[1], ls='--', lw=.1, alpha=.3)
+
+    # Add beta lines
+    plt.axvline(-0.5, c=pal[1], ls='--', lw=.1, alpha=.3)
+    plt.axvline(0.5, c=pal[1], ls='--', lw=.1, alpha=.3)
+
+    # Add axis lines
+    plt.axvline(0, c=bipal_dbgd[0], lw=.05, ls='-', alpha=.3)
+
+    # Add axis labels and title
+    plt.title('Collateral essentiality')
+    plt.xlabel('Model coefficient (beta)')
+    plt.ylabel('F-test FDR (-log10)')
+
+    # Legend
+    [plt.scatter([], [], bin_sizes[k], label='Overlap: {}'.format(k), c=pal[1], alpha=.5) for k in bin_sizes]
+    plt.legend(loc='center left', bbox_to_anchor=(1.02, 0.5))
+
+    # Axis range
+    plt.xlim(xmax=0)
 
 
 if __name__ == '__main__':
@@ -123,10 +168,10 @@ if __name__ == '__main__':
     nexp = pd.DataFrame({c: {g: 1 for g in nexp[c]} for c in nexp}).fillna(0)
 
     # Copy-number
-    cnv = pd.read_csv('data/crispy_copy_number_gene_snp.csv', index_col=0)
+    cnv = pd.read_csv('data/crispy_copy_number_gene_snp.csv', index_col=0).dropna()
 
     # Copy-number ratios
-    cnv_ratios = pd.read_csv('data/crispy_copy_number_gene_ratio_snp.csv', index_col=0)
+    cnv_ratios = pd.read_csv('data/crispy_copy_number_gene_ratio_snp.csv', index_col=0).dropna()
 
     # Ploidy
     ploidy = pd.read_csv('data/crispy_copy_number_ploidy_snp.csv', index_col=0, names=['sample', 'ploidy'])['ploidy']
@@ -135,31 +180,42 @@ if __name__ == '__main__':
     c_gdsc_fc = pd.read_csv('data/crispr_gdsc_logfc.csv', index_col=0)
 
     # Cancer gene census list
-    cgenes = pd.read_csv('data/gene_sets/Census_allThu Dec 21 15_43_09 2017.tsv', sep='\t')
+    cgenes = set(pd.read_csv('data/gene_sets/Census_allThu Dec 21 15_43_09 2017.tsv', sep='\t')['Gene Symbol'])
 
     # - Overlap samples
     samples = list(set(cnv).intersection(c_gdsc_fc).intersection(nexp).intersection(ploidy.index))
     print('[INFO] Samples overlap: {}'.format(len(samples)))
 
     # - Recurrent amplified cancer genes (following COSMIC definition)
-    g_amp = recurrent_amplified_genes(cnv[samples], cnv_ratios[samples], ploidy[samples], genelist=cgenes['Gene Symbol'])
+    g_amp = recurrent_amplified_genes(cnv[samples], cnv_ratios[samples], ploidy[samples])
+    g_amp = list(set(g_amp).intersection(cgenes))
 
     # - Recurrent non-expressed genes (Genes not expressed in at least 50% of the samples)
-    g_nexp = recurrent_non_expressed_genes(nexp.reindex(c_gdsc_fc.index)[samples].dropna(), min_events=(len(samples) * .5))
+    g_nexp = recurrent_non_expressed_genes(nexp.reindex(c_gdsc_fc.index)[samples].dropna(), min_events=int(len(samples) * .5))
 
     # - Filter-out genes with low CRISPR var
     g_nexp_var = filter_low_var_essential(c_gdsc_fc.loc[g_nexp, samples])
+    print('[INFO] Amplified genes: {}; Non-expressed genes: {}'.format(len(g_amp), len(g_nexp_var)))
 
     # - Linear regressions
     lm_res = lr_ess(cnv_ratios.loc[g_amp, samples].T, c_gdsc_fc.loc[g_nexp_var, samples].T, nexp)
+
+    # - Define significant associations
+    lm_res = lm_res.assign(signif=[int(p < 0.05 and b < -.5) for p, b in lm_res[['f_fdr', 'beta']].values])
+
     lm_res.query('f_fdr < 0.05').to_csv('data/crispy_df_collateral_essentialities.csv', index=False)
-    print(lm_res.query('f_fdr < 0.05 & beta < -.5'))
+    print(lm_res.query('f_fdr < 0.05 & beta < -.5').sort_values(['overlap', 'f_fdr'], ascending=[False, True]).head(60))
 
     # - Plot
-    crispr_gene, ratio_gene = association_boxplot(3314, lm_res, c_gdsc_fc, cnv, cnv_ratios, nexp)
+    crispr_gene, ratio_gene = association_boxplot(23517, lm_res, c_gdsc_fc, cnv, cnv_ratios, nexp)
     plt.gcf().set_size_inches(4, 3)
     plt.savefig('reports/crispy/collateral_essentiality_boxplot_{}_{}.png'.format(crispr_gene, ratio_gene), bbox_inches='tight', dpi=600)
     plt.close('all')
 
-    # - Plot
-    # plot_count_associations(lm_res.query('f_fdr < 0.05 & beta < -.5')['gene_ratios'].value_counts())
+    # - Volcano
+    plot_volcano(lm_res)
+
+    # Save
+    plt.gcf().set_size_inches(2, 4)
+    plt.savefig('reports/crispy/collateral_essentiality_volcano.png', bbox_inches='tight', dpi=600)
+    plt.close('all')
