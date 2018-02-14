@@ -34,7 +34,8 @@ if __name__ == '__main__':
         }
 
     # -
-    diff_var_exp = pd.DataFrame({c: svs_crispy[c]['copynumber']['var_exp'] - svs_crispy[c]['sv']['var_exp'] for c in svs_crispy})
+    varexp = pd.DataFrame({c: svs_crispy[c]['sv'].groupby('chr')['var_exp'].first() for c in svs_crispy}).unstack().sort_values(ascending=False).dropna()
+    varexp = varexp.reset_index().rename(columns={'level_0': 'sample', 0: 'varexp'})
 
     # -
     sample, chrm, = 'HCC1937', 'chr18'
@@ -62,5 +63,5 @@ if __name__ == '__main__':
 
             #
             plt.gcf().set_size_inches(8, 3)
-            plt.savefig('reports/crispy/svplots/svplot_{}_{}.pdf'.format(sample, chrm), bbox_inches='tight')
+            plt.savefig('reports/crispy/svplot_{}_{}.pdf'.format(sample, chrm), bbox_inches='tight')
             plt.close('all')

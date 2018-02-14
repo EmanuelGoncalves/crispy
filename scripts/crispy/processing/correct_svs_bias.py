@@ -74,6 +74,13 @@ if __name__ == '__main__':
         crispy_cnv_only = pd.concat([v.to_dataframe() for k, v in crispy_cnv_only.items()])
         crispy_cnv_only.to_csv('data/crispy/gdsc_brass/{}.copynumber.csv'.format(sample))
 
+        # Correction only with TD
+        crispy_td_only = CRISPRCorrection().rename(sample).fit_by(
+            by=svmatrix['chr'], X=svmatrix[['tandemduplication']], y=svmatrix['crispr']
+        )
+        crispy_td_only = pd.concat([v.to_dataframe() for k, v in crispy_td_only.items()])
+        crispy_td_only.to_csv('data/crispy/gdsc_brass/{}.td.csv'.format(sample))
+
         # Correction only with SV features
         crispy_svs_only = CRISPRCorrection().rename(sample).fit_by(
             by=svmatrix['chr'], X=svmatrix.drop(['chr', 'crispr', 'cnv'], axis=1), y=svmatrix['crispr']

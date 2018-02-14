@@ -60,8 +60,8 @@ def ratios_kmean(x, y, data, outfile):
     sns.boxplot(x, y, data=data, orient='h', linewidth=.3, fliersize=1, order=order, palette=pal, notch=True)
     plt.axvline(0, lw=.1, ls='-', c=bipal_dbgd[0])
 
-    plt.title('Gene copy-number ratio\neffect on CRISPR/Cas9 bias')
-    plt.xlabel('CRISPR/Cas9 fold-change bias (log2)')
+    plt.title('Copy-number ratio effect on CRISPR/Cas9\nnon-expressed genes')
+    plt.xlabel('CRISPR/Cas9 fold-change (log2)')
     plt.ylabel('Copy-number ratio')
     plt.gcf().set_size_inches(2, 2)
     plt.savefig(outfile, bbox_inches='tight', dpi=600)
@@ -111,22 +111,6 @@ def ratios_heatmap(x, y, z, data, outfile, z_bin='1'):
     plt.close('all')
 
 
-def copynumber_kmean_corr(x1, x2, data, outfile):
-    # Histogram
-
-    sns.distplot(data[x1], label=x1, color=bipal_dbgd[0], kde_kws={'lw': 1.})
-    sns.distplot(data[x2], label=x2, color=bipal_dbgd[1], kde_kws={'lw': 1.})
-
-    plt.title('Copy-number correlation with CRISPR bias')
-    plt.xlabel("Pearson's r")
-    plt.ylabel('Density')
-    plt.legend(loc='upper left')
-
-    plt.gcf().set_size_inches(3, 2)
-    plt.savefig(outfile, bbox_inches='tight', dpi=600)
-    plt.close('all')
-
-
 def main():
     # - Import
     # CRISPR library
@@ -146,15 +130,15 @@ def main():
 
     # CRISPR
     c_gdsc_fc = pd.read_csv('data/crispr_gdsc_logfc.csv', index_col=0)
-    c_gdsc_crispy_kmean = assemble_matrix('data/crispy/gdsc/', 'k_mean')
+    # c_gdsc_crispy_kmean = assemble_matrix('data/crispy/gdsc/', 'k_mean')
 
     # - Overlap samples
-    samples = list(set(cnv).intersection(c_gdsc_fc).intersection(c_gdsc_crispy_kmean).intersection(nexp))
+    samples = list(set(cnv).intersection(c_gdsc_fc).intersection(c_gdsc_fc).intersection(nexp))
     print('[INFO] Samples overlap: {}'.format(len(samples)))
 
     # - Assemble data-frame of non-expressed genes
     # Non-expressed genes CRISPR bias from copy-number
-    df = pd.DataFrame({c: c_gdsc_crispy_kmean.reindex(nexp[c])[c] for c in samples})
+    df = pd.DataFrame({c: c_gdsc_fc.reindex(nexp[c])[c] for c in samples})
 
     # Concat copy-number information
     df = pd.concat([df[samples].unstack().rename('crispy'), cnv[samples].unstack().rename('cnv'), cnv_ratios[samples].unstack().rename('ratio')], axis=1).dropna()
@@ -174,16 +158,6 @@ def main():
     ratios_kmean('crispy', 'ratio_bin', df, 'reports/crispy/copynumber_ratio_kmean_boxplot.png')
     ratios_arocs('ratio_bin', 'crispy', df, 'reports/crispy/copynumber_ratio_kmean_arocs.png', exclude_labels={'0', '1'})
     ratios_heatmap('cnv_bin', 'chr_cnv_bin', 'ratio_bin', df, 'reports/crispy/copynumber_ratio_heatmap.png', z_bin='1')
-
-    # - Plot: CRISPR bias correlation with copy-number and ratios
-    genes = list(set(c_gdsc_fc[samples].dropna(how='all').index).intersection(cnv[samples].dropna(how='all').index).intersection(cnv_ratios[samples].dropna(how='all').index))
-
-    plot_df = pd.concat([
-        c_gdsc_fc.loc[genes, samples].T.corrwith(cnv.loc[genes, samples].T).rename('Copy-number'),
-        c_gdsc_fc.loc[genes, samples].T.corrwith(cnv_ratios.loc[genes, samples].T).rename('Ratio'),
-    ], axis=1)
-
-    copynumber_kmean_corr('Copy-number', 'Ratio', plot_df, 'reports/crispy/copynumber_ratio_corr_histogram.png')
 
 
 if __name__ == '__main__':
