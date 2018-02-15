@@ -63,7 +63,7 @@ if __name__ == '__main__':
         plt.close('all')
 
     # -
-    sample, chrm, t = 'HCC1954', 'chr12', 'copynumber'
+    sample, chrm, t = 'HCC1937', 'chr2', 'all'
     for sample in brca_samples:
         #
         bedpe = import_brass_bedpe('data/gdsc/wgs/brass_bedpe/{}.brass.annot.bedpe'.format(sample), bkdist=None, splitreads=True)

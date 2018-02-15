@@ -11,6 +11,7 @@ from sklearn import clone
 from functools import partial
 from datetime import datetime as dt
 from crispy.ratio import GFF_HEADERS
+from sklearn.metrics import r2_score
 from concurrent.futures import ThreadPoolExecutor
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import WhiteKernel, ConstantKernel, RBF
@@ -50,7 +51,8 @@ class CRISPRCorrection(GaussianProcessRegressor):
         self.name = name
         return self
 
-    def predict(self, X, return_std=True, return_cov=False):
+    def predict(self, X=None, return_std=True, return_cov=False):
+        X = self.X_train_ if X is None else X
         return super().predict(X, return_std=return_std, return_cov=return_cov)
 
     def regress_out(self, X=None, y=None):
@@ -100,6 +102,15 @@ class CRISPRCorrection(GaussianProcessRegressor):
         cov_var /= cov_var.sum()
 
         return cov_var
+
+    def gp_metric(self, metric=r2_score, X=None, y=None):
+        X = self.X_train_ if X is None else X
+
+        y_true = self.y_train_ if y is None else y
+
+        y_pred = self.predict(X, return_std=False)
+
+        return metric(y_true, y_pred)
 
     def fit(self, X, y):
         return super().fit(X, y)
