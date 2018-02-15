@@ -30,15 +30,40 @@ if __name__ == '__main__':
         svs_crispy[s] = {
             'copynumber': pd.read_csv('{}/{}.copynumber.csv'.format(svs_dir, s), index_col=0).rename(columns={'fit_by': 'chr'}),
             'sv': pd.read_csv('{}/{}.svs.csv'.format(svs_dir, s), index_col=0).rename(columns={'fit_by': 'chr'}),
-            'all': pd.read_csv('{}/{}.all.csv'.format(svs_dir, s), index_col=0).rename(columns={'fit_by': 'chr'})
+            'all': pd.read_csv('{}/{}.all.csv'.format(svs_dir, s), index_col=0).rename(columns={'fit_by': 'chr'}),
+            'td': pd.read_csv('{}/{}.td.csv'.format(svs_dir, s), index_col=0).rename(columns={'fit_by': 'chr'})
         }
 
     # -
-    varexp = pd.DataFrame({c: svs_crispy[c]['sv'].groupby('chr')['var_exp'].first() for c in svs_crispy}).unstack().sort_values(ascending=False).dropna()
-    varexp = varexp.reset_index().rename(columns={'level_0': 'sample', 0: 'varexp'})
+    varexp = pd.DataFrame({t: pd.DataFrame({c: svs_crispy[c][t].groupby('chr')['var_exp'].first() for c in svs_crispy}).unstack() for t in ['sv', 'copynumber']})
 
     # -
-    sample, chrm, = 'HCC1937', 'chr18'
+    for t in ['sv', 'copynumber']:
+        plot_df = varexp.sort_values(t, ascending=False).head(10).reset_index().rename(columns={'level_0': 'sample'})
+        plot_df = pd.melt(plot_df, id_vars=['sample', 'chr'], value_vars=['copynumber', 'sv'])
+        plot_df = plot_df.assign(name=['{} ({})'.format(s, c) for s, c in plot_df[['sample', 'chr']].values])
+        plot_df = plot_df.assign(variable=plot_df['variable'].replace({'copynumber': 'Copy-number', 'sv': 'SV'}).values)
+        plot_df = plot_df.assign(value=(plot_df['value'] * 100).round(1).values)
+
+        pal = dict(zip(*(['Copy-number', 'SV'], sns.light_palette(bipal_dbgd[0], 3).as_hex()[1:])))
+
+        g = sns.barplot('value', 'name', 'variable', data=plot_df, palette=pal, orient='h')
+
+        plt.legend(loc='center left', bbox_to_anchor=(1.02, 0.5))
+
+        g.xaxis.grid(True, color=bipal_dbgd[0], linestyle='-', linewidth=.1, alpha=.5)
+
+        plt.xlabel('Variance explained (%)')
+        plt.ylabel('')
+
+        plt.title('Crispy fit of CRISPR/Cas9 bias')
+
+        plt.gcf().set_size_inches(2, 3)
+        plt.savefig('reports/crispy/brass_varexp_barplot_{}.pdf'.format(t), bbox_inches='tight', dpi=600)
+        plt.close('all')
+
+    # -
+    sample, chrm, t = 'HCC1954', 'chr12', 'copynumber'
     for sample in brca_samples:
         #
         bedpe = import_brass_bedpe('data/gdsc/wgs/brass_bedpe/{}.brass.annot.bedpe'.format(sample), bkdist=None, splitreads=True)
@@ -51,7 +76,7 @@ if __name__ == '__main__':
         ngsc = ngsc.assign(chr=ngsc['chr'].apply(lambda x: 'chr{}'.format(x)).values)
 
         #
-        crispr = pd.concat([svs_crispy[sample]['sv'], crispr_lib], axis=1).dropna()
+        crispr = pd.concat([svs_crispy[sample][t], crispr_lib], axis=1).dropna()
 
         for chrm in set(bedpe['chr1']).union(bedpe['chr2']):
             print('{} {}'.format(sample, chrm))

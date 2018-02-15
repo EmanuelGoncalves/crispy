@@ -151,7 +151,7 @@ def plot_volcano(lm_res):
     plt.ylabel('F-test FDR (-log10)')
 
     # Legend
-    [plt.scatter([], [], bin_sizes[k], label='Overlap: {}'.format(k), c=pal[1], alpha=.5) for k in bin_sizes]
+    [plt.scatter([], [], bin_sizes[k], label='Overlap: {}%'.format(k), c=pal[1], alpha=.5) for k in bin_sizes]
     plt.legend(loc='center left', bbox_to_anchor=(1.02, 0.5))
 
     # Axis range
