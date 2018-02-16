@@ -95,11 +95,12 @@ def ratios_arocs(y_true, y_pred, data, outfile, exclude_labels=set()):
 
 def ratios_heatmap(x, y, z, data, outfile, z_bin='1'):
     plot_df = data.query("{} == '{}'".format(z, z_bin))
+
     plot_df = plot_df.groupby([x, y])[z].count().reset_index()
     plot_df = pd.pivot_table(plot_df, index=x, columns=y, values=z)
 
     g = sns.heatmap(
-        plot_df.loc[natsorted(plot_df.index, reverse=True)], center=0, cmap=sns.light_palette(bipal_dbgd[0], as_cmap=True), annot=True, fmt='g', square=True,
+        plot_df.loc[natsorted(plot_df.index, reverse=True)], cmap=sns.light_palette(bipal_dbgd[0], as_cmap=True), annot=True, fmt='g', square=True,
         linewidths=.3, cbar=False, annot_kws={'fontsize': 7}
     )
     plt.setp(g.get_yticklabels(), rotation=0)
@@ -111,7 +112,26 @@ def ratios_heatmap(x, y, z, data, outfile, z_bin='1'):
     plt.close('all')
 
 
-def main():
+def ratios_heatmap_bias(x, y, z, data, outfile, z_bin='1'):
+    plot_df = data.query("{} == '{}'".format('ratio_bin', z_bin))
+
+    plot_df = plot_df.groupby([x, y])[z].mean().reset_index()
+    plot_df = pd.pivot_table(plot_df, index=x, columns=y, values=z)
+
+    g = sns.heatmap(
+        plot_df.loc[natsorted(plot_df.index, reverse=True)], cmap=sns.light_palette(bipal_dbgd[0], as_cmap=True, reverse=True), annot=True, fmt='.2f', square=True,
+        linewidths=.3, cbar=False, annot_kws={'fontsize': 7}
+    )
+    plt.setp(g.get_yticklabels(), rotation=0)
+    plt.xlabel('# chromosome copies')
+    plt.ylabel('# gene copies')
+    plt.title('Non-expressed genes with copy-number ratio ~1')
+    plt.gcf().set_size_inches(5.5, 5.5)
+    plt.savefig(outfile, bbox_inches='tight', dpi=600)
+    plt.close('all')
+
+
+if __name__ == '__main__':
     # - Import
     # CRISPR library
     lib = pd.read_csv('data/crispr_libs/KY_Library_v1.1_updated.csv', index_col=0).groupby('gene')['chr'].first()
@@ -158,7 +178,4 @@ def main():
     ratios_kmean('crispy', 'ratio_bin', df, 'reports/crispy/copynumber_ratio_kmean_boxplot.png')
     ratios_arocs('ratio_bin', 'crispy', df, 'reports/crispy/copynumber_ratio_kmean_arocs.png', exclude_labels={'0', '1'})
     ratios_heatmap('cnv_bin', 'chr_cnv_bin', 'ratio_bin', df, 'reports/crispy/copynumber_ratio_heatmap.png', z_bin='1')
-
-
-if __name__ == '__main__':
-    main()
+    ratios_heatmap_bias('cnv_bin', 'chr_cnv_bin', 'crispy', df, 'reports/crispy/copynumber_ratio_heatmap_crispr.png')

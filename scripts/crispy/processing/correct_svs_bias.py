@@ -33,7 +33,7 @@ if __name__ == '__main__':
     brca_samples = ['HCC1954', 'HCC1143', 'HCC38', 'HCC1187', 'HCC1937', 'HCC1395']
 
     # Annotate BRASS bedpes
-    bed_dfs = annotate_brass_bedpe(bedpe_dir, bkdist=-1, splitreads=False, samples=brca_samples)
+    bed_dfs = annotate_brass_bedpe(bedpe_dir, bkdist=-1, splitreads=True)
 
     # - CRISPR
     c_gdsc_fc = pd.read_csv('data/crispr_gdsc_logfc.csv', index_col=0).dropna()

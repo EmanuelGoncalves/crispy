@@ -309,6 +309,8 @@ if __name__ == '__main__':
     crispr = pd.read_csv(dc.CRISPR_GENE_FC_CORRECTED, index_col=0, sep='\t').dropna()
     crispr_scaled = dc.scale_crispr(crispr)
 
+    crispr_scaled.dropna().to_csv('/Users/eg14/Downloads/gdsc_crispr_scalled.csv')
+
     # Drug response
     d_response = pd.read_csv(dc.DRUG_RESPONSE_FILE, index_col=[0, 1, 2], header=[0, 1])
     d_response.columns = d_response.columns.droplevel(0)
