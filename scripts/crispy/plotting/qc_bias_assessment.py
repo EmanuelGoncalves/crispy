@@ -84,7 +84,7 @@ def copy_number_bias_arocs(y_true, y_pred, data, outfile):
     ax.set_ylim(0, 1)
     ax.set_xlabel('False positive rate')
     ax.set_ylabel('True positive rate')
-    ax.set_title('CRISPR/Cas9 copy-number amplification bias\nnon-expressed genes')
+    ax.set_title('Copy-number effect on CRISPR/Cas9\n(non-expressed genes)')
     legend = ax.legend(loc=4, title='Copy-number', prop={'size': 6})
     legend.get_title().set_fontsize('7')
 
@@ -102,9 +102,9 @@ def copy_number_bias_arocs_per_sample(x, y, hue, data, outfile):
     sns.boxplot(x, y, data=data, sym='', order=thresholds, palette=thresholds_color, linewidth=.3)
     sns.stripplot(x, y, data=data, order=thresholds, palette=thresholds_color, edgecolor='white', linewidth=.1, size=3, jitter=.4)
 
-    plt.title('CRISPR/Cas9 copy-number amplification bias\nnon-expressed genes')
+    plt.title('Copy-number effect on CRISPR/Cas9\n(non-expressed genes)')
     plt.xlabel('Copy-number')
-    plt.ylabel('Copy-number AUC (cell lines)')
+    plt.ylabel('Copy-number AUC (per cell line)')
     plt.axhline(0.5, ls='--', lw=.3, alpha=.5, c=bipal_dbgd[0])
     plt.gcf().set_size_inches(3, 3)
     plt.savefig(outfile, bbox_inches='tight', dpi=600)
@@ -119,9 +119,9 @@ def copy_number_bias_arocs_per_sample(x, y, hue, data, outfile):
 
     handles = [mpatches.Circle([.0, .0], .25, facecolor=c, label=l) for c, l in zip(*(hue_thresholds_color, hue_thresholds))]
     plt.legend(handles=handles, title='Ploidy', prop={'size': 6}).get_title().set_fontsize('6')
-    plt.title('Cell ploidy bias on CRISPR/Cas9\nnon-expressed genes')
+    plt.title('Cell ploidy effect on CRISPR/Cas9\n(non-expressed genes)')
     plt.xlabel('Copy-number')
-    plt.ylabel('Copy-number AUC (cell lines)')
+    plt.ylabel('Copy-number AUC (per cell line)')
     plt.axhline(0.5, ls='--', lw=.3, alpha=.5, c=bipal_dbgd[0])
     plt.gcf().set_size_inches(3, 3)
 
@@ -143,9 +143,9 @@ def copy_number_bias_arocs_per_chrm(x, y, hue, data, outfile):
     handles = [mpatches.Circle([.0, .0], .25, facecolor=c, label=l) for c, l in zip(*(hue_color, hue_order))]
     plt.legend(handles=handles, title='Chr. copies', prop={'size': 5}).get_title().set_fontsize('5')
 
-    plt.title('CRISPR/Cas9 copy-number amplification bias\nnon-expressed genes')
+    plt.title('Copy-number effect in CRISPR/Cas9\n(non-expressed genes)')
     plt.xlabel('Copy-number')
-    plt.ylabel('Copy-number AUC (chromossome)')
+    plt.ylabel('Copy-number AUC (per chromossome)')
     plt.axhline(0.5, ls='--', lw=.3, alpha=.5, c=bipal_dbgd[0])
     plt.gcf().set_size_inches(3, 3)
     plt.savefig(outfile, bbox_inches='tight', dpi=600)
@@ -170,7 +170,7 @@ def arocs_scatter(x, y, data, outfile):
     plt.close('all')
 
 
-def main():
+if __name__ == '__main__':
     # - Import
     # (non)essential genes
     essential = pd.read_csv('data/gene_sets/curated_BAGEL_essential.csv', sep='\t')['gene'].rename('essential')
@@ -283,7 +283,3 @@ def main():
         for cn, cn_auc in multilabel_roc_auc_score('cnv', 'fc', plot_df_crispy.query("(sample == '{}') & (chr == '{}')".format(s, c)), min_events=5).items()
     ])
     copy_number_bias_arocs_per_chrm('cnv', 'auc', 'chr_cnv', plot_df_aucs_chr_crispy.query("chr_cnv != '1'"), 'reports/crispy/copynumber_bias_corrected_per_chr.png')
-
-
-if __name__ == '__main__':
-    main()

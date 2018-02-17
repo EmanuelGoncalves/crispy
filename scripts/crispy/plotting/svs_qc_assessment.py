@@ -30,24 +30,26 @@ if __name__ == '__main__':
         svs_crispy[s] = {
             'copynumber': pd.read_csv('{}/{}.copynumber.csv'.format(svs_dir, s), index_col=0).rename(columns={'fit_by': 'chr'}),
             'sv': pd.read_csv('{}/{}.svs.csv'.format(svs_dir, s), index_col=0).rename(columns={'fit_by': 'chr'}),
-            'all': pd.read_csv('{}/{}.all.csv'.format(svs_dir, s), index_col=0).rename(columns={'fit_by': 'chr'}),
-            'td': pd.read_csv('{}/{}.td.csv'.format(svs_dir, s), index_col=0).rename(columns={'fit_by': 'chr'})
+            'all': pd.read_csv('{}/{}.all.csv'.format(svs_dir, s), index_col=0).rename(columns={'fit_by': 'chr'})
         }
 
     # -
-    varexp = pd.DataFrame({t: pd.DataFrame({c: svs_crispy[c][t].groupby('chr')['var_exp'].first() for c in svs_crispy}).unstack() for t in ['sv', 'copynumber']})
+    varexp = pd.DataFrame({t: pd.DataFrame({c: svs_crispy[c][t].groupby('chr')['var_exp'].first() for c in svs_crispy}).unstack() for t in ['sv', 'all', 'copynumber']})
 
     # -
-    for t in ['sv', 'copynumber']:
+    for t in ['sv']:
         plot_df = varexp.sort_values(t, ascending=False).head(10).reset_index().rename(columns={'level_0': 'sample'})
-        plot_df = pd.melt(plot_df, id_vars=['sample', 'chr'], value_vars=['copynumber', 'sv'])
-        plot_df = plot_df.assign(name=['{} ({})'.format(s, c) for s, c in plot_df[['sample', 'chr']].values])
-        plot_df = plot_df.assign(variable=plot_df['variable'].replace({'copynumber': 'Copy-number', 'sv': 'SV'}).values)
+        plot_df = pd.melt(plot_df, id_vars=['sample', 'chr'], value_vars=['all', 'sv', 'copynumber'])
+        plot_df = plot_df.assign(name=['{} {}'.format(s, c) for s, c in plot_df[['sample', 'chr']].values])
+        plot_df = plot_df.assign(variable=plot_df['variable'].replace({'copynumber': 'Copy-number', 'sv': 'SV', 'all': 'Both'}).values)
         plot_df = plot_df.assign(value=(plot_df['value'] * 100).round(1).values)
 
-        pal = dict(zip(*(['Copy-number', 'SV'], sns.light_palette(bipal_dbgd[0], 3).as_hex()[1:])))
+        pal = dict(zip(*(['Copy-number', 'SV', 'Both'], sns.light_palette(bipal_dbgd[0], 4).as_hex()[1:])))
 
-        g = sns.barplot('value', 'name', 'variable', data=plot_df, palette=pal, orient='h')
+        order = list(plot_df.query("variable == 'SV'").sort_values('value')['name'])
+        hue_order = ['SV', 'Copy-number', 'Both']
+
+        g = sns.barplot('value', 'name', 'variable', data=plot_df, palette=pal, orient='h', hue_order=hue_order)
 
         plt.legend(loc='center left', bbox_to_anchor=(1.02, 0.5))
 
@@ -59,11 +61,11 @@ if __name__ == '__main__':
         plt.title('Crispy fit of CRISPR/Cas9 bias')
 
         plt.gcf().set_size_inches(2, 3)
-        plt.savefig('reports/crispy/brass_varexp_barplot_{}.pdf'.format(t), bbox_inches='tight', dpi=600)
+        plt.savefig('reports/crispy/brass_varexp_barplot_{}.png'.format(t), bbox_inches='tight', dpi=600)
         plt.close('all')
 
     # -
-    sample, chrm, t = 'HCC1937', 'chr2', 'all'
+    sample, chrm, t = 'HCC1954', 'chr12', 'sv'
     for sample in brca_samples:
         #
         bedpe = import_brass_bedpe('data/gdsc/wgs/brass_bedpe/{}.brass.annot.bedpe'.format(sample), bkdist=None, splitreads=True)
@@ -87,6 +89,6 @@ if __name__ == '__main__':
             plt.suptitle('{}'.format(sample))
 
             #
-            plt.gcf().set_size_inches(8, 3)
-            plt.savefig('reports/crispy/svplot_{}_{}.pdf'.format(sample, chrm), bbox_inches='tight')
+            plt.gcf().set_size_inches(6, 2)
+            plt.savefig('reports/crispy/svplot_{}_{}.png'.format(sample, chrm), bbox_inches='tight', dpi=600)
             plt.close('all')

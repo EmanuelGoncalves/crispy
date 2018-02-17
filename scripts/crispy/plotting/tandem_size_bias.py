@@ -36,9 +36,9 @@ def bin_bkdist(distance):
 
 
 def import_brass_bedpe(bedpe_file, bkdist, splitreads):
-    # bedpe_file = 'data/gdsc/wgs/brass_bedpe/HCC1143.brass.annot.bedpe'
+    # bedpe_file = 'data/gdsc/wgs/brass_bedpe/HCC1954.brass.annot.bedpe'
     # Import BRASS bedpe
-    bedpe_df = pd.read_csv(bedpe_file, sep='\t', names=BRASS_HEADERS, comment='#')
+    bedpe_df = pd.read_table(bedpe_file, sep='\t', names=BRASS_HEADERS, comment='#')
 
     # Correct sample name
     bedpe_df['sample'] = bedpe_df['sample'].apply(lambda v: v.split(',')[0])
@@ -50,18 +50,18 @@ def import_brass_bedpe(bedpe_file, bkdist, splitreads):
     if splitreads:
         bedpe_df = bedpe_df.query("assembly_score != '_'")
 
-    # Fileter for tandem-duplications
-    bedpe_df = bedpe_df[bedpe_df['svclass'] == 'tandem-duplication']
+    # # Fileter for tandem-duplications
+    # bedpe_df = bedpe_df[bedpe_df['svclass'] == 'tandem-duplication']
 
     # Classify tandem-duplication based on size
-    bedpe_df = bedpe_df.assign(td_size=bedpe_df['bkdist'].apply(bin_bkdist).values)
+    # bedpe_df = bedpe_df.assign(td_size=bedpe_df['bkdist'].apply(bin_bkdist).values)
 
     # Assemble bed file
     bed_df = pd.concat([
         bedpe_df['chr1'].rename('#chr').apply(lambda x: 'chr{}'.format(x)),
         bedpe_df[['start1', 'end1']].mean(1).astype(int).rename('start'),
         bedpe_df[['start2', 'end2']].mean(1).astype(int).rename('end'),
-        bedpe_df['td_size'].rename('svclass')
+        bedpe_df['svclass'].rename('svclass')
     ], axis=1)
 
     return bed_df
@@ -119,11 +119,14 @@ if __name__ == '__main__':
     # samples = ['HCC1954', 'HCC1143', 'HCC38', 'HCC1187', 'HCC1937', 'HCC1395', 'NCI-H2087', 'LS-1034']
 
     # Annotate BRASS bedpes
-    bed_dfs = annotate_brass_bedpe(bedpe_dir, bkdist=-1, splitreads=True, samples=samples)
+    bed_dfs = annotate_brass_bedpe(bedpe_dir, bkdist=-2, splitreads=True, samples=samples)
+
+    # Non-expressed genes
+    nexp = pickle.load(open('data/gdsc/nexp_pickle.pickle', 'rb'))
 
     # - CRISPR
     c_gdsc_fc = pd.read_csv('data/crispr_gdsc_logfc.csv', index_col=0).dropna()
-    # c_gdsc_fc = pd.DataFrame({c: c_gdsc_fc.reindex(nexp[c])[c] for c in c_gdsc_fc if c in nexp})
+    c_gdsc_fc = pd.DataFrame({c: c_gdsc_fc.reindex(nexp[c])[c] for c in c_gdsc_fc if c in nexp})
     # c_gdsc_fc = dc.scale_crispr(c_gdsc_fc)
 
     # - Copy-number
@@ -150,8 +153,12 @@ if __name__ == '__main__':
 
     # -
     order = natsorted(set(df['ratio_bin']))
-    hue_order = ['1-10 kb', '1-100 kb', '0.1-1 Mb', '1-10 Mb', '>10 Mb']
-    sns.boxplot('ratio_bin', 'crispr', 'collapse', data=df, order=order, hue_order=hue_order, notch=True, palette=sns.light_palette(bipal_dbgd[0]))
+    hue_order = natsorted(set(df['collapse']))
+    # hue_order = ['1-10 kb', '1-100 kb', '0.1-1 Mb', '1-10 Mb', '>10 Mb']
+
+    sns.boxplot(
+        'ratio_bin', 'crispr', 'collapse', data=df, order=order, hue_order=hue_order, notch=True, palette=sns.light_palette(bipal_dbgd[0]), fliersize=1
+    )
     plt.savefig('reports/crispy/td_size_bias.png', bbox_inches='tight', dpi=600)
     plt.close('all')
 

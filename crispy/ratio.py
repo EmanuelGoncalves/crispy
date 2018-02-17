@@ -111,7 +111,7 @@ def plot_gene(gene, bed_file, ax=None):
     gff_int_df = gff.intersect(bed, wb=True).to_dataframe(names=GFF_HEADERS + bed_headers).set_index('feature')
 
     # if ax is None:
-    ax = plt.gca()
+    ax = plt.gca() if ax is None else ax
 
     # Plot original values
     for seg_start, seg_end, seg_cn in gff_int_df.loc[gene, ['start', 'end', 'total_cn_bed']].values:

@@ -16,7 +16,12 @@ from scripts.crispy.processing.correct_cnv_bias import assemble_matrix
 
 
 PALETTE = {
-    'tandem-duplication': '#377eb8', 'deletion': '#e41a1c', 'translocation': '#984ea3', 'inversion_h_h': '#4daf4a', 'inversion_t_t': '#ff7f00'
+    'tandem-duplication': '#377eb8',
+    'deletion': '#e41a1c',
+    'translocation': '#984ea3',
+    'inversion': '#4daf4a',
+    'inversion_h_h': '#4daf4a',
+    'inversion_t_t': '#ff7f00',
 }
 
 CHR_SIZES_HG19 = {
@@ -26,7 +31,7 @@ CHR_SIZES_HG19 = {
 }
 
 
-def svtype(strand1, strand2, svclass):
+def svtype(strand1, strand2, svclass, unfold_inversions):
     if svclass == 'translocation':
         svtype = 'translocation'
 
@@ -37,15 +42,34 @@ def svtype(strand1, strand2, svclass):
         svtype = 'tandem-duplication'
 
     elif strand1 == '+' and strand2 == '-':
-        svtype = 'inversion_h_h'
+        svtype = 'inversion_h_h' if unfold_inversions else 'inversion'
 
     elif strand1 == '-' and strand2 == '+':
-        svtype = 'inversion_t_t'
+        svtype = 'inversion_t_t' if unfold_inversions else 'inversion'
 
     else:
         assert False, 'SV class not recognised: strand1 == {}; strand2 == {}; svclass == {}'.format(strand1, strand2, svclass)
 
     return svtype
+
+
+def bin_bkdist(distance):
+    if 1 < distance < 10e3:
+        bin_distance = '1-10 kb'
+
+    elif 10e3 < distance < 100e3:
+        bin_distance = '1-100 kb'
+
+    elif 100e3 < distance < 1e6:
+        bin_distance = '0.1-1 Mb'
+
+    elif 1e6 < distance < 10e6:
+        bin_distance = '1-10 Mb'
+
+    else:
+        bin_distance = '>10 Mb'
+
+    return bin_distance
 
 
 def import_brass_bedpe(bedpe_file, bkdist, splitreads):
@@ -70,7 +94,7 @@ def import_brass_bedpe(bedpe_file, bkdist, splitreads):
     return bedpe_df
 
 
-def plot_rearrangements(brass, crispr, ngsc, chrm, winsize=1e5, chrm_size=None, xlim=None, scale=1e6):
+def plot_rearrangements(brass, crispr, ngsc, chrm, winsize=1e5, chrm_size=None, xlim=None, scale=1e6, unfold_inversions=False):
     chrm_size = CHR_SIZES_HG19 if chrm_size is None else chrm_size
 
     #
@@ -107,11 +131,11 @@ def plot_rearrangements(brass, crispr, ngsc, chrm, winsize=1e5, chrm_size=None, 
     ax1.set_ylim(-1, 1)
 
     #
-    ax2.scatter(ngsc_['location'] / scale, ngsc_['absolute_cn'], s=2, alpha=.5, c=bipal_dbgd[0], label='copy-number', zorder=1)
+    ax2.scatter(ngsc_['location'] / scale, ngsc_['absolute_cn'], s=1, alpha=.5, c=bipal_dbgd[0], label='copy-number', zorder=1)
     ax2.set_ylim(0.0, np.ceil(ngsc_['absolute_cn'].quantile(0.99)))
 
     #
-    ax3.scatter(crispr_['location'] / scale, crispr_['crispr'], s=2, alpha=.5, c=bipal_dbgd[1], label='crispr', zorder=1)
+    ax3.scatter(crispr_['location'] / scale, crispr_['crispr'], s=1, alpha=.5, c=bipal_dbgd[1], label='crispr', zorder=1)
     ax3.axhline(0.0, lw=.3, color=bipal_dbgd[0])
 
     #
@@ -123,7 +147,7 @@ def plot_rearrangements(brass, crispr, ngsc, chrm, winsize=1e5, chrm_size=None, 
 
     #
     for c1, s1, e1, c2, s2, e2, st1, st2, sv in brass_[['chr1', 'start1', 'end1', 'chr2', 'start2', 'end2', 'strand1', 'strand2', 'svclass']].values:
-        stype = svtype(st1, st2, sv)
+        stype = svtype(st1, st2, sv, unfold_inversions)
         stype_col = PALETTE[stype]
 
         x1_mean, x2_mean = np.mean([s1, e1]), np.mean([s2, e2])
@@ -187,46 +211,41 @@ def plot_rearrangements(brass, crispr, ngsc, chrm, winsize=1e5, chrm_size=None, 
     return ax1, ax2, ax3
 
 
+def svcount_barplot(brass):
+    plot_df = pd.concat([
+        brass['svclass'].value_counts().to_frame(),
+        brass.query("assembly_score != '_'")['svclass'].value_counts().rename('svclass2')
+    ], axis=1).sort_values('svclass')
+    plot_df = plot_df.assign(ypos=np.arange(plot_df.shape[0]))
+
+    pal = sns.light_palette(bipal_dbgd[0], n_colors=3, reverse=False).as_hex()[1:]
+
+    for i, c in enumerate(['svclass', 'svclass2']):
+        plt.barh(plot_df['ypos'], plot_df[c], .8, color=pal[i], align='center', label='BRASS' if c == 'svclass' else 'BRASS2')
+
+    plt.yticks(plot_df['ypos'])
+    plt.yticks(plot_df['ypos'], plot_df.index)
+
+    plt.xlabel('Count')
+    plt.title('BRCA cell lines\nstructural rearrangements')
+
+    plt.legend(loc=4, prop={'size': 4})
+
+    plt.grid(color=pal[0], ls='-', lw=.1, axis='x')
+
+
 if __name__ == '__main__':
-    # - Import CRISPR
-    cnv = pd.read_csv('data/crispy_copy_number_gene_snp.csv', index_col=0)
-    kmean = assemble_matrix('data/crispy/gdsc/', 'k_mean')
-    sgrna_lib = pd.read_csv('data/crispr_libs/KY_Library_v1.1_updated.csv', index_col=0)
-    crispr_sgrna = pd.read_csv('data/crispr_gdsc_sgrna_logfc.csv', index_col=0)
-    nexp = pickle.load(open('data/gdsc/nexp_pickle.pickle', 'rb'))
-    ss = pd.read_csv('data/gdsc/samplesheet.csv', index_col=0)
-
     samples = ['HCC1954', 'HCC1143', 'HCC38', 'HCC1187', 'HCC1937', 'HCC1395']
-    # samples = ['LS-1034', 'HCC1143', 'HCC38', 'HCC1187', 'HCC1937', 'HCC1395']
-    # samples = set(samples).intersection(nexp)
 
     #
-    sample, chrm, = 'HCC1187', 'chr1'
+    brass_dir = 'data/gdsc/wgs/brass_bedpe/{}.brass.annot.bedpe'
 
-    #
-    bedpe = import_brass_bedpe('data/gdsc/wgs/brass_bedpe/{}.brass.annot.bedpe'.format(sample), bkdist=None, splitreads=True)
+    brass = pd.concat([
+        import_brass_bedpe(brass_dir.format(sample), bkdist=None, splitreads=False).assign(sample=sample) for sample in samples
+    ])
 
-    #
-    ngsc = pd.read_csv(
-        'data/gdsc/wgs/brass_intermediates/{}.ngscn.abs_cn.bg'.format(sample), sep='\t', header=None,
-        names=['chr', 'start', 'end', 'absolute_cn', 'norm_logratio'], dtype={'chr': str, 'start': int, 'end': int, 'cn': float, 'score': float}
-    )
-    ngsc = ngsc.assign(chr=ngsc['chr'].apply(lambda x: 'chr{}'.format(x)).values)
-
-    # -
-    print('Sample: {}; Chrm: {}'.format(sample, chrm))
-
-    crispr = pd.concat([crispr_sgrna[sample].rename('crispr'), sgrna_lib], axis=1).dropna()
-    # crispr = crispr[crispr['gene'].isin(nexp[sample])]
-    crispr = crispr.assign(snp=cnv[sample].reindex(crispr['gene']).values)
-    crispr = crispr.assign(kmean=kmean[sample].reindex(crispr['gene']).values)
-    # crispr = crispr.groupby('gene').agg({'start': np.min, 'end': np.max, 'chr': 'first', 'crispr': np.mean})
-
-    ax1, ax2, ax3 = plot_rearrangements(bedpe, crispr, ngsc, chrm)
-
-    plt.suptitle('{}'.format(sample))
-
-    #
-    plt.gcf().set_size_inches(8, 3)
-    plt.savefig('reports/crispy/svplot_{}_{}.pdf'.format(sample, chrm), bbox_inches='tight')
+    # Count number of SVs
+    svcount_barplot(brass)
+    plt.gcf().set_size_inches(2, 2)
+    plt.savefig('reports/crispy/svs_counts_barplot.png', bbox_inches='tight', dpi=600)
     plt.close('all')

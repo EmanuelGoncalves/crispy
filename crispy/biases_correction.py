@@ -10,9 +10,8 @@ import pandas as pd
 from sklearn import clone
 from functools import partial
 from datetime import datetime as dt
-from crispy.ratio import GFF_HEADERS
-from sklearn.metrics import r2_score
 from concurrent.futures import ThreadPoolExecutor
+from sklearn.metrics import explained_variance_score
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import WhiteKernel, ConstantKernel, RBF
 
@@ -74,7 +73,7 @@ class CRISPRCorrection(GaussianProcessRegressor):
 
         res = res.assign(regressed_out=res[self.y_name] - res['k_mean'])
 
-        res = res.assign(var_exp=self.var_explained(X)['K1'])
+        res = res.assign(var_exp=self.gp_metric(X=X))
 
         return res
 
@@ -103,7 +102,7 @@ class CRISPRCorrection(GaussianProcessRegressor):
 
         return cov_var
 
-    def gp_metric(self, metric=r2_score, X=None, y=None):
+    def gp_metric(self, metric=explained_variance_score, X=None, y=None):
         X = self.X_train_ if X is None else X
 
         y_true = self.y_train_ if y is None else y
