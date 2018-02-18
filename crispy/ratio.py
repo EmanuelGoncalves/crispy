@@ -74,8 +74,10 @@ def map_cn(bed_file, method='min,max,mean,median,collapse,count', cn_field_pos=4
     return gff_map_df
 
 
-def import_bed_datframe(bed_file, remove_sex_chr=True, add_ratio=True):
+def import_bed_datframe(bed_file, remove_sex_chr=True, add_ratio=True, seg_min_size=-1):
     bed = pd.read_csv(bed_file, sep='\t')
+
+    bed = bed[bed.eval('end - start') > seg_min_size]
 
     if remove_sex_chr:
         bed = bed[~bed['#chr'].isin(SEX_CHR)]

@@ -11,7 +11,8 @@ from pybedtools import BedTool
 from crispy import bipal_dbgd
 from matplotlib.patches import Arc
 from crispy.ratio import BRASS_HEADERS
-from sklearn.metrics import roc_curve, auc
+from sklearn.metrics import roc_curve, auc, roc_auc_score
+from crispy.utils import multilabel_roc_auc_score
 
 
 PALETTE = {
@@ -214,12 +215,31 @@ def svcount_barplot(brass):
 
 
 def brass_bedpe_to_bed(bedpe_df):
-    return pd.concat([
-        bedpe_df['chr1'].rename('#chr'),
-        bedpe_df[['start1', 'end1']].mean(1).astype(int).rename('start'),
-        bedpe_df[['start2', 'end2']].mean(1).astype(int).rename('end'),
-        bedpe_df['svclass'].rename('svclass')
+    # Unfold translocations
+    bed_translocations = []
+    for idx in [1, 2]:
+        df = bedpe_df.query("svclass == 'translocation'")
+
+        bed_translocations.append(pd.concat([
+            df['chr{}'.format(idx)].rename('#chr'),
+            df['start{}'.format(idx)].astype(int).rename('start'),
+            df['end{}'.format(idx)].astype(int).rename('end'),
+            df['svclass'].rename('svclass')
+        ], axis=1))
+
+    bed_translocations = pd.concat(bed_translocations)
+
+    # Merge other SVs
+    df = bedpe_df.query("svclass != 'translocation'")
+
+    bed_others = pd.concat([
+        df['chr1'].rename('#chr'),
+        df[['start1', 'end1']].mean(1).astype(int).rename('start'),
+        df[['start2', 'end2']].mean(1).astype(int).rename('end'),
+        df['svclass'].rename('svclass')
     ], axis=1)
+
+    return bed_translocations.append(bed_others)
 
 
 def import_brass_bedpe(bedpe_file, bkdist=None, splitreads=False, convert_to_bed=False):
@@ -248,12 +268,12 @@ def import_brass_bedpe(bedpe_file, bkdist=None, splitreads=False, convert_to_bed
     return bedpe_df
 
 
-def plot_sv_ratios_arocs(plot_df):
-    order = ['deletion', 'inversion', 'tandem-duplication', '.']
+def plot_sv_ratios_arocs(plot_df, order):
+    pal = sns.light_palette(bipal_dbgd[0], len(order) + 1).as_hex()[1:]
 
     ax = plt.gca()
 
-    for t, c in zip(order, sns.light_palette(bipal_dbgd[0], len(order) + 1).as_hex()[1:]):
+    for t, c in zip(order, pal):
         y_true, y_score = plot_df['svclass'].map(lambda x: t in set(x.split(','))).astype(int), plot_df['ratio']
 
         fpr, tpr, _ = roc_curve(y_true, y_score)
@@ -268,6 +288,18 @@ def plot_sv_ratios_arocs(plot_df):
     ax.set_title('Structural rearrangements relation with\ncopy-number ratio')
 
     ax.legend(loc=4, prop={'size': 6})
+
+    return ax
+
+
+def plot_sv_ratios_boxplots(plot_df, order):
+    ax = plt.gca()
+
+    sns.boxplot('ratio', 'svclass', data=plot_df, orient='h', order=order, color=bipal_dbgd[0], notch=True, linewidth=.5, fliersize=1, ax=ax)
+    plt.axvline(1., lw=.3, c=bipal_dbgd[0])
+    plt.title('Structural rearrangements relation with\ncopy-number ratio')
+    plt.xlabel('Copy-number ratio (rank)')
+    plt.ylabel('')
 
     return ax
 
@@ -288,13 +320,28 @@ if __name__ == '__main__':
     plt.close('all')
 
     # - Map structural rearrangements to copy-number ratio segments
-    ratio_svs = []
+    # Import BRCA hotspots
+    hotspots_file = 'data/brca_hotspots.{}'
+
+    hotspots_df = pd.read_csv(hotspots_file.format('csv'))
+
+    hotspots_df = pd.concat([
+        hotspots_df['chr'].apply(lambda x: 'chr{}'.format(x)).rename('#chr'),
+        hotspots_df['start.bp'].rename('start'), hotspots_df['end.bp'].rename('end'),
+        hotspots_df['hotspot.id'].rename('hotspot')
+    ], axis=1)
+    hotspots_df.to_csv(hotspots_file.format('bed'), sep='\t', index=False)
+
+    hotspots = BedTool(hotspots_file.format('bed')).sort()
+
+    #
+    ratio_svs, ratio_hotspots = [], []
     # sample = 'HCC38'
     for sample in samples:
         # Import ASCAT segments and calculate ratios
         seg_file = ascat_dir.format(sample) + '.ratio.bed'
 
-        seg_df = cr.import_bed_datframe(ascat_dir.format(sample)).assign(sample=sample)
+        seg_df = cr.import_bed_datframe(ascat_dir.format(sample), seg_min_size=1).assign(sample=sample)
         seg_df.to_csv(seg_file, sep='\t', index=False)
 
         seg = BedTool(seg_file).sort()
@@ -302,25 +349,66 @@ if __name__ == '__main__':
         # Import BRASS SV
         svs_file = brass_dir.format(sample) + '.bed'
 
-        svs_df = import_brass_bedpe(brass_dir.format(sample), bkdist=0, splitreads=False, convert_to_bed=True)
+        svs_df = import_brass_bedpe(brass_dir.format(sample), bkdist=-1, splitreads=False, convert_to_bed=True)
         svs_df.to_csv(svs_file, sep='\t', index=False)
 
         svs = BedTool(svs_file).sort()
 
         # Map ASCAT copy-number ratio segments to BRASS structural rearrangements
-        seg_svs = seg.map(svs, c=4, o='collapse,count').to_dataframe(names=list(seg_df.columns) + ['svclass', 'count'])
+        seg_hotspots = seg.map(hotspots, c=4, o='collapse').to_dataframe(names=list(seg_df.columns) + ['hotspots'])
 
-        # Append
-        ratio_svs.append(seg_svs)
+        ratio_svs.append(
+            seg.map(svs, c=4, o='collapse,count')
+                .to_dataframe(names=list(seg_df.columns) + ['svclass', 'count'])
+                .assign(hotspots=seg_hotspots['hotspots'].values)
+        )
 
-    ratio_svs = pd.concat(ratio_svs).reset_index()
-    ratio_svs = ratio_svs.assign(length=ratio_svs.eval('end - start').apply(bin_bkdist).values)
-    print(ratio_svs.sort_values('ratio'))
+    ratio_svs = pd.concat(ratio_svs).reset_index(drop=True)
+
+    ratio_svs = ratio_svs.assign(length=ratio_svs.eval('end - start').values)
+    ratio_svs = ratio_svs.assign(length_bin=ratio_svs['length'].apply(bin_bkdist).values)
+
+    ratio_svs = ratio_svs.assign(is_hotspot=ratio_svs['hotspots'].apply(lambda x: int(x != '.')).values)
+    print(ratio_svs.sort_values('ratio', ascending=False).head(30))
 
     # - Copy-number ratio structural rearrangements enrichment
+    order = ['deletion', 'inversion', 'translocation', 'tandem-duplication', '.']
+    plot_df = ratio_svs.query('count <=1').copy()
+    print(plot_df.sort_values('ratio', ascending=False).head(30))
+
+    #
+    aucs_df = pd.DataFrame([
+        {
+            'svclass': t,
+            'svdist': d,
+            'auc': roc_auc_score(
+                plot_df.query("length_bin == '{}'".format(d))['svclass']
+                    .map(lambda x: t in set(x.split(','))).astype(int),
+                plot_df.query("length_bin == '{}'".format(d))['ratio']
+            )
+        }
+        for t in order for d in BKDIST_ORDER
+    ])
+    sns.barplot('svclass', 'auc', 'svdist', aucs_df, order=order, hue_order=BKDIST_ORDER)
+    plt.show()
+
     # AROCs
-    ax = plot_sv_ratios_arocs(ratio_svs)
+    ax = plot_sv_ratios_arocs(plot_df, order)
 
     plt.gcf().set_size_inches(3, 3)
     plt.savefig('reports/crispy/brass_sv_ratio_cumdist.png', bbox_inches='tight', dpi=600)
     plt.close('all')
+
+    # # Boxplots
+    # ax = plot_sv_ratios_boxplots(plot_df, order)
+    #
+    # plt.gcf().set_size_inches(3, 1)
+    # plt.savefig('reports/crispy/brass_sv_ratio_boxplot.png', bbox_inches='tight', dpi=600)
+    # plt.close('all')
+    #
+    # # SV enrichment per sample
+    # plot_sv_ratios_arocs_per_sample(plot_df, 'sample', order)
+    #
+    # plt.gcf().set_size_inches(3, 1)
+    # plt.savefig('reports/crispy/brass_sv_ratio_boxplot_auc.png', bbox_inches='tight', dpi=600)
+    # plt.close('all')
