@@ -2,7 +2,6 @@
 # Copyright (C) 2018 Emanuel Goncalves
 
 import pickle
-import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -10,7 +9,6 @@ from crispy import bipal_dbgd
 from natsort import natsorted
 from crispy.utils import bin_cnv
 from sklearn.metrics import roc_curve, auc
-from scripts.crispy.processing.correct_cnv_bias import assemble_matrix
 
 
 def ratios_histogram(x, data, outfile):

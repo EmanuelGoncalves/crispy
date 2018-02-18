@@ -6,22 +6,12 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
 from crispy import bipal_dbgd
 from natsort import natsorted
 from crispy.utils import bin_cnv
 from crispy.regression.linear import lr
-from matplotlib.legend_handler import HandlerPatch
 from statsmodels.stats.multitest import multipletests
-
-
-class HandlerEllipse(HandlerPatch):
-    def create_artists(self, legend, orig_handle, xdescent, ydescent, width, height, fontsize, trans):
-        center = 0.5 * width - 0.5 * xdescent, 0.5 * height - 0.5 * ydescent
-        p = mpatches.Ellipse(xy=center, width=height + xdescent, height=height + ydescent)
-        self.update_prop(p, orig_handle, legend)
-        p.set_transform(trans)
-        return [p]
+from crispy.benchmark_plot import plot_chromosome, import_cytobands
 
 
 def recurrent_amplified_genes(cnv, cnv_ratios, ploidy, min_events=3):
@@ -179,6 +169,10 @@ if __name__ == '__main__':
     # CRISPR
     c_gdsc_fc = pd.read_csv('data/crispr_gdsc_logfc.csv', index_col=0)
 
+    # CRISPR lib
+    lib = pd.read_csv('data/crispr_libs/KY_Library_v1.1_updated.csv', index_col=0)
+    lib = lib.assign(pos=lib[['start', 'end']].mean(1).values)
+
     # Cancer gene census list
     cgenes = set(pd.read_csv('data/gene_sets/Census_allThu Dec 21 15_43_09 2017.tsv', sep='\t')['Gene Symbol'])
 
@@ -206,7 +200,7 @@ if __name__ == '__main__':
     lm_res.query('f_fdr < 0.05').to_csv('data/crispy_df_collateral_essentialities.csv', index=False)
     print(lm_res.query('f_fdr < 0.05 & beta < -.5').sort_values(['overlap', 'f_fdr'], ascending=[False, True]).head(60))
 
-    # - Plot
+    # - Boxplots
     crispr_gene, ratio_gene = association_boxplot(23517, lm_res, c_gdsc_fc, cnv, cnv_ratios, nexp)
     plt.gcf().set_size_inches(4, 3)
     plt.savefig('reports/crispy/collateral_essentiality_boxplot_{}_{}.png'.format(crispr_gene, ratio_gene), bbox_inches='tight', dpi=600)
@@ -214,8 +208,30 @@ if __name__ == '__main__':
 
     # - Volcano
     plot_volcano(lm_res)
-
-    # Save
     plt.gcf().set_size_inches(2, 4)
     plt.savefig('reports/crispy/collateral_essentiality_volcano.png', bbox_inches='tight', dpi=600)
+    plt.close('all')
+
+    # - Chromosome plot
+    sample, chrm = 'UACC-893', 'chr17'
+
+    plot_df = pd.read_csv('data/crispy/gdsc/crispy_crispr_{}.csv'.format(sample), index_col=0)
+    plot_df = plot_df[plot_df['fit_by'] == chrm]
+    plot_df = plot_df.assign(pos=lib.groupby('gene')['pos'].mean().loc[plot_df.index])
+
+    cytobands = import_cytobands(chrm=chrm)
+
+    seg = pd.read_csv('data/gdsc/copynumber/snp6_bed/{}.snp6.picnic.bed'.format(sample), sep='\t')
+
+    ax = plot_chromosome(
+        plot_df['pos'], plot_df['fc'].rename('CRISPR FC'), plot_df['k_mean'].rename('Crispy'), seg=seg[seg['#chr'] == chrm],
+        highlight=['NEUROD2', 'ERBB2', 'MED24'], cytobands=cytobands, legend=True
+    )
+
+    ax.set_xlabel('Position on chromosome {} (Mb)'.format(chrm))
+    ax.set_ylabel('Fold-change')
+    ax.set_title('{}'.format(sample))
+
+    plt.gcf().set_size_inches(3, 1.5)
+    plt.savefig('reports/crispy/collateral_essentiality_chromosomeplot.png', bbox_inches='tight', dpi=600)
     plt.close('all')

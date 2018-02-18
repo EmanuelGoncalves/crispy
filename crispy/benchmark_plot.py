@@ -9,6 +9,8 @@ import matplotlib.pyplot as plt
 from crispy import bipal_dbgd
 from sklearn.metrics.ranking import auc
 
+CYTOBANDS_FILE = 'data/cytoBand.txt'
+
 
 # TODO: Add documentation
 def plot_cumsum_auc(X, index_set, ax=None, palette=None, legend=True, plot_mean=False):
@@ -114,29 +116,29 @@ def plot_cnv_rank(x, y, ax=None, stripplot=False, hline=0.5, order=None, color='
     return ax
 
 
-def plot_chromosome(pos, original, mean, se=None, seg=None, highlight=None, ax=None, legend=False, cytobands=None, seg_label='Copy-number'):
+def plot_chromosome(pos, original, mean, se=None, seg=None, highlight=None, ax=None, legend=False, cytobands=True, seg_label='Copy-number', scale=1e6):
     if ax is None:
         ax = plt.gca()
 
     # Plot original values
-    ax.scatter(pos, original, s=2, marker='.', lw=0, c=bipal_dbgd[0], alpha=.5, label=original.name)
+    ax.scatter(pos / scale, original, s=4, marker='.', lw=0, c=bipal_dbgd[0], alpha=.5, label=original.name)
 
     # Plot corrected values
-    ax.scatter(pos, mean, s=4, marker='.', lw=0, c=bipal_dbgd[1], alpha=.9, label=mean.name)
+    ax.scatter(pos / scale, mean, s=6, marker='.', lw=0, c=bipal_dbgd[1], alpha=.9, label=mean.name)
 
     if se is not None:
-        ax.fill_between(pos, mean - se, mean + se, c=bipal_dbgd[1], alpha=0.2)
+        ax.fill_between(pos / scale, mean - se, mean + se, c=bipal_dbgd[1], alpha=0.2)
 
     # Plot segments
     if seg is not None:
-        for i, (s, e, c) in enumerate(seg[['startpos', 'endpos', 'totalCN']].values):
-            ax.plot([s, e], [c, c], lw=.3, c=bipal_dbgd[0], alpha=1., label=seg_label if i == 0 else None)
+        for i, (s, e, c) in enumerate(seg[['start', 'end', 'total_cn']].values):
+            ax.plot([s / scale, e / scale], [c, c], lw=1., c=bipal_dbgd[0], alpha=1., label=seg_label if i == 0 else None)
 
     # Highlight
     if highlight is not None:
         for ic, i in zip(*(sns.color_palette('tab20', n_colors=len(highlight)), highlight)):
             if i in pos.index:
-                ax.scatter(pos.loc[i], original.loc[i], s=6, marker='X', lw=0, c=ic, alpha=.9, label=i)
+                ax.scatter(pos.loc[i] / scale, original.loc[i], s=8, marker='X', lw=0, c=ic, alpha=.9, label=i)
     # Misc
     ax.axhline(0, lw=.3, ls='-', color='black')
 
@@ -144,20 +146,29 @@ def plot_chromosome(pos, original, mean, se=None, seg=None, highlight=None, ax=N
     if cytobands is not None:
         for i, (s, e, t) in enumerate(cytobands[['start', 'end', 'band']].values):
             if t == 'acen':
-                ax.axvline(s, lw=.2, ls='-', color=bipal_dbgd[0], alpha=.1)
-                ax.axvline(e, lw=.2, ls='-', color=bipal_dbgd[0], alpha=.1)
+                ax.axvline(s / scale, lw=.2, ls='-', color=bipal_dbgd[0], alpha=.1)
+                ax.axvline(e / scale, lw=.2, ls='-', color=bipal_dbgd[0], alpha=.1)
 
             elif not i % 2:
-                ax.axvspan(s, e, alpha=0.1, facecolor=bipal_dbgd[0])
+                ax.axvspan(s / scale, e / scale, alpha=0.1, facecolor=bipal_dbgd[0])
 
     # Legend
     if legend:
         ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
 
-    # Labels and dim
-    ax.set_xlabel('Chromosome position')
-    ax.set_ylabel('Fold-change')
-
-    ax.set_xlim(pos.min(), pos.max())
+    ax.set_xlim(pos.min() / scale, pos.max() / scale)
 
     return ax
+
+
+def import_cytobands(file=None, chrm=None):
+    file = CYTOBANDS_FILE if file is None else file
+
+    cytobands = pd.read_csv(file, sep='\t')
+
+    if chrm is not None:
+        cytobands = cytobands[cytobands['chr'] == chrm]
+
+    assert cytobands.shape[0] > 0, '{} not found in cytobands file'
+
+    return cytobands
