@@ -203,39 +203,3 @@ if __name__ == '__main__':
     plt.gcf().set_size_inches(3, 1)
     plt.savefig('reports/crispy/brass_sv_ratio_boxplot_auc.png', bbox_inches='tight', dpi=600)
     plt.close('all')
-
-    # # - Plot: CRISPR fold-change
-    # # CRISPR
-    # c_gdsc_fc = pd.read_csv('data/crispr_gdsc_logfc.csv', index_col=0)
-    # # c_gdsc_crispy_kmean = assemble_matrix('data/crispy/gdsc/', 'k_mean')
-    #
-    # # Overlap
-    # samples = list(set(cnv_ratios).intersection(bed_dfs['sample']).intersection(c_gdsc_fc))
-    # print('Samples: {}'.format(len(samples)))
-    #
-    # # Append ratios
-    # brass_crispr = bed_dfs.assign(crispr=[c_gdsc_fc.loc[g, s] if s in samples and g in c_gdsc_fc.index else np.nan for s, g in bed_dfs[['sample', 'feature']].values]).dropna()
-    #
-    # # Plot
-    # plot_df = brass_crispr.query('count == 1').dropna().sort_values('crispr', ascending=False)
-    #
-    # # AROCs
-    # ax = plot_sv_ratios_arocs(plot_df, x='crispr')
-    #
-    # plt.gcf().set_size_inches(3, 3)
-    # plt.savefig('reports/crispy/brass_crispr_sv_ratio_cumdist.png', bbox_inches='tight', dpi=600)
-    # plt.close('all')
-    #
-    # # Boxplots
-    # ax = plot_sv_ratios_boxplots(plot_df, x='crispr')
-    #
-    # plt.gcf().set_size_inches(3, 1)
-    # plt.savefig('reports/crispy/brass_crispr_sv_ratio_boxplot.png', bbox_inches='tight', dpi=600)
-    # plt.close('all')
-    #
-    # # SV enrichment per sample
-    # plot_sv_ratios_arocs_per_sample(plot_df, 'sample', x='crispr')
-    #
-    # plt.gcf().set_size_inches(3, 1)
-    # plt.savefig('reports/crispy/brass_crispr_sv_ratio_boxplot_auc.png', bbox_inches='tight', dpi=600)
-    # plt.close('all')

@@ -6,89 +6,97 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 from crispy import bipal_dbgd
-from natsort import natsorted
-from sklearn.metrics import roc_auc_score
-from crispy.benchmark_plot import plot_cumsum_auc
-from crispy.utils import multilabel_roc_auc_score_array, bin_cnv
 from scripts.crispy.plotting.svplot import import_brass_bedpe, plot_rearrangements
 
 
 if __name__ == '__main__':
-    svs_dir = 'data/crispy/gdsc_brass/'
+    svs_dir = 'data/crispy/gdsc_brass/{}.{}.csv'
+    brca_samples = ['HCC1954', 'HCC1143', 'HCC38', 'HCC1187', 'HCC1937', 'HCC1395']
 
+    # - Import CRISPR lib
     crispr_lib = pd.read_csv('data/crispr_libs/KY_Library_v1.1_updated.csv', index_col=0).groupby('gene').agg(
         {'start': np.min, 'end': np.max}
     )
 
-    brca_samples = ['HCC1954', 'HCC1143', 'HCC38', 'HCC1187', 'HCC1937', 'HCC1395']
+    # - Import Crispy results
+    fit_type = {'svs_no_comb': 'SV', 'copynumber': 'Copy-number'}
 
-    essential = pd.read_csv('data/gene_sets/curated_BAGEL_essential.csv', sep='\t')['gene'].rename('essential')
-
-    # -
-    svs_crispy = {}
-    for s in brca_samples:
-        svs_crispy[s] = {
-            'copynumber': pd.read_csv('{}/{}.copynumber.csv'.format(svs_dir, s), index_col=0).rename(columns={'fit_by': 'chr'}),
-            'sv': pd.read_csv('{}/{}.svs.csv'.format(svs_dir, s), index_col=0).rename(columns={'fit_by': 'chr'}),
-            'all': pd.read_csv('{}/{}.all.csv'.format(svs_dir, s), index_col=0).rename(columns={'fit_by': 'chr'})
-        }
+    svs_crispy = {
+        t: {
+            s: pd.read_csv(svs_dir.format(s, t), index_col=0).rename(columns={'fit_by': 'chr'}) for s in brca_samples
+        } for t in fit_type
+    }
 
     # -
-    varexp = pd.DataFrame({t: pd.DataFrame({c: svs_crispy[c][t].groupby('chr')['var_exp'].first() for c in svs_crispy}).unstack() for t in ['sv', 'all', 'copynumber']})
+    varexp = pd.DataFrame({
+        t: pd.DataFrame({
+            c: svs_crispy[t][c].groupby('chr')['var_exp'].first() for c in svs_crispy[t]
+        }).unstack() for t in svs_crispy
+    })
 
     # -
-    for t in ['sv']:
-        plot_df = varexp.sort_values(t, ascending=False).head(10).reset_index().rename(columns={'level_0': 'sample'})
-        plot_df = pd.melt(plot_df, id_vars=['sample', 'chr'], value_vars=['all', 'sv', 'copynumber'])
+    order = varexp[varexp[varexp > 1e-2].count(1) == 2]\
+        .eval('svs_no_comb - copynumber')\
+        .sort_values(ascending=False).head(10)
+
+    # -
+    for t in ['svs_no_comb']:
+        # Build data-frame
+        plot_df = varexp.loc[order.index].reset_index().rename(columns={'level_0': 'sample'})
+
+        plot_df = pd.melt(plot_df, id_vars=['sample', 'chr'], value_vars=list(fit_type))
+
         plot_df = plot_df.assign(name=['{} {}'.format(s, c) for s, c in plot_df[['sample', 'chr']].values])
-        plot_df = plot_df.assign(variable=plot_df['variable'].replace({'copynumber': 'Copy-number', 'sv': 'SV', 'all': 'Both'}).values)
+
+        plot_df = plot_df.assign(variable=plot_df['variable'].replace(fit_type).values)
+
         plot_df = plot_df.assign(value=(plot_df['value'] * 100).round(1).values)
 
-        pal = dict(zip(*(['Copy-number', 'SV', 'Both'], sns.light_palette(bipal_dbgd[0], 4).as_hex()[1:])))
+        # Palette
+        hue_order = list(fit_type.values())
+        pal = dict(zip(*(list(fit_type.values()), sns.light_palette(bipal_dbgd[0], len(hue_order) + 1).as_hex()[1:])))
 
-        order = list(plot_df.query("variable == 'SV'").sort_values('value')['name'])
-        hue_order = ['SV', 'Copy-number', 'Both']
-
+        # Plot
         g = sns.barplot('value', 'name', 'variable', data=plot_df, palette=pal, orient='h', hue_order=hue_order)
 
-        plt.legend(loc='center left', bbox_to_anchor=(1.02, 0.5))
+        # plt.legend(loc='center left', bbox_to_anchor=(1.02, 0.5))
+        plt.legend(prop={'size': 6})
 
         g.xaxis.grid(True, color=bipal_dbgd[0], linestyle='-', linewidth=.1, alpha=.5)
 
         plt.xlabel('Variance explained (%)')
         plt.ylabel('')
 
-        plt.title('Crispy fit of CRISPR/Cas9 bias')
+        plt.title('Crispy fit of CRISPR/Cas9')
 
         plt.gcf().set_size_inches(2, 3)
         plt.savefig('reports/crispy/brass_varexp_barplot_{}.png'.format(t), bbox_inches='tight', dpi=600)
         plt.close('all')
 
     # -
-    sample, chrm, t = 'HCC1954', 'chr12', 'sv'
-    for sample in brca_samples:
-        #
-        bedpe = import_brass_bedpe('data/gdsc/wgs/brass_bedpe/{}.brass.annot.bedpe'.format(sample), bkdist=None, splitreads=True)
+    # sample, chrm, t = 'HCC1395', 'chr6', 'svs_no_comb'
+    for sample, chrm in order.index:
+        print('{} {}'.format(sample, chrm))
 
-        #
+        t = 'svs_no_comb'
+
+        # Import BRASS bedpe
+        bedpe_dir = 'data/gdsc/wgs/brass_bedpe/{}.brass.annot.bedpe'
+        bedpe = import_brass_bedpe(bedpe_dir.format(sample), bkdist=None, splitreads=False)
+
+        # Import WGS sequencing depth
         ngsc = pd.read_csv(
             'data/gdsc/wgs/brass_intermediates/{}.ngscn.abs_cn.bg'.format(sample), sep='\t', header=None,
             names=['chr', 'start', 'end', 'absolute_cn', 'norm_logratio'], dtype={'chr': str, 'start': int, 'end': int, 'cn': float, 'score': float}
         )
         ngsc = ngsc.assign(chr=ngsc['chr'].apply(lambda x: 'chr{}'.format(x)).values)
 
-        #
-        crispr = pd.concat([svs_crispy[sample][t], crispr_lib], axis=1).dropna()
+        # Concat CRISPR measurements
+        crispr = pd.concat([svs_crispy[t][sample], crispr_lib], axis=1).dropna()
 
-        for chrm in set(bedpe['chr1']).union(bedpe['chr2']):
-            print('{} {}'.format(sample, chrm))
-
-            #
-            ax1, ax2, ax3 = plot_rearrangements(bedpe, crispr, ngsc, chrm)
-
-            plt.suptitle('{}'.format(sample))
-
-            #
-            plt.gcf().set_size_inches(6, 2)
-            plt.savefig('reports/crispy/svplot_{}_{}.png'.format(sample, chrm), bbox_inches='tight', dpi=600)
-            plt.close('all')
+        # Plot
+        ax1, ax2, ax3 = plot_rearrangements(bedpe, crispr, ngsc, chrm)
+        plt.suptitle('{}'.format(sample))
+        plt.gcf().set_size_inches(6, 2)
+        plt.savefig('reports/crispy/brass_svplot_{}_{}_{}.png'.format(sample, chrm, t), bbox_inches='tight', dpi=600)
+        plt.close('all')

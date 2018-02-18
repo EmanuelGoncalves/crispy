@@ -246,6 +246,6 @@ if __name__ == '__main__':
 
     # Count number of SVs
     svcount_barplot(brass)
-    plt.gcf().set_size_inches(2, 2)
-    plt.savefig('reports/crispy/svs_counts_barplot.png', bbox_inches='tight', dpi=600)
+    plt.gcf().set_size_inches(2, 1)
+    plt.savefig('reports/crispy/brass_svs_counts_barplot.png', bbox_inches='tight', dpi=600)
     plt.close('all')

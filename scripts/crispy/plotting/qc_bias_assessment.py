@@ -143,7 +143,7 @@ def copy_number_bias_arocs_per_chrm(x, y, hue, data, outfile):
     handles = [mpatches.Circle([.0, .0], .25, facecolor=c, label=l) for c, l in zip(*(hue_color, hue_order))]
     plt.legend(handles=handles, title='Chr. copies', prop={'size': 5}).get_title().set_fontsize('5')
 
-    plt.title('Copy-number effect in CRISPR/Cas9\n(non-expressed genes)')
+    plt.title('Copy-number effect on CRISPR/Cas9\n(non-expressed genes)')
     plt.xlabel('Copy-number')
     plt.ylabel('Copy-number AUC (per chromossome)')
     plt.axhline(0.5, ls='--', lw=.3, alpha=.5, c=bipal_dbgd[0])

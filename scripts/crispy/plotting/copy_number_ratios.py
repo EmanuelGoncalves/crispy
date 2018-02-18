@@ -104,8 +104,8 @@ def ratios_heatmap(x, y, z, data, outfile, z_bin='1'):
         linewidths=.3, cbar=False, annot_kws={'fontsize': 7}
     )
     plt.setp(g.get_yticklabels(), rotation=0)
-    plt.xlabel('# chromosome copies')
-    plt.ylabel('# gene copies')
+    plt.ylabel('# chromosome copies')
+    plt.xlabel('# gene copies')
     plt.title('Number of occurrences\n(non-expressed genes with copy-number ratio ~1)')
     plt.gcf().set_size_inches(5.5, 5.5)
     plt.savefig(outfile, bbox_inches='tight', dpi=600)
@@ -123,8 +123,8 @@ def ratios_heatmap_bias(x, y, z, data, outfile, z_bin='1'):
         linewidths=.3, cbar=False, annot_kws={'fontsize': 7}
     )
     plt.setp(g.get_yticklabels(), rotation=0)
-    plt.xlabel('# chromosome copies')
-    plt.ylabel('# gene copies')
+    plt.ylabel('# chromosome copies')
+    plt.xlabel('# gene copies')
     plt.title('Mean CRISPR/Cas9 fold-change\n(non-expressed genes with copy-number ratio ~1)')
     plt.gcf().set_size_inches(5.5, 5.5)
     plt.savefig(outfile, bbox_inches='tight', dpi=600)
