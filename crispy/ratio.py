@@ -74,7 +74,21 @@ def map_cn(bed_file, method='min,max,mean,median,collapse,count', cn_field_pos=4
     return gff_map_df
 
 
-def _segments_cn(bed_file):
+def import_bed_datframe(bed_file, remove_sex_chr=True, add_ratio=True):
+    bed = pd.read_csv(bed_file, sep='\t')
+
+    if remove_sex_chr:
+        bed = bed[~bed['#chr'].isin(SEX_CHR)]
+
+    if add_ratio:
+        bed = bed.assign(ploidy=ploidy(bed_file))
+        bed = bed.assign(chr_cn=chromosome_cn(bed_file).loc[bed['#chr']].values)
+        bed = bed.assign(ratio=bed.eval('total_cn / chr_cn').values)
+
+    return bed
+
+
+def segments_cn(bed_file):
     bed = pd.read_csv(bed_file, sep='\t')
 
     bed = bed[~bed['#chr'].isin(SEX_CHR)]
@@ -87,7 +101,7 @@ def _segments_cn(bed_file):
 
 
 def chromosome_cn(bed_file):
-    bed = _segments_cn(bed_file)
+    bed = segments_cn(bed_file)
 
     bed = bed.groupby('#chr')['cn_by_length'].sum().divide(bed.groupby('#chr')['length'].sum()) - 1
 
@@ -95,7 +109,7 @@ def chromosome_cn(bed_file):
 
 
 def ploidy(bed_file):
-    bed = _segments_cn(bed_file)
+    bed = segments_cn(bed_file)
 
     return (bed['cn_by_length'].sum() / bed['length'].sum()) - 1
 

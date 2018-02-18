@@ -156,9 +156,10 @@ def plot_sv_ratios_boxplots(plot_df, x='ratio', y='collapse', order=None):
 
 if __name__ == '__main__':
     bedpe_dir = 'data/gdsc/wgs/brass_bedpe'
+    brca_samples = ['HCC1954', 'HCC1143', 'HCC38', 'HCC1187', 'HCC1937', 'HCC1395']
 
     # Annotate BRASS bedpes
-    bed_dfs = annotate_brass_bedpe(bedpe_dir, bkdist=-1, splitreads=False)
+    bed_dfs = annotate_brass_bedpe(bedpe_dir, bkdist=-1, splitreads=False, samples=brca_samples)
     bed_dfs.to_csv('{}/{}'.format(os.path.dirname(bedpe_dir), 'brass.genes.gff.tab'), index=False, sep='\t')
 
     # - CRISPR
@@ -175,8 +176,8 @@ if __name__ == '__main__':
     # Append ratios
     brass = bed_dfs.assign(ratio=[cnv_ratios.loc[g, s] for s, g in bed_dfs[['sample', 'feature']].values])
 
-    # - Exclude samples
-    brass = brass[~brass['sample'].isin(['HCC1954'])]
+    # # - Exclude samples
+    # brass = brass[~brass['sample'].isin(['HCC1954'])]
 
     # - Plot: Copy-number ratio
     plot_df = brass.query('count == 1').dropna().sort_values('ratio', ascending=False)

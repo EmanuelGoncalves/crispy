@@ -1,18 +1,17 @@
 #!/usr/bin/env python
 # Copyright (C) 2018 Emanuel Goncalves
 
-import pickle
 import numpy as np
 import pandas as pd
 import seaborn as sns
+import crispy.ratio as cr
 import matplotlib.pyplot as plt
 import matplotlib.ticker as plticker
-from matplotlib.gridspec import GridSpec
+from pybedtools import BedTool
 from crispy import bipal_dbgd
 from matplotlib.patches import Arc
-from collections import OrderedDict
 from crispy.ratio import BRASS_HEADERS
-from scripts.crispy.processing.correct_cnv_bias import assemble_matrix
+from sklearn.metrics import roc_curve, auc
 
 
 PALETTE = {
@@ -29,6 +28,8 @@ CHR_SIZES_HG19 = {
     'chr9': 141213431, 'chr10': 135534747, 'chr11': 135006516, 'chr12': 133851895, 'chr13': 115169878, 'chr14': 107349540, 'chr15': 102531392, 'chr16': 90354753,
     'chr17': 81195210, 'chr18': 78077248, 'chr19': 59128983, 'chr20': 63025520, 'chr21': 48129895, 'chr22': 51304566, 'chrX': 155270560, 'chrY': 59373566
 }
+
+BKDIST_ORDER = ['1-10 kb', '1-100 kb', '0.1-1 Mb', '1-10 Mb', '>10 Mb']
 
 
 def svtype(strand1, strand2, svclass, unfold_inversions):
@@ -70,28 +71,6 @@ def bin_bkdist(distance):
         bin_distance = '>10 Mb'
 
     return bin_distance
-
-
-def import_brass_bedpe(bedpe_file, bkdist, splitreads):
-    # Import BRASS bedpe
-    bedpe_df = pd.read_csv(bedpe_file, sep='\t', names=BRASS_HEADERS, comment='#')
-
-    # Correct sample name
-    bedpe_df['sample'] = bedpe_df['sample'].apply(lambda v: v.split(',')[0])
-
-    # SV larger than threshold
-    if bkdist is not None:
-        bedpe_df = bedpe_df[bedpe_df['bkdist'] >= bkdist]
-
-    # BRASS2 annotated SV
-    if splitreads:
-        bedpe_df = bedpe_df.query("assembly_score != '_'")
-
-    # Parse chromosome name
-    bedpe_df = bedpe_df.assign(chr1=bedpe_df['chr1'].apply(lambda x: 'chr{}'.format(x)).values)
-    bedpe_df = bedpe_df.assign(chr2=bedpe_df['chr2'].apply(lambda x: 'chr{}'.format(x)).values)
-
-    return bedpe_df
 
 
 def plot_rearrangements(brass, crispr, ngsc, chrm, winsize=1e5, chrm_size=None, xlim=None, scale=1e6, unfold_inversions=False):
@@ -234,18 +213,114 @@ def svcount_barplot(brass):
     plt.grid(color=pal[0], ls='-', lw=.1, axis='x')
 
 
+def brass_bedpe_to_bed(bedpe_df):
+    return pd.concat([
+        bedpe_df['chr1'].rename('#chr'),
+        bedpe_df[['start1', 'end1']].mean(1).astype(int).rename('start'),
+        bedpe_df[['start2', 'end2']].mean(1).astype(int).rename('end'),
+        bedpe_df['svclass'].rename('svclass')
+    ], axis=1)
+
+
+def import_brass_bedpe(bedpe_file, bkdist=None, splitreads=False, convert_to_bed=False):
+    # Import BRASS bedpe
+    bedpe_df = pd.read_csv(bedpe_file, sep='\t', names=BRASS_HEADERS, comment='#')
+
+    # Correct sample name
+    bedpe_df['sample'] = bedpe_df['sample'].apply(lambda v: v.split(',')[0])
+
+    # SV larger than threshold
+    if bkdist is not None:
+        bedpe_df = bedpe_df[bedpe_df['bkdist'] >= bkdist]
+
+    # BRASS2 annotated SV
+    if splitreads:
+        bedpe_df = bedpe_df.query("assembly_score != '_'")
+
+    # Parse chromosome name
+    bedpe_df = bedpe_df.assign(chr1=bedpe_df['chr1'].apply(lambda x: 'chr{}'.format(x)).values)
+    bedpe_df = bedpe_df.assign(chr2=bedpe_df['chr2'].apply(lambda x: 'chr{}'.format(x)).values)
+
+    # Conver SVs to bed
+    if convert_to_bed:
+        bedpe_df = brass_bedpe_to_bed(bedpe_df)
+
+    return bedpe_df
+
+
+def plot_sv_ratios_arocs(plot_df):
+    order = ['deletion', 'inversion', 'tandem-duplication', '.']
+
+    ax = plt.gca()
+
+    for t, c in zip(order, sns.light_palette(bipal_dbgd[0], len(order) + 1).as_hex()[1:]):
+        y_true, y_score = plot_df['svclass'].map(lambda x: t in set(x.split(','))).astype(int), plot_df['ratio']
+
+        fpr, tpr, _ = roc_curve(y_true, y_score)
+
+        ax.plot(fpr, tpr, label='{0:} (AUC={1:.2f})'.format(t.capitalize(), auc(fpr, tpr)), lw=1., c=c)
+
+    ax.plot((0, 1), (0, 1), 'k--', lw=.3, alpha=.5)
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
+    ax.set_xlabel('False positive rate')
+    ax.set_ylabel('True positive rate')
+    ax.set_title('Structural rearrangements relation with\ncopy-number ratio')
+
+    ax.legend(loc=4, prop={'size': 6})
+
+    return ax
+
+
 if __name__ == '__main__':
     samples = ['HCC1954', 'HCC1143', 'HCC38', 'HCC1187', 'HCC1937', 'HCC1395']
 
-    #
+    ascat_dir = 'data/gdsc/wgs/ascat_bed/{}.wgs.ascat.bed'
     brass_dir = 'data/gdsc/wgs/brass_bedpe/{}.brass.annot.bedpe'
 
-    brass = pd.concat([
-        import_brass_bedpe(brass_dir.format(sample), bkdist=None, splitreads=False).assign(sample=sample) for sample in samples
-    ])
+    # - BRASS
+    brass = pd.concat([import_brass_bedpe(brass_dir.format(sample)).assign(sample=sample) for sample in samples])
 
     # Count number of SVs
     svcount_barplot(brass)
     plt.gcf().set_size_inches(2, 1)
     plt.savefig('reports/crispy/brass_svs_counts_barplot.png', bbox_inches='tight', dpi=600)
+    plt.close('all')
+
+    # - Map structural rearrangements to copy-number ratio segments
+    ratio_svs = []
+    # sample = 'HCC38'
+    for sample in samples:
+        # Import ASCAT segments and calculate ratios
+        seg_file = ascat_dir.format(sample) + '.ratio.bed'
+
+        seg_df = cr.import_bed_datframe(ascat_dir.format(sample)).assign(sample=sample)
+        seg_df.to_csv(seg_file, sep='\t', index=False)
+
+        seg = BedTool(seg_file).sort()
+
+        # Import BRASS SV
+        svs_file = brass_dir.format(sample) + '.bed'
+
+        svs_df = import_brass_bedpe(brass_dir.format(sample), bkdist=0, splitreads=False, convert_to_bed=True)
+        svs_df.to_csv(svs_file, sep='\t', index=False)
+
+        svs = BedTool(svs_file).sort()
+
+        # Map ASCAT copy-number ratio segments to BRASS structural rearrangements
+        seg_svs = seg.map(svs, c=4, o='collapse,count').to_dataframe(names=list(seg_df.columns) + ['svclass', 'count'])
+
+        # Append
+        ratio_svs.append(seg_svs)
+
+    ratio_svs = pd.concat(ratio_svs).reset_index()
+    ratio_svs = ratio_svs.assign(length=ratio_svs.eval('end - start').apply(bin_bkdist).values)
+    print(ratio_svs.sort_values('ratio'))
+
+    # - Copy-number ratio structural rearrangements enrichment
+    # AROCs
+    ax = plot_sv_ratios_arocs(ratio_svs)
+
+    plt.gcf().set_size_inches(3, 3)
+    plt.savefig('reports/crispy/brass_sv_ratio_cumdist.png', bbox_inches='tight', dpi=600)
     plt.close('all')
