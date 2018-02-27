@@ -88,7 +88,7 @@ def marginal_boxplot(a, xs=None, ys=None, zs=None, vertical=False, **kws):
 
 
 def plot_corr_discrete(x, y, z):
-    scatter_kws = {'s': 20, 'edgecolor': 'w', 'linewidth': .5, 'alpha': .8}
+    scatter_kws = {'s': 20, 'edgecolor': 'w', 'linewidth': .3, 'alpha': .8}
 
     plot_df = pd.concat([x, y, z], axis=1)
 
@@ -111,7 +111,7 @@ def plot_corr_discrete(x, y, z):
     g.ax_joint.axhline(0, ls='-', lw=0.3, c='black', alpha=.2)
     g.ax_joint.axvline(0, ls='-', lw=0.3, c='black', alpha=.2)
 
-    g.set_axis_labels('{} (log10 FC)'.format(x.name), '{} (ln IC50)'.format(y.name))
+    g.set_axis_labels('{} (log2 FC)'.format(x.name), '{} (ln IC50)'.format(y.name))
 
     handles = [mpatches.Circle([.0, .0], .25, facecolor=c, label='Yes' if t else 'No') for t, c in bipal_dbgd.items()]
     g.ax_marg_y.legend(handles=handles, title='', loc='center left', bbox_to_anchor=(1, 0.5))
@@ -203,15 +203,15 @@ if __name__ == '__main__':
     plt.close('all')
 
     # Corr plot discrete
-    idx = 43
+    idx = 7
     d_id, d_name, d_screen, gene, genomic = lm_res_df.loc[idx, ['drug_DRUG_ID', 'drug_DRUG_NAME', 'drug_VERSION', 'crispr_Gene', 'genomic']].values
     # d_id, d_name, d_screen, gene, genomic = 1560, 'Alpelisib', 'RS', 'FOXA1', 'gain:cnaPANCAN301 (CDK12,ERBB2,MED24)'
 
     plot_corr_discrete(
-        x=crispr_scaled.loc[gene].rename('{} CRISPR'.format(gene)),
+        x=crispr.loc[gene].rename('{} CRISPR'.format(gene)),
         y=d_response.loc[(d_id, d_name, d_screen)].rename('{} {} Drug'.format(d_name, d_screen)),
         z=mobems.loc[genomic].rename(genomic)
     )
     plt.gcf().set_size_inches(2, 2)
-    plt.savefig('reports/drug/crispr_drug_genomic_corrplot.png', bbox_inches='tight', dpi=600)
+    plt.savefig('reports/drug/crispr_drug_genomic_corrplot.pdf', bbox_inches='tight')
     plt.close('all')

@@ -172,7 +172,7 @@ def plot_ppi_arocs(lm_res_df, fdr_thres, beta_thres):
     ax.set_ylabel('True positive rate')
     ax.set_title('Protein-protein interactions\nDrug ~ CRISPR (FDR<{}%, |b|>{})'.format(fdr_thres * 100, beta_thres))
 
-    ax.legend(loc=4, prop={'size': 6})
+    ax.legend(loc=4, prop={'size': 8})
 
 
 def plot_ppi_prc(lm_res_df, fdr_thres, beta_thres):
@@ -361,7 +361,7 @@ if __name__ == '__main__':
     plot_volcano(lm_res_df, fdr_thres, beta_thres)
 
     plt.gcf().set_size_inches(2., 4.)
-    plt.savefig('reports/drug/lm_crispr_volcano.png', bbox_inches='tight', dpi=600)
+    plt.savefig('reports/drug/lm_crispr_volcano.png', bbox_inches='tight', dpi=1200)
     plt.close('all')
 
     # Barplot count number of significant associations
@@ -402,7 +402,7 @@ if __name__ == '__main__':
     # Drug associations barplot
     plot_df = lm_res_df[(lm_res_df['beta'].abs() > beta_thres) & (lm_res_df['lr_fdr'] < fdr_thres)]
 
-    drug_list = list(plot_df.groupby('DRUG_NAME')['lr_fdr'].min().sort_values().index)[10:20]
+    drug_list = list(plot_df.groupby('DRUG_NAME')['lr_fdr'].min().sort_values().index)[:10]
 
     plot_drug_associations_barplot(plot_df, drug_list)
 

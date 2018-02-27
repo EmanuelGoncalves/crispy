@@ -198,7 +198,7 @@ if __name__ == '__main__':
     lm_res = lm_res.assign(signif=[int(p < 0.05 and b < -.5) for p, b in lm_res[['f_fdr', 'beta']].values])
 
     lm_res.query('f_fdr < 0.05').to_csv('data/crispy_df_collateral_essentialities.csv', index=False)
-    print(lm_res.query('f_fdr < 0.05 & beta < -.5').sort_values(['overlap', 'f_fdr'], ascending=[False, True]).head(60))
+    print(lm_res.query('f_fdr < 0.05 & beta < -.5').sort_values(['overlap', 'f_fdr'], ascending=[False, True]))
 
     # - Boxplots
     crispr_gene, ratio_gene = association_boxplot(23517, lm_res, c_gdsc_fc, cnv, cnv_ratios, nexp)
