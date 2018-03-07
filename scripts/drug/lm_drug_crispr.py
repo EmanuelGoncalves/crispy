@@ -13,7 +13,7 @@ from matplotlib.colors import rgb2hex
 from crispy.regression.linear import lr
 from sklearn.preprocessing import StandardScaler
 from statsmodels.stats.multitest import multipletests
-from scripts.drug.assemble_ppi import import_ppi, build_omnipath_ppi, BIOGRID_PICKLE
+from scripts.drug.assemble_ppi import build_biogrid_ppi
 from sklearn.metrics import roc_curve, auc, precision_recall_curve, average_precision_score
 
 
@@ -309,8 +309,6 @@ if __name__ == '__main__':
     crispr = pd.read_csv(dc.CRISPR_GENE_FC_CORRECTED, index_col=0, sep='\t').dropna()
     crispr_scaled = dc.scale_crispr(crispr)
 
-    crispr_scaled.dropna().to_csv('/Users/eg14/Downloads/gdsc_crispr_scalled.csv')
-
     # Drug response
     d_response = pd.read_csv(dc.DRUG_RESPONSE_FILE, index_col=[0, 1, 2], header=[0, 1])
     d_response.columns = d_response.columns.droplevel(0)
@@ -338,7 +336,7 @@ if __name__ == '__main__':
     lm_res_df = lm_drug_crispr(crispr_scaled[samples].T, d_response[samples].T, covariates.loc[samples])
 
     # - PPI annotation
-    ppi = import_ppi(BIOGRID_PICKLE)
+    ppi = build_biogrid_ppi(int_type={'physical'})
 
     # Calculate distance between drugs and CRISPR genes in PPI
     d_drug_genes = dist_drugtarget_genes(d_targets, set(lm_res_df['Gene']), ppi)
@@ -428,22 +426,4 @@ if __name__ == '__main__':
 
     plt.gcf().set_size_inches(2., 2.)
     plt.savefig('reports/drug/crispr_drug_corrplot.png', bbox_inches='tight', dpi=600)
-    plt.close('all')
-
-    # - Signed inteactions
-    omnipath = build_omnipath_ppi()
-
-    d_interactions = drug_interaction_signed_ppi(omnipath, d_targets)
-
-    fdr_thres = .15
-
-    plot_df = lm_res_df[lm_res_df['lr_fdr'] < fdr_thres]
-    plot_df = plot_df.assign(interaction=[
-        d_interactions[d][g] if d in d_interactions and g in d_interactions[d] else np.nan for d, g in plot_df[['DRUG_ID', 'Gene']].values
-    ])
-    plot_df = plot_df.dropna(subset=['interaction'])
-
-    sns.boxplot('interaction', 'beta', data=plot_df, color=bipal_dbgd[0], linewidth=.3, fliersize=2)
-    plt.gcf().set_size_inches(1., 3.)
-    plt.savefig('reports/drug/signed_interactions_beta.png', bbox_inches='tight', dpi=600)
     plt.close('all')

@@ -44,23 +44,31 @@ if __name__ == '__main__':
 
         ss.loc[samples, 'Cancer Type'].apply(lambda x: int(x == 'Colorectal Carcinoma')).rename('Colorectal Carcinoma'),
 
+        ss.loc[samples, 'Cancer Type'].apply(lambda x: int(x == 'Ovarian Carcinoma')).rename('Ovarian Carcinoma'),
+
         ss.loc[samples, 'Microsatellite'].apply(lambda x: int(x == 'MSI-H')).rename('MSI'),
 
         crispr_scaled.loc['WRN'].apply(lambda x: int(x < -1)).rename('WRN (essential)'),
 
         methy.loc['MLH1', samples].apply(lambda x: int(x > .66)).rename('MLH1 (hypermethylation)'),
 
-        wes[wes['Gene'].isin(['POLE'])].drop_duplicates(subset=['SAMPLE', 'Gene']).set_index('SAMPLE').assign(value=1)['value'].reindex(samples).replace(np.nan, 0).rename('POLE (mutation)')
+        wes[wes['Gene'].isin(['POLE'])].drop_duplicates(subset=['SAMPLE', 'Gene']).set_index('SAMPLE').assign(value=1)['value'].reindex(samples).replace(np.nan, 0).rename('POLE (mutation)'),
+        wes[wes['Gene'].isin(['POLE2'])].drop_duplicates(subset=['SAMPLE', 'Gene']).set_index('SAMPLE').assign(value=1)['value'].reindex(samples).replace(np.nan, 0).rename('POLE2 (mutation)'),
+        wes[wes['Gene'].isin(['POLE3'])].drop_duplicates(subset=['SAMPLE', 'Gene']).set_index('SAMPLE').assign(value=1)['value'].reindex(samples).replace(np.nan, 0).rename('POLE3 (mutation)')
 
     ], axis=1).dropna()
     plot_df = plot_df.reset_index().sort_values('mutations', ascending=False)
+
+    plot_df = plot_df[plot_df['MSI'] == 1]
+    plot_df = plot_df[plot_df[['Colorectal Carcinoma', 'Ovarian Carcinoma']].sum(1) > 0]
+
     plot_df = plot_df.assign(pos=range(plot_df.shape[0]))
 
     #
     pal = sns.light_palette(bipal_dbgd[0], n_colors=2)
 
     #
-    fig, (ax1, ax2) = plt.subplots(nrows=2, ncols=1, sharex=True, sharey=False, gridspec_kw={'height_ratios': [4, 1]})
+    fig, (ax1, ax2) = plt.subplots(nrows=2, ncols=1, sharex=True, sharey=False, gridspec_kw={'height_ratios': [3.5, 1.5]})
     plt.subplots_adjust(wspace=.1, hspace=.1)
 
     #
@@ -77,7 +85,9 @@ if __name__ == '__main__':
     #
     cmap = ListedColormap(pal)
 
-    sns.heatmap(plot_df.set_index('pos')[['Colorectal Carcinoma', 'MSI', 'WRN (essential)', 'POLE (mutation)', 'MLH1 (hypermethylation)']].T, cbar=False, ax=ax2, cmap=cmap, lw=.3)
+    sns.heatmap(plot_df.set_index('pos')[[
+        'Colorectal Carcinoma', 'Ovarian Carcinoma', 'MSI', 'WRN (essential)', 'POLE (mutation)', 'POLE2 (mutation)', 'POLE3 (mutation)', 'MLH1 (hypermethylation)'
+    ]].T, cbar=False, ax=ax2, cmap=cmap, lw=.3)
 
     ax2.tick_params(axis='x', which='both', bottom='off', top='off', labelbottom='off')
 
@@ -89,6 +99,6 @@ if __name__ == '__main__':
     plt.suptitle('Genomic landscape of WRN dependence')
 
     #
-    plt.gcf().set_size_inches(8, 4)
+    plt.gcf().set_size_inches(4, 5)
     plt.savefig('reports/drug/mmr_mutation_count.png', bbox_inches='tight', dpi=600)
     plt.close('all')

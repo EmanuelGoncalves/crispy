@@ -20,13 +20,13 @@ GROWTHRATE_FILE = 'data/gdsc/growth/growth_rate.csv'
 # CRISPR
 CRISPR_GENES_FILE = 'data/gdsc/crispr/_00_Genes_for_panCancer_assocStudies.txt'
 
-CRISPR_GENE_FC_CORRECTED = 'data/gdsc/crispr/corrected_logFCs.tsv'
+CRISPR_GENE_FC_CORRECTED = 'data/gdsc/crispr/corrected_logFCs_march_2018.tsv'
 
 # DRUG-RESPONSE
 DRUG_RESPONSE_FILE = 'data/gdsc/drug_single/drug_ic50_merged_matrix.csv'
 
 # GENOMIC
-MOBEM_FILE = 'data/gdsc/mobems/PANCAN_simple_MOBEM.rdata.annotated.csv'
+MOBEM_FILE = 'data/gdsc/PANCAN_mobem.csv'
 
 
 """

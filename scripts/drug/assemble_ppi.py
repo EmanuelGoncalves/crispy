@@ -9,7 +9,7 @@ STRING_FILE = 'data/resources/string/9606.protein.links.full.v10.5.txt'
 STRING_ALIAS_FILE = 'data/resources/string/9606.protein.aliases.v10.5.txt'
 STRING_PICKLE = 'data/igraph_string.pickle'
 
-BIOGRID_FILE = 'data/resources/biogrid/BIOGRID-ALL-3.4.145.tab2.txt'
+BIOGRID_FILE = 'data/resources/BIOGRID-ORGANISM-Homo_sapiens-3.4.157.tab2.txt'
 BIOGRID_PICKLE = 'data/igraph_biogrid.pickle'
 
 OMNIPATH_FILE = 'data/resources/omnipath/omnipathdb.org.txt'
@@ -49,25 +49,30 @@ def build_omnipath_ppi(is_directed=True, is_signed=True):
     return net_i
 
 
-def build_biogrid_ppi(exp_type=None, missing_interactions=None):
-    # 'Affinity Capture-MS', 'Affinity Capture-Western', 'Co-crystal Structure', 'Co-purification', 'Reconstituted Complex', 'PCA', 'Two-hybrid'
-    exp_type = {'Affinity Capture-MS', 'Affinity Capture-Western'} if exp_type is None else exp_type
-
-    missing_interactions = [('TP53', 'PPM1D')] if missing_interactions is None else missing_interactions
+def build_biogrid_ppi(exp_type=None, int_type=None, organism=9606):
+    # 'Affinity Capture-MS', 'Affinity Capture-Western', 'Co-crystal Structure', 'Co-purification',
+    # 'Reconstituted Complex', 'PCA', 'Two-hybrid'
 
     # Import
     biogrid = pd.read_csv(BIOGRID_FILE, sep='\t')
 
-    # Human only
+    # Filter organism
     biogrid = biogrid[
-        (biogrid['Organism Interactor A'] == 9606) & (biogrid['Organism Interactor B'] == 9606)
+        (biogrid['Organism Interactor A'] == organism) & (biogrid['Organism Interactor B'] == organism)
+    ]
+
+    # Filter non matching genes
+    biogrid = biogrid[
+        (biogrid['Official Symbol Interactor A'] != '-') & (biogrid['Official Symbol Interactor B'] != '-')
     ]
 
     # Physical interactions only
-    biogrid = biogrid[biogrid['Experimental System Type'] == 'physical']
+    if int_type is not None:
+        biogrid = biogrid[[i in int_type for i in biogrid['Experimental System Type']]]
 
     # Filter by experimental type
-    biogrid = biogrid[[i in exp_type for i in biogrid['Experimental System']]]
+    if exp_type is not None:
+        biogrid = biogrid[[i in exp_type for i in biogrid['Experimental System']]]
 
     # Interaction source map
     biogrid['interaction'] = biogrid['Official Symbol Interactor A'] + '<->' + biogrid['Official Symbol Interactor B']
@@ -77,9 +82,6 @@ def build_biogrid_ppi(exp_type=None, missing_interactions=None):
         (s, t) for p1, p2 in biogrid[['Official Symbol Interactor A', 'Official Symbol Interactor B']].values
         for s, t in [(p1, p2), (p2, p1)] if s != t
     }
-
-    # Append missing interactions
-    biogrid.update(missing_interactions)
 
     # Build igraph network
     # igraph network
@@ -152,6 +154,6 @@ def build_string_ppi(score_thres=900):
 
 
 if __name__ == '__main__':
-    build_biogrid_ppi()
+    build_biogrid_ppi(int_type=['physical'])
     build_string_ppi()
     print('[INFO] PPIs pickle files created')
