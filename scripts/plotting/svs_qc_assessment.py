@@ -6,7 +6,7 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 from crispy import bipal_dbgd
-from scripts.crispy.plotting.svplot import import_brass_bedpe, plot_rearrangements
+from scripts.plotting.svplot import import_brass_bedpe, plot_rearrangements
 
 
 if __name__ == '__main__':
