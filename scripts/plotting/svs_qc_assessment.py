@@ -3,6 +3,7 @@
 
 import numpy as np
 import pandas as pd
+import scripts as mp
 import seaborn as sns
 import matplotlib.pyplot as plt
 from crispy import bipal_dbgd
@@ -10,20 +11,19 @@ from scripts.plotting.svplot import import_brass_bedpe, plot_rearrangements
 
 
 if __name__ == '__main__':
-    svs_dir = 'data/crispy/gdsc_brass/{}.{}.csv'
-    brca_samples = ['HCC1954', 'HCC1143', 'HCC38', 'HCC1187', 'HCC1937', 'HCC1395']
+    svs_dir = '{}/{}.{}.csv'
 
     # - Import CRISPR lib
-    crispr_lib = pd.read_csv('data/crispr_libs/KY_Library_v1.1_updated.csv', index_col=0).groupby('gene').agg(
+    crispr_lib = pd.read_csv(mp.LIBRARY, index_col=0).groupby('gene').agg(
         {'start': np.min, 'end': np.max}
     )
 
     # - Import Crispy results
-    fit_type = {'svs_no_comb': 'SV', 'copynumber': 'Copy-number'}
+    fit_type = {'svs': 'SV', 'cnv': 'Copy-number'}
 
     svs_crispy = {
         t: {
-            s: pd.read_csv(svs_dir.format(s, t), index_col=0).rename(columns={'fit_by': 'chr'}) for s in brca_samples
+            s: pd.read_csv(svs_dir.format(mp.CRISPY_WGS_OUTDIR, s, t), index_col=0).rename(columns={'fit_by': 'chr'}) for s in mp.BRCA_SAMPLES
         } for t in fit_type
     }
 
@@ -35,9 +35,7 @@ if __name__ == '__main__':
     })
 
     # -
-    order = varexp[varexp[varexp > 1e-2].count(1) == 2]\
-        .eval('svs_no_comb - copynumber')\
-        .sort_values(ascending=False).head(10)
+    order = varexp[varexp[varexp > 1e-2].count(1) == 2].eval('svs - cnv').sort_values(ascending=False).head(10)
 
     # -
     for t in ['svs_no_comb']:
@@ -60,7 +58,7 @@ if __name__ == '__main__':
         g = sns.barplot('value', 'name', 'variable', data=plot_df, palette=pal, orient='h', hue_order=hue_order)
 
         # plt.legend(loc='center left', bbox_to_anchor=(1.02, 0.5))
-        plt.legend(prop={'size': 6})
+        plt.legend(prop={'size': 6}, loc='lower right')
 
         g.xaxis.grid(True, color=bipal_dbgd[0], linestyle='-', linewidth=.1, alpha=.5)
 
@@ -78,7 +76,7 @@ if __name__ == '__main__':
     for sample, chrm in order.index:
         print('{} {}'.format(sample, chrm))
 
-        t = 'svs_no_comb'
+        t = 'svs'
 
         # Import BRASS bedpe
         bedpe_dir = 'data/gdsc/wgs/brass_bedpe/{}.brass.annot.bedpe'

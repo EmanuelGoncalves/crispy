@@ -198,7 +198,7 @@ if __name__ == '__main__':
     # - Define significant associations
     lm_res = lm_res.assign(signif=[int(p < 0.05 and b < -.5) for p, b in lm_res[['f_fdr', 'beta']].values])
 
-    lm_res.query('f_fdr < 0.05').to_csv('data/crispy_df_collateral_essentialities.csv', index=False)
+    lm_res.query('f_fdr < 0.05 & beta < -.5').sort_values('f_fdr').to_csv('data/crispy_df_collateral_essentialities.csv', index=False)
     print(lm_res.query('f_fdr < 0.05 & beta < -.5').sort_values(['overlap', 'f_fdr'], ascending=[False, True]))
 
     # - Boxplots

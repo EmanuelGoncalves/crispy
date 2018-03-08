@@ -284,3 +284,4 @@ if __name__ == '__main__':
         for cn, cn_auc in multilabel_roc_auc_score('cnv', 'fc', plot_df_crispy.query("(sample == '{}') & (chr == '{}')".format(s, c)), min_events=5).items()
     ])
     copy_number_bias_arocs_per_chrm('cnv', 'auc', 'chr_cnv', plot_df_aucs_chr_crispy.query("chr_cnv != '1'"), 'reports/crispy/copynumber_bias_corrected_per_chr.png')
+

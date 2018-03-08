@@ -43,6 +43,7 @@ CN_PLOIDY = 'data/crispy_copy_number_ploidy_{}.csv'
 
 # CRISPY
 CRISPY_OUTDIR = 'data/crispy/gdsc/'
+CRISPY_WGS_OUTDIR = 'data/crispy/gdsc_brass/'
 
 # NON-EXPRESSED GENES: RNA-SEQ
 NON_EXP_PICKLE = 'data/gdsc/nexp_pickle.pickle'

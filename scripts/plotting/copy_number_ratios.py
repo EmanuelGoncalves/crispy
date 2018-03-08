@@ -21,7 +21,7 @@ def ratios_histogram(x, data, outfile):
     axs[0].axvline(1, lw=.3, ls='--', c=bipal_dbgd[1])
     axs[1].axvline(1, lw=.3, ls='--', c=bipal_dbgd[1])
 
-    axs[0].set_ylim(500000, 525000)  # outliers only
+    axs[0].set_ylim(500000, 650000)  # outliers only
     axs[1].set_ylim(0, 200000)  # most of the data
 
     axs[0].spines['bottom'].set_visible(False)
@@ -47,7 +47,7 @@ def ratios_histogram(x, data, outfile):
     plt.grid(False)
 
     plt.title('Copy-number ratio histogram (non-expressed genes)')
-    plt.gcf().set_size_inches(3.5, 2)
+    plt.gcf().set_size_inches(4, 3)
     plt.savefig(outfile, bbox_inches='tight', dpi=600)
     plt.close('all')
 
