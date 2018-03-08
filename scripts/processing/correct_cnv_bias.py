@@ -4,6 +4,7 @@
 import os
 import argparse
 import pandas as pd
+import scripts as mp
 from bsub import bsub
 from datetime import datetime as dt
 from crispy.biases_correction import CRISPRCorrection
@@ -86,10 +87,10 @@ def main():
     # Command line args parser
     parser = argparse.ArgumentParser(description='Run Crispy correction')
 
-    parser.add_argument('-crispr_file', nargs='?', default='data/crispr_gdsc_logfc.csv')
-    parser.add_argument('-crispr_lib_file', nargs='?', default='data/crispr_libs/KY_Library_v1.1_updated.csv')
-    parser.add_argument('-cnv_file', nargs='?', default='data/crispy_copy_number_gene_snp.csv')
-    parser.add_argument('-output_folder', nargs='?', default='data/crispy/gdsc/')
+    parser.add_argument('-crispr_file', nargs='?', default=mp.CRISPR_GENE_FC)
+    parser.add_argument('-crispr_lib_file', nargs='?', default=mp.LIBRARY)
+    parser.add_argument('-cnv_file', nargs='?', default=mp.CN_GENE.format('snp'))
+    parser.add_argument('-output_folder', nargs='?', default=mp.CRISPY_OUTDIR)
     parser.add_argument('-sample', nargs='?')
     parser.add_argument('-bsub', action='store_true', default=False)
 

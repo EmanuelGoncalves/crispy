@@ -3,6 +3,7 @@
 
 import pickle
 import pandas as pd
+import scripts as mp
 import seaborn as sns
 import matplotlib.pyplot as plt
 from crispy import bipal_dbgd
@@ -132,26 +133,25 @@ def ratios_heatmap_bias(x, y, z, data, outfile, z_bin='1'):
 if __name__ == '__main__':
     # - Import
     # CRISPR library
-    lib = pd.read_csv('data/crispr_libs/KY_Library_v1.1_updated.csv', index_col=0).groupby('gene')['chr'].first()
+    lib = pd.read_csv(mp.LIBRARY, index_col=0).groupby('gene')['chr'].first()
 
     # Non-expressed genes
-    nexp = pickle.load(open('data/gdsc/nexp_pickle.pickle', 'rb'))
+    nexp = pickle.load(open(mp.NON_EXP_PICKLE, 'rb'))
 
     # Copy-number
-    cnv = pd.read_csv('data/crispy_copy_number_gene_snp.csv', index_col=0)
+    cnv = pd.read_csv(mp.CN_GENE.format('snp'), index_col=0)
 
     # Chromosome copies
-    chrm = pd.read_csv('data/crispy_copy_number_chr_snp.csv', index_col=0)
+    chrm = pd.read_csv(mp.CN_CHR.format('snp'), index_col=0)
 
     # Copy-number ratios
-    cnv_ratios = pd.read_csv('data/crispy_copy_number_gene_ratio_snp.csv', index_col=0)
+    cnv_ratios = pd.read_csv(mp.CN_GENE_RATIO.format('snp'), index_col=0)
 
     # CRISPR
-    c_gdsc_fc = pd.read_csv('data/crispr_gdsc_logfc.csv', index_col=0)
-    # c_gdsc_crispy_kmean = assemble_matrix('data/crispy/gdsc/', 'k_mean')
+    c_gdsc_fc = pd.read_csv(mp.CRISPR_GENE_FC, index_col=0)
 
     # - Overlap samples
-    samples = list(set(cnv).intersection(c_gdsc_fc).intersection(c_gdsc_fc).intersection(nexp))
+    samples = list(set(cnv).intersection(c_gdsc_fc).intersection(nexp))
     print('[INFO] Samples overlap: {}'.format(len(samples)))
 
     # - Assemble data-frame of non-expressed genes

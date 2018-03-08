@@ -2,17 +2,16 @@
 # Copyright (C) 2018 Emanuel Goncalves
 
 import os
-import numpy as np
 import pandas as pd
+import scripts as mp
 import seaborn as sns
 import matplotlib.pyplot as plt
 from crispy import bipal_dbgd
 from pybedtools import BedTool
 from matplotlib.colors import rgb2hex
+from sklearn.metrics import roc_curve, auc
 from crispy.utils import multilabel_roc_auc_score
-from sklearn.metrics import roc_curve, auc, roc_auc_score
 from crispy.ratio import BRASS_HEADERS, GFF_FILE, GFF_HEADERS
-from scripts.crispy.processing.correct_cnv_bias import assemble_matrix
 
 
 def import_brass_bedpe(bedpe_file, bkdist, splitreads):
@@ -155,19 +154,16 @@ def plot_sv_ratios_boxplots(plot_df, x='ratio', y='collapse', order=None):
 
 
 if __name__ == '__main__':
-    bedpe_dir = 'data/gdsc/wgs/brass_bedpe'
-    brca_samples = ['HCC1954', 'HCC1143', 'HCC38', 'HCC1187', 'HCC1937', 'HCC1395']
-
     # Annotate BRASS bedpes
-    bed_dfs = annotate_brass_bedpe(bedpe_dir, bkdist=-1, splitreads=False, samples=brca_samples)
-    bed_dfs.to_csv('{}/{}'.format(os.path.dirname(bedpe_dir), 'brass.genes.gff.tab'), index=False, sep='\t')
+    bed_dfs = annotate_brass_bedpe(mp.WGS_BRASS_BEDPE, bkdist=-1, splitreads=False, samples=mp.BRCA_SAMPLES)
+    bed_dfs.to_csv('{}/{}'.format(os.path.dirname(mp.WGS_BRASS_BEDPE), 'brass.genes.gff.tab'), index=False, sep='\t')
 
     # - CRISPR
-    c_gdsc_fc = pd.read_csv('data/crispr_gdsc_logfc.csv', index_col=0)
+    c_gdsc_fc = pd.read_csv(mp.CRISPR_GENE_FC, index_col=0)
 
     # - Append information of copy-number ratio
     # Copy-number
-    cnv_ratios = pd.read_csv('data/crispy_copy_number_gene_ratio_wgs.csv', index_col=0)
+    cnv_ratios = pd.read_csv(mp.CN_GENE_RATIO.format('wgs'), index_col=0)
 
     # Overlap
     samples = list(set(cnv_ratios).intersection(bed_dfs['sample']))
@@ -176,12 +172,8 @@ if __name__ == '__main__':
     # Append ratios
     brass = bed_dfs.assign(ratio=[cnv_ratios.loc[g, s] for s, g in bed_dfs[['sample', 'feature']].values])
 
-    # # - Exclude samples
-    # brass = brass[~brass['sample'].isin(['HCC1954'])]
-
     # - Plot: Copy-number ratio
     plot_df = brass.query('count == 1').dropna().sort_values('ratio', ascending=False)
-    # plot_df = plot_df[['chr', 'collapse', 'sample', 'ratio']].drop_duplicates()
     print(plot_df)
 
     # AROCs

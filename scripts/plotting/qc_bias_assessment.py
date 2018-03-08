@@ -5,6 +5,7 @@ import os
 import pickle
 import numpy as np
 import pandas as pd
+import scripts as mp
 import seaborn as sns
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
@@ -173,30 +174,30 @@ def arocs_scatter(x, y, data, outfile):
 if __name__ == '__main__':
     # - Import
     # (non)essential genes
-    essential = pd.read_csv('data/gene_sets/curated_BAGEL_essential.csv', sep='\t')['gene'].rename('essential')
-    nessential = pd.read_csv('data/gene_sets/curated_BAGEL_nonEssential.csv', sep='\t')['gene'].rename('non-essential')
+    essential = pd.read_csv(mp.HART_ESSENTIAL, sep='\t')['gene'].rename('essential')
+    nessential = pd.read_csv(mp.HART_NON_ESSENTIAL, sep='\t')['gene'].rename('non-essential')
 
     # CRISPR library
-    lib = pd.read_csv('data/crispr_libs/KY_Library_v1.1_updated.csv', index_col=0).groupby('gene')['chr'].first()
+    lib = pd.read_csv(mp.LIBRARY, index_col=0).groupby('gene')['chr'].first()
 
     # Samplesheet
-    ss = pd.read_csv('data/gdsc/samplesheet.csv', index_col=0)
+    ss = pd.read_csv(mp.SAMPLESHEET, index_col=0)
 
     # Non-expressed genes
-    nexp = pickle.load(open('data/gdsc/nexp_pickle.pickle', 'rb'))
+    nexp = pickle.load(open(mp.NON_EXP_PICKLE, 'rb'))
 
     # Copy-number
-    cnv = pd.read_csv('data/crispy_copy_number_gene_snp.csv', index_col=0)
+    cnv = pd.read_csv(mp.CN_GENE.format('snp'), index_col=0)
 
     # Ploidy
-    ploidy = pd.read_csv('data/crispy_copy_number_ploidy_snp.csv', index_col=0, names=['sample', 'ploidy'])['ploidy']
+    ploidy = pd.read_csv(mp.CN_PLOIDY.format('snp'), index_col=0, names=['sample', 'ploidy'])['ploidy']
 
     # Chromosome copies
-    chrm = pd.read_csv('data/crispy_copy_number_chr_snp.csv', index_col=0)
+    chrm = pd.read_csv(mp.CN_CHR.format('snp'), index_col=0)
 
     # CRISPR
-    c_gdsc_fc = pd.read_csv('data/crispr_gdsc_logfc.csv', index_col=0)
-    c_gdsc_crispy = pd.read_csv('data/crispr_gdsc_logfc_corrected.csv', index_col=0)
+    c_gdsc_fc = pd.read_csv(mp.CRISPR_GENE_FC, index_col=0)
+    c_gdsc_crispy = pd.read_csv(mp.CRISPR_GENE_CORRECTED_FC, index_col=0)
 
     # - Overlap samples
     samples = list(set(cnv).intersection(c_gdsc_fc).intersection(c_gdsc_crispy).intersection(nexp))

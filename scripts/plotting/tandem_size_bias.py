@@ -7,7 +7,6 @@ import numpy as np
 import pandas as pd
 import itertools as it
 import seaborn as sns
-import scripts.drug as dc
 import matplotlib.pyplot as plt
 from crispy import bipal_dbgd
 from natsort import natsorted
@@ -135,9 +134,6 @@ if __name__ == '__main__':
 
     # -
     ploidy = pd.read_csv('data/crispy_copy_number_ploidy_snp.csv', index_col=0, names=['sample', 'ploidy'])['ploidy']
-
-    # - Growth rate
-    growth = pd.read_csv(dc.GROWTHRATE_FILE, index_col=0)['growth_rate_median']
 
     # - Overlap
     genes = set(c_gdsc_fc.index).intersection(cnv.index)

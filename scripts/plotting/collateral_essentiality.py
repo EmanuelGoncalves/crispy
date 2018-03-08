@@ -4,6 +4,7 @@
 import pickle
 import numpy as np
 import pandas as pd
+import scripts as mp
 import seaborn as sns
 import matplotlib.pyplot as plt
 from crispy import bipal_dbgd
@@ -151,30 +152,30 @@ def plot_volcano(lm_res):
 if __name__ == '__main__':
     # - Import
     # Samplesheet
-    ss = pd.read_csv('data/gdsc/samplesheet.csv', index_col=0)
+    ss = pd.read_csv(mp.SAMPLESHEET, index_col=0)
 
     # Non-expressed genes
-    nexp = pickle.load(open('data/gdsc/nexp_pickle.pickle', 'rb'))
+    nexp = pickle.load(open(mp.NON_EXP_PICKLE, 'rb'))
     nexp = pd.DataFrame({c: {g: 1 for g in nexp[c]} for c in nexp}).fillna(0)
 
     # Copy-number
-    cnv = pd.read_csv('data/crispy_copy_number_gene_snp.csv', index_col=0).dropna()
+    cnv = pd.read_csv(mp.CN_GENE.format('snp'), index_col=0).dropna()
 
     # Copy-number ratios
-    cnv_ratios = pd.read_csv('data/crispy_copy_number_gene_ratio_snp.csv', index_col=0).dropna()
+    cnv_ratios = pd.read_csv(mp.CN_GENE_RATIO.format('snp'), index_col=0).dropna()
 
     # Ploidy
-    ploidy = pd.read_csv('data/crispy_copy_number_ploidy_snp.csv', index_col=0, names=['sample', 'ploidy'])['ploidy']
+    ploidy = pd.read_csv(mp.CN_PLOIDY.format('snp'), index_col=0, names=['sample', 'ploidy'])['ploidy']
 
     # CRISPR
-    c_gdsc_fc = pd.read_csv('data/crispr_gdsc_logfc.csv', index_col=0)
+    c_gdsc_fc = pd.read_csv(mp.CRISPR_GENE_FC, index_col=0)
 
     # CRISPR lib
-    lib = pd.read_csv('data/crispr_libs/KY_Library_v1.1_updated.csv', index_col=0)
+    lib = pd.read_csv(mp.LIBRARY, index_col=0)
     lib = lib.assign(pos=lib[['start', 'end']].mean(1).values)
 
     # Cancer gene census list
-    cgenes = set(pd.read_csv('data/gene_sets/Census_allThu Dec 21 15_43_09 2017.tsv', sep='\t')['Gene Symbol'])
+    cgenes = set(pd.read_csv(mp.CANCER_GENES, sep='\t')['Gene Symbol'])
 
     # - Overlap samples
     samples = list(set(cnv).intersection(c_gdsc_fc).intersection(nexp).intersection(ploidy.index))

@@ -3,11 +3,10 @@
 
 import numpy as np
 import pandas as pd
+import scripts as mp
 import seaborn as sns
-import crispy.ratio as cr
 import matplotlib.pyplot as plt
 import matplotlib.ticker as plticker
-from natsort import natsorted
 from pybedtools import BedTool
 from crispy import bipal_dbgd
 from crispy.utils import bin_cnv
@@ -301,17 +300,14 @@ def aucs_samples(plot_df, order, min_events=5):
 
 
 if __name__ == '__main__':
-    ascat_dir = 'data/gdsc/wgs/ascat_bed/{}.wgs.ascat.bed'
-    brass_dir = 'data/gdsc/wgs/brass_bedpe/{}.brass.annot.bedpe'
-
     # - Copy-number
-    ratios = pd.read_csv('data/crispy_copy_number_gene_ratio_wgs.csv', index_col=0)
-    ploidy = pd.read_csv('data/crispy_copy_number_ploidy_wgs.csv', index_col=0, names=['sample', 'ploidy'])['ploidy']
+    ratios = pd.read_csv(mp.CN_GENE_RATIO.format('wgs'), index_col=0)
+    ploidy = pd.read_csv(mp.CN_PLOIDY.format('wgs'), index_col=0, names=['sample', 'ploidy'])['ploidy']
 
     # - BRASS
-    brca_samples = ['HCC1954', 'HCC1143', 'HCC38', 'HCC1187', 'HCC1937', 'HCC1395']
-
-    brass = pd.concat([import_brass_bedpe(brass_dir.format(sample)).assign(sample=sample) for sample in brca_samples])
+    brass = pd.concat([
+        import_brass_bedpe('{}/{}.brass.annot.bedpe'.format(mp.WGS_BRASS_BEDPE, sample)).assign(sample=sample) for sample in mp.BRCA_SAMPLES
+    ])
 
     # Count number of SVs
     svcount_barplot(brass)
@@ -331,9 +327,9 @@ if __name__ == '__main__':
     # sample = 'HCC38'
     for sample in samples:
         # Import BRASS SV
-        svs_file = brass_dir.format(sample) + '.bed'
+        svs_file = '{}/{}.brass.annot.bedpe.{}'.format(mp.WGS_BRASS_BEDPE, sample, 'bed')
 
-        svs_df = import_brass_bedpe(brass_dir.format(sample), bkdist=0, splitreads=False, convert_to_bed=True)
+        svs_df = import_brass_bedpe('{}/{}.brass.annot.bedpe'.format(mp.WGS_BRASS_BEDPE, sample), bkdist=0, splitreads=False, convert_to_bed=True)
         svs_df.to_csv(svs_file, sep='\t', index=False)
 
         svs = BedTool(svs_file).sort()
