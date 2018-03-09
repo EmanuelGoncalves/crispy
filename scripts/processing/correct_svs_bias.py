@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 # Copyright (C) 2018 Emanuel Goncalves
 
-import os
 import argparse
 import numpy as np
 import pandas as pd
 import scripts as mp
 from bsub import bsub
+from crispy.utils import DotDict
 from datetime import datetime as dt
 from crispy.biases_correction import CRISPRCorrection
 from scripts.plotting.annotate_bedpe import annotate_brass_bedpe
@@ -40,19 +40,24 @@ def present_svs(svs):
     return {sv.replace('-', ''): int(sv in svs_set) for sv in SVTYPES}
 
 
-def run_correction(args):
+def run_correction(args, sample=None, feature=None):
+    sample = args.sample if sample is None else sample
+    feature = args.feature if feature is None else feature
+
+    # sample, feature = 'HCC38', 'all'
+
     # - Imports
     # CRISPR lib
     sgrna_lib = pd.read_csv(args.crispr_lib_file, index_col=0)
 
     # Annotate BRASS bedpes
-    bed_dfs = annotate_brass_bedpe(args.wgs_dir, bkdist=BKDIST, splitreads=SPLITREADS, samples=[args.sample])
+    bed_dfs = annotate_brass_bedpe(args.wgs_dir, bkdist=BKDIST, splitreads=SPLITREADS, samples=[sample])
 
     # CRISPR
-    c_gdsc_fc = pd.read_csv(args.wgs_cnv_file, index_col=0).dropna()[args.sample]
+    c_gdsc_fc = pd.read_csv(args.crispr_file, index_col=0).dropna()[sample]
 
     # Copy-number
-    cnv = pd.read_csv(args.wgs_cnv_file, index_col=0)[args.sample]
+    cnv = pd.read_csv(args.wgs_cnv_file, index_col=0)[sample]
 
     # - Overlap
     genes = set(c_gdsc_fc.index).intersection(cnv.index)
@@ -68,22 +73,25 @@ def run_correction(args):
     svmatrix = svmatrix.dropna()
 
     # Correction
-    df = CRISPRCorrection().rename(args.sample).fit_by(by=svmatrix['chr'], X=svmatrix[FEATURES[args.feature]], y=svmatrix['crispr'])
+    df = CRISPRCorrection().rename(sample).fit_by(by=svmatrix['chr'], X=svmatrix[FEATURES[feature]], y=svmatrix['crispr'])
 
     df = pd.concat([v.to_dataframe() for k, v in df.items()])
 
-    df.to_csv('{}/{}.{}.csv'.format(args.output_dir, args.sample, args.feature))
+    df.to_csv('{}/{}.{}.csv'.format(args.output_dir, sample, feature))
 
 
-def run_correction_bsub(args):
+def run_correction_bsub(args, sample=None, feature=None):
+    sample = args.sample if sample is None else sample
+    feature = args.feature if feature is None else feature
+
     # Set job name
-    jname = 'crispy_{}'.format(args.sample)
+    jname = 'crispy_{}'.format(sample)
 
     # Define command
     j_cmd = \
         "python3.6.1 scripts/processing/correct_svs_bias.py " \
         "-crispr_file '{}' -crispr_lib_file '{}' -wgs_dir '{}' -wgs_cnv_file '{}' -feature '{}' -sample '{}' -output_folder '{}'" \
-            .format(args.crispr_file, args.crispr_lib_file, args.wgs_dir, args.wgs_cnv_file, args.feature, args.sample, args.output_dir)
+            .format(args.crispr_file, args.crispr_lib_file, args.wgs_dir, args.wgs_cnv_file, feature, sample, args.output_dir)
 
     # Create bsub
     j = bsub(
@@ -131,10 +139,7 @@ if __name__ == '__main__':
 
         for s in samples:
             for t in FEATURES:
-                if pargs.bsub:
-                    run_correction_bsub(pargs)
-                else:
-                    run_correction(pargs)
+                run_correction_bsub(pargs, sample=s, feature=t) if pargs.bsub else run_correction(pargs, sample=s, feature=t)
 
     elif pargs.bsub:
         print('[{}] Crispy: bsub {}'.format(dt.now().strftime('%Y-%m-%d %H:%M:%S'), pargs.sample))
@@ -142,5 +147,4 @@ if __name__ == '__main__':
 
     else:
         print('[{}] {}: {}'.format(dt.now().strftime('%Y-%m-%d %H:%M:%S'), pargs.sample, pargs.output_dir))
-
         run_correction(pargs)

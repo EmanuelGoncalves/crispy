@@ -33,3 +33,9 @@ def qnorm(x):
     y = st.rankdata(x)
     y = -st.norm.isf(y / (len(x) + 1))
     return y
+
+
+class DotDict(dict):
+    __getattr__ = dict.get
+    __setattr__ = dict.__setitem__
+    __delattr__ = dict.__delitem__

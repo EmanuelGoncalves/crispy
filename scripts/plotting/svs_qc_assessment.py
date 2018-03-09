@@ -41,7 +41,7 @@ if __name__ == '__main__':
     })
 
     # -
-    order = varexp.loc[varexp[varexp[varexp > 1e-2].count(1) == 2].eval('svs + cnv').sort_values(ascending=False).head(10).index]
+    order = varexp[varexp[varexp > 1e-2].count(1) == 2].eval('svs - cnv').sort_values(ascending=False).head(10)
 
     # -
     for t in ['svs_no_comb']:
