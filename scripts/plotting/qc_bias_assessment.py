@@ -40,7 +40,8 @@ def auc_curves(df, geneset, outfile):
     pal = sns.light_palette(bipal_dbgd[0], n_colors=df.shape[1]).as_hex()
 
     # AUCs fold-changes
-    ax, stats_ess = plot_cumsum_auc(df, geneset, plot_mean=True, legend=False, palette=pal)
+    ax, stats_ess = plot_cumsum_auc(df, geneset, plot_mean=False, legend=False, palette=pal)
+    plt.title('Mean AUC = {:.2f}'.format(pd.Series(stats_ess['auc']).mean()))
     plt.gcf().set_size_inches(3, 3)
     plt.savefig(outfile, bbox_inches='tight', dpi=600)
     plt.close('all')

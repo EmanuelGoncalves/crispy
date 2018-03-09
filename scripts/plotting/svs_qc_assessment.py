@@ -19,7 +19,7 @@ if __name__ == '__main__':
     )
 
     # - Import Crispy results
-    fit_type = {'svs': 'SV', 'cnv': 'Copy-number'}
+    fit_type = {'svs': 'SV', 'cnv': 'Copy-number', 'all': 'Both'}
 
     svs_crispy = {
         t: {
@@ -34,8 +34,14 @@ if __name__ == '__main__':
         }).unstack() for t in svs_crispy
     })
 
+    kmean = pd.DataFrame({
+        t: pd.DataFrame({
+            c: svs_crispy[t][c].groupby('chr')['k_mean'].min() for c in svs_crispy[t]
+        }).unstack() for t in svs_crispy
+    })
+
     # -
-    order = varexp[varexp[varexp > 1e-2].count(1) == 2].eval('svs - cnv').sort_values(ascending=False).head(10)
+    order = varexp.loc[varexp[varexp[varexp > 1e-2].count(1) == 2].eval('svs + cnv').sort_values(ascending=False).head(10).index]
 
     # -
     for t in ['svs_no_comb']:
@@ -58,7 +64,7 @@ if __name__ == '__main__':
         g = sns.barplot('value', 'name', 'variable', data=plot_df, palette=pal, orient='h', hue_order=hue_order)
 
         # plt.legend(loc='center left', bbox_to_anchor=(1.02, 0.5))
-        plt.legend(prop={'size': 6}, loc='lower right')
+        plt.legend(prop={'size': 5}, loc='lower right')
 
         g.xaxis.grid(True, color=bipal_dbgd[0], linestyle='-', linewidth=.1, alpha=.5)
 
@@ -72,15 +78,14 @@ if __name__ == '__main__':
         plt.close('all')
 
     # -
-    # sample, chrm, t = 'HCC1395', 'chr6', 'svs_no_comb'
+    # sample, chrm, t = 'HCC38', 'chr10', 'all'
     for sample, chrm in order.index:
         print('{} {}'.format(sample, chrm))
 
-        t = 'svs'
+        t = 'all'
 
         # Import BRASS bedpe
-        bedpe_dir = 'data/gdsc/wgs/brass_bedpe/{}.brass.annot.bedpe'
-        bedpe = import_brass_bedpe(bedpe_dir.format(sample), bkdist=None, splitreads=False)
+        bedpe = import_brass_bedpe('{}/{}.brass.annot.bedpe'.format(mp.WGS_BRASS_BEDPE, sample), bkdist=None, splitreads=True)
 
         # Import WGS sequencing depth
         ngsc = pd.read_csv(

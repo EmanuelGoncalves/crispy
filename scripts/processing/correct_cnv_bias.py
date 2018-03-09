@@ -59,7 +59,7 @@ def iterate_correction(crispr_file, crispr_lib_file, cnv_file, output_folder, bs
             jname = 'crispy_{}'.format(sample)
 
             # Define command
-            j_cmd = "python3.6.1 scripts/crispy/processing/correct_cnv_bias.py -crispr_file '{}' -crispr_lib_file '{}' -cnv_file '{}' -output_folder '{}' -sample '{}'"\
+            j_cmd = "python3.6.1 scripts/processing/correct_cnv_bias.py -crispr_file '{}' -crispr_lib_file '{}' -cnv_file '{}' -output_folder '{}' -sample '{}'"\
                 .format(crispr_file, crispr_lib_file, cnv_file, output_folder, sample)
 
             # Create bsub

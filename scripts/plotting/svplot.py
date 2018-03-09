@@ -111,11 +111,11 @@ def plot_rearrangements(brass, crispr, ngsc, chrm, winsize=1e5, chrm_size=None, 
     ax1.set_ylim(-1, 1)
 
     #
-    ax2.scatter(ngsc_['location'] / scale, ngsc_['absolute_cn'], s=1, alpha=.5, c=bipal_dbgd[0], label='copy-number', zorder=1)
+    ax2.scatter(ngsc_['location'] / scale, ngsc_['absolute_cn'], s=1, alpha=.5, c=bipal_dbgd[0], label='Copy-number', zorder=1)
     ax2.set_ylim(0.0, np.ceil(ngsc_['absolute_cn'].quantile(0.99)))
 
     #
-    ax3.scatter(crispr_['location'] / scale, crispr_['crispr'], s=1, alpha=.5, c=bipal_dbgd[1], label='crispr', zorder=1)
+    ax3.scatter(crispr_['location'] / scale, crispr_['crispr'], s=1, alpha=.5, c=bipal_dbgd[1], label='CRISPR FC', zorder=1)
     ax3.axhline(0.0, lw=.3, color=bipal_dbgd[0])
 
     #
@@ -161,7 +161,7 @@ def plot_rearrangements(brass, crispr, ngsc, chrm, winsize=1e5, chrm_size=None, 
                 ax1.text(x2_mean / scale, 0, ' to {}'.format(c1), color=stype_col, ha='center', fontsize=3, rotation=90, va='bottom')
 
     #
-    by_label = {l: p for p, l in zip(*(ax2.get_legend_handles_labels())) if l in PALETTE}
+    by_label = {l.capitalize(): p for p, l in zip(*(ax2.get_legend_handles_labels())) if l in PALETTE}
     ax1.legend(by_label.values(), by_label.keys(), loc='center left', bbox_to_anchor=(1.02, 0.5), prop={'size': 4})
 
     by_label = {l: p for p, l in zip(*(ax2.get_legend_handles_labels())) if l not in PALETTE}
@@ -329,7 +329,7 @@ if __name__ == '__main__':
         # Import BRASS SV
         svs_file = '{}/{}.brass.annot.bedpe.{}'.format(mp.WGS_BRASS_BEDPE, sample, 'bed')
 
-        svs_df = import_brass_bedpe('{}/{}.brass.annot.bedpe'.format(mp.WGS_BRASS_BEDPE, sample), bkdist=0, splitreads=False, convert_to_bed=True)
+        svs_df = import_brass_bedpe('{}/{}.brass.annot.bedpe'.format(mp.WGS_BRASS_BEDPE, sample), bkdist=0, splitreads=True, convert_to_bed=True)
         svs_df.to_csv(svs_file, sep='\t', index=False)
 
         svs = BedTool(svs_file).sort()
