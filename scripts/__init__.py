@@ -52,3 +52,6 @@ NON_EXP_PICKLE = 'data/gdsc/nexp_pickle.pickle'
 CANCER_GENES = 'data/gene_sets/Census_allThu Dec 21 15_43_09 2017.tsv'
 HART_ESSENTIAL = 'data/gene_sets/curated_BAGEL_essential.csv'
 HART_NON_ESSENTIAL = 'data/gene_sets/curated_BAGEL_nonEssential.csv'
+
+# GTex
+GTEX_TPM = 'data/GTEx_Analysis_2016-01-15_v7_RNASeQCv1.1.8_gene_median_tpm.gct'

@@ -41,7 +41,8 @@ if __name__ == '__main__':
     })
 
     # -
-    order = varexp[varexp[varexp > 1e-2].count(1) == 2].eval('svs - cnv').sort_values(ascending=False).head(10)
+    order = varexp[varexp[varexp > 1e-2].count(1) == 2].eval('svs').sort_values(ascending=True).head(10)
+    # order = varexp['cnv'].sort_values(ascending=False).head(10)
 
     # -
     for t in ['svs_no_comb']:
@@ -85,7 +86,7 @@ if __name__ == '__main__':
         t = 'all'
 
         # Import BRASS bedpe
-        bedpe = import_brass_bedpe('{}/{}.brass.annot.bedpe'.format(mp.WGS_BRASS_BEDPE, sample), bkdist=None, splitreads=True)
+        bedpe = import_brass_bedpe('{}/{}.brass.annot.bedpe'.format(mp.WGS_BRASS_BEDPE, sample), bkdist=0, splitreads=False)
 
         # Import WGS sequencing depth
         ngsc = pd.read_csv(

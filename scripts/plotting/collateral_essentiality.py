@@ -22,6 +22,12 @@ def recurrent_amplified_genes(cnv, cnv_ratios, ploidy, min_events=3):
     return list(g_amp.index)
 
 
+def recurrent_high_copy_number_ratio(cnv_ratios, thres=2, min_events=3):
+    g_amp = (cnv_ratios > thres).sum(1)
+    g_amp = g_amp[g_amp > min_events]
+    return list(g_amp.index)
+
+
 def recurrent_non_expressed_genes(nexp, min_events=3):
     g_nexp = nexp[nexp.sum(1) >= min_events]
     return list(g_nexp.index)
@@ -104,7 +110,7 @@ def association_boxplot(idx, lm_res, c_gdsc_fc, cnv, cnv_ratios, nexp, cnv_bin_t
     # Labels
     plt.suptitle('Collateral essentiality {0} - {1}\nbeta={2:.1f}; FDR={3:1.2e}'.format(y_feat, x_feat, lm_res.loc[idx, 'beta'], lm_res.loc[idx, 'f_fdr']), y=1.02)
 
-    return y_feat, x_feat
+    return y_feat, x_feat, plot_df
 
 
 def plot_volcano(lm_res):
@@ -174,35 +180,35 @@ if __name__ == '__main__':
     lib = pd.read_csv(mp.LIBRARY, index_col=0)
     lib = lib.assign(pos=lib[['start', 'end']].mean(1).values)
 
-    # Cancer gene census list
-    cgenes = set(pd.read_csv(mp.CANCER_GENES, sep='\t')['Gene Symbol'])
+    # GTex TPM per tissue
+    gtex = pd.read_csv('data/GTEx_Analysis_2016-01-15_v7_RNASeQCv1.1.8_gene_median_tpm.gct', sep='\t', index_col=1)
 
     # - Overlap samples
     samples = list(set(cnv).intersection(c_gdsc_fc).intersection(nexp).intersection(ploidy.index))
     print('[INFO] Samples overlap: {}'.format(len(samples)))
 
-    # - Recurrent amplified cancer genes (following COSMIC definition)
-    g_amp = recurrent_amplified_genes(cnv[samples], cnv_ratios[samples], ploidy[samples])
-    g_amp = list(set(g_amp).intersection(cgenes))
+    # - Define gene-sets
+    # Recurrent amplified cancer genes
+    g_amp = recurrent_high_copy_number_ratio(cnv_ratios[samples], min_events=3, thres=2)
 
-    # - Recurrent non-expressed genes (Genes not expressed in at least 50% of the samples)
-    g_nexp = recurrent_non_expressed_genes(nexp.reindex(c_gdsc_fc.index)[samples].dropna(), min_events=int(len(samples) * .5))
+    # Recurrent non-expressed genes (Genes not expressed in at least 50% of the samples)
+    g_nexp = recurrent_non_expressed_genes(nexp.reindex(c_gdsc_fc.index)[samples].dropna(), min_events=int(len(samples) * .25))
 
-    # - Filter-out genes with low CRISPR var
+    # Filter-out genes with low CRISPR var
     g_nexp_var = filter_low_var_essential(c_gdsc_fc.loc[g_nexp, samples])
     print('[INFO] Amplified genes: {}; Non-expressed genes: {}'.format(len(g_amp), len(g_nexp_var)))
 
     # - Linear regressions
-    lm_res = lr_ess(cnv_ratios.loc[g_amp, samples].T, c_gdsc_fc.loc[g_nexp_var, samples].T, nexp)
+    lm = lr_ess(cnv_ratios.loc[g_amp, samples].T, c_gdsc_fc.loc[g_nexp_var, samples].T, nexp)
 
     # - Define significant associations
-    lm_res = lm_res.assign(signif=[int(p < 0.05 and b < -.5) for p, b in lm_res[['f_fdr', 'beta']].values])
-
-    lm_res.query('f_fdr < 0.05 & beta < -.5').sort_values('f_fdr').to_csv('data/crispy_df_collateral_essentialities.csv', index=False)
-    print(lm_res.query('f_fdr < 0.05 & beta < -.5').sort_values(['overlap', 'f_fdr'], ascending=[False, True]))
+    lm_res = lm.assign(signif=[int(p < 0.05 and b < -.5) for p, b in lm[['f_fdr', 'beta']].values])
+    lm_res = lm_res.query('f_fdr < 0.05 & beta < -.5').sort_values(['overlap', 'f_fdr'], ascending=[False, True])
+    lm_res.to_csv('data/crispy_df_collateral_essentialities.csv', index=False)
+    print(lm_res.query('f_fdr < 0.05 & beta < -.5 & overlap > 75'))
 
     # - Boxplots
-    crispr_gene, ratio_gene = association_boxplot(23517, lm_res, c_gdsc_fc, cnv, cnv_ratios, nexp)
+    crispr_gene, ratio_gene, plot_df = association_boxplot(267036, lm_res, c_gdsc_fc, cnv, cnv_ratios, nexp)
     plt.gcf().set_size_inches(4, 3)
     plt.savefig('reports/crispy/collateral_essentiality_boxplot_{}_{}.png'.format(crispr_gene, ratio_gene), bbox_inches='tight', dpi=600)
     plt.close('all')
@@ -214,7 +220,7 @@ if __name__ == '__main__':
     plt.close('all')
 
     # - Chromosome plot
-    sample, chrm = 'UACC-893', 'chr17'
+    sample, chrm = 'TGW', 'chr8'
 
     plot_df = pd.read_csv('data/crispy/gdsc/crispy_crispr_{}.csv'.format(sample), index_col=0)
     plot_df = plot_df[plot_df['fit_by'] == chrm]
@@ -226,7 +232,7 @@ if __name__ == '__main__':
 
     ax = plot_chromosome(
         plot_df['pos'], plot_df['fc'].rename('CRISPR FC'), plot_df['k_mean'].rename('Crispy'), seg=seg[seg['#chr'] == chrm],
-        highlight=['NEUROD2', 'ERBB2', 'MED24'], cytobands=cytobands, legend=True
+        highlight=[crispr_gene, ratio_gene], cytobands=cytobands, legend=True
     )
 
     ax.set_xlabel('Position on chromosome {} (Mb)'.format(chrm))
@@ -234,5 +240,5 @@ if __name__ == '__main__':
     ax.set_title('{}'.format(sample))
 
     plt.gcf().set_size_inches(3, 1.5)
-    plt.savefig('reports/crispy/collateral_essentiality_chromosomeplot.png', bbox_inches='tight', dpi=600)
+    plt.savefig('reports/crispy/collateral_essentiality_chromosomeplot_{}_{}.png'.format(sample, chrm), bbox_inches='tight', dpi=600)
     plt.close('all')

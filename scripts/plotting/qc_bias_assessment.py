@@ -104,6 +104,7 @@ def copy_number_bias_arocs_per_sample(x, y, hue, data, outfile):
     sns.boxplot(x, y, data=data, sym='', order=thresholds, palette=thresholds_color, linewidth=.3)
     sns.stripplot(x, y, data=data, order=thresholds, palette=thresholds_color, edgecolor='white', linewidth=.1, size=3, jitter=.4)
 
+    plt.ylim(0, 1)
     plt.title('Copy-number effect on CRISPR/Cas9\n(non-expressed genes)')
     plt.xlabel('Copy-number')
     plt.ylabel('Copy-number AUC (per cell line)')
@@ -119,6 +120,7 @@ def copy_number_bias_arocs_per_sample(x, y, hue, data, outfile):
     sns.boxplot(x, y, hue, data=data, sym='', order=thresholds, hue_order=hue_thresholds, palette=hue_thresholds_color, linewidth=.3)
     sns.stripplot(x, y, hue, data=data, order=thresholds, hue_order=hue_thresholds, palette=hue_thresholds_color, edgecolor='white', linewidth=.1, size=1, jitter=.2, split=True)
 
+    plt.ylim(0, 1)
     handles = [mpatches.Circle([.0, .0], .25, facecolor=c, label=l) for c, l in zip(*(hue_thresholds_color, hue_thresholds))]
     plt.legend(handles=handles, title='Ploidy', prop={'size': 6}).get_title().set_fontsize('6')
     plt.title('Cell ploidy effect on CRISPR/Cas9\n(non-expressed genes)')
@@ -145,6 +147,7 @@ def copy_number_bias_arocs_per_chrm(x, y, hue, data, outfile):
     handles = [mpatches.Circle([.0, .0], .25, facecolor=c, label=l) for c, l in zip(*(hue_color, hue_order))]
     plt.legend(handles=handles, title='Chr. copies', prop={'size': 5}).get_title().set_fontsize('5')
 
+    plt.ylim(0, 1)
     plt.title('Copy-number effect on CRISPR/Cas9\n(non-expressed genes)')
     plt.xlabel('Copy-number')
     plt.ylabel('Copy-number AUC (per chromossome)')
@@ -238,6 +241,20 @@ if __name__ == '__main__':
     plot_df = plot_df.reset_index().rename(columns={'level_0': 'sample', 'level_1': 'gene'})
     plot_df = plot_df[~plot_df['cnv'].isin(['0', '1'])]
     plot_df = plot_df.assign(chr=lib.loc[plot_df['gene']].values)
+
+    hue_thresholds = natsorted(set(plot_df['cnv']))
+    hue_thresholds_color = sns.light_palette(bipal_dbgd[0], n_colors=len(hue_thresholds)).as_hex()
+
+    sns.boxplot('cnv', 'fc', data=plot_df, notch=True, sym='', order=hue_thresholds, palette=hue_thresholds_color, linewidth=.3)
+
+    plt.title('Copy-number effect on CRISPR/Cas9\n(non-expressed genes)')
+    plt.xlabel('Copy-number')
+    plt.ylabel('CRISPR/Cas9 FC (log2)')
+    plt.axhline(0., ls='--', lw=.3, alpha=.5, c=bipal_dbgd[0])
+    plt.gcf().set_size_inches(3, 3)
+
+    plt.savefig('reports/crispy/copynumber_bias_boxplot.png', bbox_inches='tight', dpi=600)
+    plt.close('all')
 
     # Plot overall CNV bias
     copy_number_bias_arocs('cnv', 'fc', plot_df, 'reports/crispy/copynumber_bias.png')

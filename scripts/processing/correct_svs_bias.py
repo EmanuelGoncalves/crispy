@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # Copyright (C) 2018 Emanuel Goncalves
 
+import os
 import argparse
 import numpy as np
 import pandas as pd
@@ -26,7 +27,7 @@ FEATURES = {
 }
 
 BKDIST = 0
-SPLITREADS = True
+SPLITREADS = False
 
 
 def count_svs(svs):
@@ -132,7 +133,7 @@ if __name__ == '__main__':
         print('[{}] Crispy: all'.format(dt.now().strftime('%Y-%m-%d %H:%M:%S')))
 
         crispr_samples = set(pd.read_csv(pargs.crispr_file, index_col=0).dropna())
-        wgs_samples = set(annotate_brass_bedpe(pargs.wgs_dir, bkdist=BKDIST, splitreads=SPLITREADS)['sample'])
+        wgs_samples = {f.split('.')[0] for f in os.listdir(pargs.wgs_dir) if f.endswith('.brass.annot.bed')}
 
         samples = wgs_samples.intersection(crispr_samples)
         print('[INFO] Samples: {} CRISPR / {} WGS / {} Overlap'.format(len(crispr_samples), len(wgs_samples), len(samples)))
