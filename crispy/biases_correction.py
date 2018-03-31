@@ -69,7 +69,8 @@ class CRISPRCorrection(GaussianProcessRegressor):
 
         res = pd.concat([X, y], axis=1)\
             .assign(k_mean=self.predict(X, return_std=False) - self.y_train_.mean())\
-            .assign(fit_by=self.fit_by_value)
+            .assign(fit_by=self.fit_by_value)\
+            .assign(mean=self.y_train_.mean())
 
         res = res.assign(regressed_out=res[self.y_name] - res['k_mean'])
 

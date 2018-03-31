@@ -111,11 +111,11 @@ def plot_rearrangements(brass, crispr, ngsc, chrm, winsize=1e5, chrm_size=None, 
     ax1.set_ylim(-1, 1)
 
     #
-    ax2.scatter(ngsc_['location'] / scale, ngsc_['absolute_cn'], s=1, alpha=.5, c=bipal_dbgd[0], label='Copy-number', zorder=1)
-    ax2.set_ylim(0.0, np.ceil(ngsc_['absolute_cn'].quantile(0.99)))
+    ax2.scatter(ngsc_['location'] / scale, ngsc_['absolute_cn'], s=1, alpha=1., c=bipal_dbgd[0], label='Copy-number', zorder=1)
+    ax2.set_ylim(0.0, np.ceil(ngsc_['absolute_cn'].quantile(0.9999)))
 
     #
-    ax3.scatter(crispr_['location'] / scale, crispr_['crispr'], s=1, alpha=.5, c=bipal_dbgd[1], label='CRISPR FC', zorder=1)
+    ax3.scatter(crispr_['location'] / scale, crispr_['crispr'], s=1, alpha=1., c=bipal_dbgd[1], label='CRISPR FC', zorder=1)
     ax3.axhline(0.0, lw=.3, color=bipal_dbgd[0])
 
     #
@@ -130,6 +130,9 @@ def plot_rearrangements(brass, crispr, ngsc, chrm, winsize=1e5, chrm_size=None, 
         stype = svtype(st1, st2, sv, unfold_inversions)
         stype_col = PALETTE[stype]
 
+        lw = .3 if stype == 'tandem-duplication' else .1
+        zorder = 3 if stype == 'tandem-duplication' else 1
+
         x1_mean, x2_mean = np.mean([s1, e1]), np.mean([s2, e2])
 
         # Plot arc
@@ -138,18 +141,20 @@ def plot_rearrangements(brass, crispr, ngsc, chrm, winsize=1e5, chrm_size=None, 
 
             xy = (np.mean([x1_mean, x2_mean]) / scale, 0)
 
-            ax1.add_patch(Arc(xy, (x2_mean - x1_mean) / scale, 1., angle=angle, theta1=0, theta2=180, edgecolor=stype_col, lw=.1))
+            ax1.add_patch(
+                Arc(xy, (x2_mean - x1_mean) / scale, 1., angle=angle, theta1=0, theta2=180, edgecolor=stype_col, lw=lw, zorder=zorder)
+            )
 
         # Plot segments
         for ymin, ymax, ax in [(-1, 0.5, ax1), (-1, 1, ax2), (0, 1, ax3)]:
             if (c1 == chrm) and (xlim[0] <= x1_mean <= xlim[1]):
                 ax.axvline(
-                    x=x1_mean / scale, ymin=ymin, ymax=ymax, c=stype_col, linewidth=.1, zorder=0, clip_on=False, label=stype
+                    x=x1_mean / scale, ymin=ymin, ymax=ymax, c=stype_col, linewidth=lw, zorder=zorder, clip_on=False, label=stype
                 )
 
             if (c2 == chrm) and (xlim[0] <= x2_mean <= xlim[1]):
                 ax.axvline(
-                    x=x2_mean / scale, ymin=ymin, ymax=ymax, c=stype_col, linewidth=.1, zorder=0, clip_on=False, label=stype
+                    x=x2_mean / scale, ymin=ymin, ymax=ymax, c=stype_col, linewidth=lw, zorder=zorder, clip_on=False, label=stype
                 )
 
         # Translocation label
@@ -162,13 +167,13 @@ def plot_rearrangements(brass, crispr, ngsc, chrm, winsize=1e5, chrm_size=None, 
 
     #
     by_label = {l.capitalize(): p for p, l in zip(*(ax2.get_legend_handles_labels())) if l in PALETTE}
-    ax1.legend(by_label.values(), by_label.keys(), loc='center left', bbox_to_anchor=(1.02, 0.5), prop={'size': 4})
+    ax1.legend(by_label.values(), by_label.keys(), loc='center left', bbox_to_anchor=(1.02, 0.5), prop={'size': 6})
 
     by_label = {l: p for p, l in zip(*(ax2.get_legend_handles_labels())) if l not in PALETTE}
-    ax2.legend(by_label.values(), by_label.keys(), loc='center left', bbox_to_anchor=(1.02, 0.5), prop={'size': 4})
+    ax2.legend(by_label.values(), by_label.keys(), loc='center left', bbox_to_anchor=(1.02, 0.5), prop={'size': 6})
 
     by_label = {l: p for p, l in zip(*(ax3.get_legend_handles_labels())) if l not in PALETTE}
-    ax3.legend(by_label.values(), by_label.keys(), loc='center left', bbox_to_anchor=(1.02, 0.5), prop={'size': 4})
+    ax3.legend(by_label.values(), by_label.keys(), loc='center left', bbox_to_anchor=(1.02, 0.5), prop={'size': 6})
 
     #
     ax1.axis('off')
@@ -250,17 +255,13 @@ def import_brass_bedpe(bedpe_file, bkdist=None, splitreads=False, convert_to_bed
 
 
 def svcount_barplot(brass):
-    plot_df = pd.concat([
-        brass['svclass'].value_counts().to_frame(),
-        brass.query("assembly_score != '_'")['svclass'].value_counts().rename('svclass2')
-    ], axis=1).sort_values('svclass')
+    plot_df = brass.query("assembly_score != '_'")['svclass'].value_counts().to_frame().sort_values('svclass')
     plot_df = plot_df.assign(ypos=np.arange(plot_df.shape[0]))
+    plot_df.index = [i.capitalize() for i in plot_df.index]
 
-    pal = sns.light_palette(bipal_dbgd[0], n_colors=3, reverse=False).as_hex()[1:]
+    plt.barh(plot_df['ypos'], plot_df['svclass'], .8, color=bipal_dbgd[0], align='center')
 
-    for i, c in enumerate(['svclass', 'svclass2']):
-        plt.barh(plot_df['ypos'], plot_df[c], .8, color=pal[i], align='center', label='BRASS' if c == 'svclass' else 'BRASS2')
-
+    plt.xticks(np.arange(0, 1001, 250))
     plt.yticks(plot_df['ypos'])
     plt.yticks(plot_df['ypos'], plot_df.index)
 
@@ -269,7 +270,7 @@ def svcount_barplot(brass):
 
     plt.legend(loc=4, prop={'size': 4})
 
-    plt.grid(color=pal[0], ls='-', lw=.1, axis='x')
+    plt.grid(color=bipal_dbgd[0], ls='-', lw=.1, axis='x')
 
 
 def aucs_samples(plot_df, order, min_events=5):
