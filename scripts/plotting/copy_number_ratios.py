@@ -95,6 +95,9 @@ def ratios_arocs(y_true, y_pred, data, outfile, exclude_labels=set()):
 def ratios_heatmap(x, y, z, data, outfile, z_bin='1'):
     plot_df = data.query("{} == '{}'".format(z, z_bin))
 
+    counts = {(g, c) for g, c, v in plot_df.groupby([x, y])[z].count().reset_index().values if v == 1}
+    plot_df = plot_df[[(g, c) not in counts for g, c in plot_df[[x, y]].values]]
+
     plot_df = plot_df.groupby([x, y])[z].count().reset_index()
     plot_df = pd.pivot_table(plot_df, index=x, columns=y, values=z)
 
@@ -113,6 +116,9 @@ def ratios_heatmap(x, y, z, data, outfile, z_bin='1'):
 
 def ratios_heatmap_bias(x, y, z, data, outfile, z_bin='1'):
     plot_df = data.query("{} == '{}'".format('ratio_bin', z_bin))
+
+    counts = {(g, c) for g, c, v in plot_df.groupby([x, y])[z].count().reset_index().values if v == 1}
+    plot_df = plot_df[[(g, c) not in counts for g, c in plot_df[[x, y]].values]]
 
     plot_df = plot_df.groupby([x, y])[z].mean().reset_index()
     plot_df = pd.pivot_table(plot_df, index=x, columns=y, values=z)

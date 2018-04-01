@@ -179,6 +179,7 @@ if __name__ == '__main__':
     # CRISPR lib
     lib = pd.read_csv(mp.LIBRARY, index_col=0)
     lib = lib.assign(pos=lib[['start', 'end']].mean(1).values)
+    gene_chrm = lib.groupby('gene')['chr'].first()
 
     # GTex TPM per tissue
     gtex = pd.read_csv('data/GTEx_Analysis_2016-01-15_v7_RNASeQCv1.1.8_gene_median_tpm.gct', sep='\t', index_col=1)
@@ -203,12 +204,12 @@ if __name__ == '__main__':
 
     # - Define significant associations
     lm_res = lm.assign(signif=[int(p < 0.05 and b < -.5) for p, b in lm[['f_fdr', 'beta']].values])
-    lm_res = lm_res.query('f_fdr < 0.05 & beta < -.5').sort_values(['overlap', 'f_fdr'], ascending=[False, True])
-    lm_res.to_csv('data/crispy_df_collateral_essentialities.csv', index=False)
+    lm_res.query('f_fdr < 0.05 & beta < -.5').sort_values(['overlap', 'f_fdr'], ascending=[False, True]).to_csv('data/crispy_df_collateral_essentialities.csv', index=False)
+    # lm_res = pd.read_csv('data/crispy_df_collateral_essentialities.csv')
     print(lm_res.query('f_fdr < 0.05 & beta < -.5 & overlap > 75'))
 
     # - Boxplots
-    crispr_gene, ratio_gene, plot_df = association_boxplot(267036, lm_res, c_gdsc_fc, cnv, cnv_ratios, nexp)
+    crispr_gene, ratio_gene, plot_df = association_boxplot(131073, lm_res, c_gdsc_fc, cnv, cnv_ratios, nexp)
     plt.gcf().set_size_inches(4, 3)
     plt.savefig('reports/crispy/collateral_essentiality_boxplot_{}_{}.png'.format(crispr_gene, ratio_gene), bbox_inches='tight', dpi=600)
     plt.close('all')
@@ -220,7 +221,7 @@ if __name__ == '__main__':
     plt.close('all')
 
     # - Chromosome plot
-    sample, chrm = 'TGW', 'chr8'
+    sample, chrm = c_gdsc_fc.loc[crispr_gene].argmin(), gene_chrm.loc[crispr_gene]
 
     plot_df = pd.read_csv('data/crispy/gdsc/crispy_crispr_{}.csv'.format(sample), index_col=0)
     plot_df = plot_df[plot_df['fit_by'] == chrm]
@@ -232,7 +233,7 @@ if __name__ == '__main__':
 
     ax = plot_chromosome(
         plot_df['pos'], plot_df['fc'].rename('CRISPR FC'), plot_df['k_mean'].rename('Crispy'), seg=seg[seg['#chr'] == chrm],
-        highlight=[crispr_gene, ratio_gene], cytobands=cytobands, legend=True
+        highlight=[crispr_gene, ratio_gene, 'FAM209B'], cytobands=cytobands, legend=True
     )
 
     ax.set_xlabel('Position on chromosome {} (Mb)'.format(chrm))
