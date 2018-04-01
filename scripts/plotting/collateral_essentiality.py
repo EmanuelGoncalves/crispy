@@ -218,7 +218,7 @@ if __name__ == '__main__':
     plt.close('all')
 
     # - Boxplots
-    crispr_gene, ratio_gene, plot_df = association_boxplot(129025, lm_res, c_gdsc_fc, cnv, cnv_ratios, nexp)
+    crispr_gene, ratio_gene, plot_df = association_boxplot(312524, lm_res, c_gdsc_fc, cnv, cnv_ratios, nexp)
     plt.gcf().set_size_inches(4, 3)
     plt.savefig('reports/crispy/collateral_essentiality_boxplot_{}_{}.png'.format(crispr_gene, ratio_gene), bbox_inches='tight', dpi=600)
     plt.close('all')
@@ -236,18 +236,20 @@ if __name__ == '__main__':
 
     ax = plot_chromosome(
         plot_df['pos'], plot_df['fc'].rename('CRISPR FC'), plot_df['k_mean'].rename('Crispy'), seg=seg[seg['#chr'] == chrm],
-        highlight=[crispr_gene, ratio_gene, 'FAM209B'], cytobands=cytobands, legend=True
+        highlight=[crispr_gene, ratio_gene, 'MED24'], cytobands=cytobands, legend=True
     )
 
     ax.set_xlabel('Position on chromosome {} (Mb)'.format(chrm))
     ax.set_ylabel('Fold-change')
     ax.set_title('{}'.format(sample))
 
+    # plt.xlim(30, 45)
+
     plt.gcf().set_size_inches(3, 1.5)
     plt.savefig('reports/crispy/collateral_essentiality_chromosomeplot_{}_{}.png'.format(sample, chrm), bbox_inches='tight', dpi=600)
     plt.close('all')
 
-    # -
+    # - List of collateral essentialities per cell line
     def set_keep_order(gene_dup_list):
         gene_unique_list = []
         for g in gene_dup_list:
@@ -256,21 +258,26 @@ if __name__ == '__main__':
         return gene_unique_list
 
     lm_res_filtered = lm_res.query('f_fdr < 0.05 & beta < -.5')
-    lm_res_filtered = lm_res_filtered[(nexp.loc[lm_res_filtered['gene_crispr'], samples].sum(1) > (0.5 * len(samples))).values]
 
     coless = []
     for g_crispr in set_keep_order(lm_res_filtered['gene_crispr']):
         ess_samples = (c_gdsc_fc.loc[g_crispr, samples] < c_gdsc_fc.reindex(essential)[samples].mean()).astype(int)
+
         for s in ess_samples[ess_samples == 1].index:
-            if s in nexp.loc[g_crispr]:
+            s_tissue = ss.loc[s, 'Tissue']
+            is_tissue_expressed = nexp.loc[g_crispr].reindex(ss[ss['Tissue'] == s_tissue].index, axis=1).dropna()
+            perc_tissue_expressed = round((is_tissue_expressed == 1).sum() / len(is_tissue_expressed) * 100, 2)
+
+            if s in nexp.loc[g_crispr] and perc_tissue_expressed > 50.:
                 coless.append({
                     'Gene_CRISPR': g_crispr,
                     'Cell_line': s,
                     'Cancer Type': ss.loc[s, 'Cancer Type'],
                     'Tissue': ss.loc[s, 'Tissue'],
+                    'nexp': perc_tissue_expressed,
                     'Gene_Amplified': ';'.join(lm_res_filtered[lm_res_filtered['gene_crispr'] == g_crispr]['gene_ratios'])
                 })
-    coless = pd.DataFrame(coless)[['Gene_CRISPR', 'Cell_line', 'Cancer Type', 'Tissue', 'Gene_Amplified']]
+    coless = pd.DataFrame(coless)[['Gene_CRISPR', 'Cell_line', 'Cancer Type', 'Tissue', 'nexp', 'Gene_Amplified']]
     coless.to_csv('data/crispy_df_collateral_essentialities.csv', index=False)
 
     print(
@@ -278,3 +285,48 @@ if __name__ == '__main__':
             .format(len(set(coless['Gene_CRISPR'])), len(set(coless['Cell_line'])), len(set(coless['Cancer Type'])))
     )
 
+    # - Plot number of collateral essentialities per Cancer Type
+    plot_df = pd.concat([
+        ss.loc[samples]['Cancer Type'].value_counts().rename('Total'),
+        ss.loc[set(coless['Cell_line'])]['Cancer Type'].value_counts().rename('Count')
+    ], axis=1).replace(np.nan, 0).astype(int).sort_values('Total')
+    plot_df = plot_df.reset_index().assign(ypos=np.arange(plot_df.shape[0]))
+
+    plt.barh(plot_df['ypos'], plot_df['Total'], .8, color=bipal_dbgd[0], align='center', label='All')
+    plt.barh(plot_df['ypos'], plot_df['Count'], .8, color=bipal_dbgd[1], align='center', label='w/ Collateral Essentiality')
+
+    for xx, yy in plot_df[['ypos', 'Count']].values:
+        if yy > 0:
+         plt.text(yy - .05, xx, '{}'.format(yy), color='white', ha='right', va='center', fontsize=6)
+
+    plt.yticks(plot_df['ypos'])
+    plt.yticks(plot_df['ypos'], plot_df['index'])
+
+    # plt.xticks(np.arange(0, 41, 10))
+    plt.grid(True, color=bipal_dbgd[0], linestyle='-', linewidth=.1, axis='x')
+
+    plt.xlabel('Number of collateral vulnerable genes')
+    plt.title('Histogram of collateral vulnerabilities')
+
+    plt.legend(loc='center left', bbox_to_anchor=(1.02, 0.5), prop={'size': 6})
+
+    plt.gcf().set_size_inches(2, 3)
+    plt.savefig('reports/crispy/collateral_essentiality_type_count.png', bbox_inches='tight', dpi=600)
+    plt.close('all')
+
+    # -
+    labels = '', ''
+    sizes = [len(samples) - len(set(coless['Cell_line'])), len(set(coless['Cell_line']))]
+    explode = (0, 0.1)
+
+    fig1, ax1 = plt.subplots()
+
+    ax1.pie(
+        sizes, explode=explode, labels=labels, autopct='%1.1f%%', shadow=False, startangle=90, colors=[bipal_dbgd[0], bipal_dbgd[1]],
+        textprops={'color': 'white', 'fontsize': 14}
+    )
+    ax1.axis('equal')
+
+    plt.gcf().set_size_inches(2, 2)
+    plt.savefig('reports/crispy/collateral_essentiality_count_piechart.png', bbox_inches='tight', dpi=600)
+    plt.close('all')
