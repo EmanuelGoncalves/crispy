@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 # Copyright (C) 2018 Emanuel Goncalves
 
-import pickle
 import numpy as np
 import pandas as pd
 import scripts as mp
@@ -160,9 +159,11 @@ if __name__ == '__main__':
     # Samplesheet
     ss = pd.read_csv(mp.SAMPLESHEET, index_col=0)
 
+    # Essential
+    essential = pd.read_csv(mp.HART_ESSENTIAL, sep='\t')['gene'].rename('essential')
+
     # Non-expressed genes
-    nexp = pickle.load(open(mp.NON_EXP_PICKLE, 'rb'))
-    nexp = pd.DataFrame({c: {g: 1 for g in nexp[c]} for c in nexp}).fillna(0)
+    nexp = pd.read_csv(mp.NON_EXP, index_col=0)
 
     # Copy-number
     cnv = pd.read_csv(mp.CN_GENE.format('snp'), index_col=0).dropna()
@@ -204,15 +205,11 @@ if __name__ == '__main__':
 
     # - Define significant associations
     lm_res = lm.assign(signif=[int(p < 0.05 and b < -.5) for p, b in lm[['f_fdr', 'beta']].values])
-    lm_res.query('f_fdr < 0.05 & beta < -.5').sort_values(['overlap', 'f_fdr'], ascending=[False, True]).to_csv('data/crispy_df_collateral_essentialities.csv', index=False)
-    # lm_res = pd.read_csv('data/crispy_df_collateral_essentialities.csv')
+    lm_res\
+        .query('f_fdr < 0.05 & beta < -.5')\
+        .sort_values(['overlap', 'f_fdr'], ascending=[False, True])\
+        .to_csv('data/crispy_df_collateral_essentialities_interactions.csv', index=False)
     print(lm_res.query('f_fdr < 0.05 & beta < -.5 & overlap > 75'))
-
-    # - Boxplots
-    crispr_gene, ratio_gene, plot_df = association_boxplot(131073, lm_res, c_gdsc_fc, cnv, cnv_ratios, nexp)
-    plt.gcf().set_size_inches(4, 3)
-    plt.savefig('reports/crispy/collateral_essentiality_boxplot_{}_{}.png'.format(crispr_gene, ratio_gene), bbox_inches='tight', dpi=600)
-    plt.close('all')
 
     # - Volcano
     plot_volcano(lm_res)
@@ -220,8 +217,14 @@ if __name__ == '__main__':
     plt.savefig('reports/crispy/collateral_essentiality_volcano.png', bbox_inches='tight', dpi=600)
     plt.close('all')
 
+    # - Boxplots
+    crispr_gene, ratio_gene, plot_df = association_boxplot(129025, lm_res, c_gdsc_fc, cnv, cnv_ratios, nexp)
+    plt.gcf().set_size_inches(4, 3)
+    plt.savefig('reports/crispy/collateral_essentiality_boxplot_{}_{}.png'.format(crispr_gene, ratio_gene), bbox_inches='tight', dpi=600)
+    plt.close('all')
+
     # - Chromosome plot
-    sample, chrm = c_gdsc_fc.loc[crispr_gene].argmin(), gene_chrm.loc[crispr_gene]
+    sample, chrm = plot_df.sort_values(['ratio_bin', 'crispy'], ascending=[False, True]).index[0], gene_chrm.loc[crispr_gene]
 
     plot_df = pd.read_csv('data/crispy/gdsc/crispy_crispr_{}.csv'.format(sample), index_col=0)
     plot_df = plot_df[plot_df['fit_by'] == chrm]
@@ -243,3 +246,35 @@ if __name__ == '__main__':
     plt.gcf().set_size_inches(3, 1.5)
     plt.savefig('reports/crispy/collateral_essentiality_chromosomeplot_{}_{}.png'.format(sample, chrm), bbox_inches='tight', dpi=600)
     plt.close('all')
+
+    # -
+    def set_keep_order(gene_dup_list):
+        gene_unique_list = []
+        for g in gene_dup_list:
+            if g not in gene_unique_list:
+                gene_unique_list.append(g)
+        return gene_unique_list
+
+    lm_res_filtered = lm_res.query('f_fdr < 0.05 & beta < -.5')
+    lm_res_filtered = lm_res_filtered[(nexp.loc[lm_res_filtered['gene_crispr'], samples].sum(1) > (0.5 * len(samples))).values]
+
+    coless = []
+    for g_crispr in set_keep_order(lm_res_filtered['gene_crispr']):
+        ess_samples = (c_gdsc_fc.loc[g_crispr, samples] < c_gdsc_fc.reindex(essential)[samples].mean()).astype(int)
+        for s in ess_samples[ess_samples == 1].index:
+            if s in nexp.loc[g_crispr]:
+                coless.append({
+                    'Gene_CRISPR': g_crispr,
+                    'Cell_line': s,
+                    'Cancer Type': ss.loc[s, 'Cancer Type'],
+                    'Tissue': ss.loc[s, 'Tissue'],
+                    'Gene_Amplified': ';'.join(lm_res_filtered[lm_res_filtered['gene_crispr'] == g_crispr]['gene_ratios'])
+                })
+    coless = pd.DataFrame(coless)[['Gene_CRISPR', 'Cell_line', 'Cancer Type', 'Tissue', 'Gene_Amplified']]
+    coless.to_csv('data/crispy_df_collateral_essentialities.csv', index=False)
+
+    print(
+        'Collateral essentialies:\n\tUnique genes: {};\n\tUnique cell lines: {}\n\tUnique cancer type: {}'
+            .format(len(set(coless['Gene_CRISPR'])), len(set(coless['Cell_line'])), len(set(coless['Cancer Type'])))
+    )
+

@@ -142,7 +142,7 @@ if __name__ == '__main__':
     lib = pd.read_csv(mp.LIBRARY, index_col=0).groupby('gene')['chr'].first()
 
     # Non-expressed genes
-    nexp = pickle.load(open(mp.NON_EXP_PICKLE, 'rb'))
+    nexp = pd.read_csv(mp.NON_EXP, index_col=0)
 
     # Copy-number
     cnv = pd.read_csv(mp.CN_GENE.format('snp'), index_col=0)
@@ -162,7 +162,7 @@ if __name__ == '__main__':
 
     # - Assemble data-frame of non-expressed genes
     # Non-expressed genes CRISPR bias from copy-number
-    df = pd.DataFrame({c: c_gdsc_fc.reindex(nexp[c])[c] for c in samples})
+    df = pd.DataFrame({c: c_gdsc_fc[c].reindex(nexp.loc[nexp[c] == 1, c].index) for c in samples})
 
     # Concat copy-number information
     df = pd.concat([df[samples].unstack().rename('crispy'), cnv[samples].unstack().rename('cnv'), cnv_ratios[samples].unstack().rename('ratio')], axis=1).dropna()

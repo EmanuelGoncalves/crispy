@@ -188,7 +188,7 @@ if __name__ == '__main__':
     ss = pd.read_csv(mp.SAMPLESHEET, index_col=0)
 
     # Non-expressed genes
-    nexp = pickle.load(open(mp.NON_EXP_PICKLE, 'rb'))
+    nexp = pd.read_csv(mp.NON_EXP, index_col=0)
 
     # Copy-number
     cnv = pd.read_csv(mp.CN_GENE.format('snp'), index_col=0)
@@ -235,9 +235,10 @@ if __name__ == '__main__':
 
     # - Plot: Copy-number bias in ORIGINAL CRISPR fold-changes (AROCs)
     plot_df = pd.concat([
-        pd.DataFrame({c: c_gdsc_fc.reindex(nexp[c])[c] for c in samples if c in nexp}).unstack().rename('fc'),
+        pd.DataFrame({c: c_gdsc_fc[c].reindex(nexp.loc[nexp[c] == 1, c].index) for c in samples}).unstack().rename('fc'),
         cnv[samples].applymap(lambda v: bin_cnv(v, 10)).unstack().rename('cnv')
     ], axis=1).dropna()
+
     plot_df = plot_df.reset_index().rename(columns={'level_0': 'sample', 'level_1': 'gene'})
     plot_df = plot_df[~plot_df['cnv'].isin(['0', '1'])]
     plot_df = plot_df.assign(chr=lib.loc[plot_df['gene']].values)
@@ -277,7 +278,7 @@ if __name__ == '__main__':
 
     # - Plot: Copy-number bias in CORRECTED CRISPR fold-changes (AROCs)
     plot_df_crispy = pd.concat([
-        pd.DataFrame({c: c_gdsc_crispy.reindex(nexp[c])[c] for c in samples if c in nexp}).unstack().rename('fc'),
+        pd.DataFrame({c: c_gdsc_crispy[c].reindex(nexp.loc[nexp[c] == 1, c].index) for c in samples if c in nexp}).unstack().rename('fc'),
         cnv[samples].applymap(lambda v: bin_cnv(v, 10)).unstack().rename('cnv')
     ], axis=1).dropna()
     plot_df_crispy = plot_df_crispy.reset_index().rename(columns={'level_0': 'sample', 'level_1': 'gene'})

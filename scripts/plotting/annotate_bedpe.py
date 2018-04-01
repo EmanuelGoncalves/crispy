@@ -3,7 +3,6 @@
 
 import os
 import pandas as pd
-import scripts as mp
 import seaborn as sns
 import matplotlib.pyplot as plt
 from crispy import bipal_dbgd

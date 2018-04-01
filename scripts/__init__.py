@@ -46,7 +46,14 @@ CRISPY_OUTDIR = 'data/crispy/gdsc/'
 CRISPY_WGS_OUTDIR = 'data/crispy/gdsc_brass/'
 
 # NON-EXPRESSED GENES: RNA-SEQ
-NON_EXP_PICKLE = 'data/gdsc/nexp_pickle.pickle'
+RPKM_THRES = 1
+
+NON_EXP = 'data/non_expressed_genes.csv'
+
+BIOMART_HUMAN_ID_TABLE = 'data/resources/biomart/biomart_human_id_table.csv'
+
+GDSC_RNASEQ_SAMPLESHEET = 'data/gdsc/gene_expression/merged_sample_annotation.csv'
+GDSC_RNASEQ_RPKM = 'data/gdsc/gene_expression/merged_rpkm.csv'
 
 # GENE-SETS
 CANCER_GENES = 'data/gene_sets/Census_allThu Dec 21 15_43_09 2017.tsv'
