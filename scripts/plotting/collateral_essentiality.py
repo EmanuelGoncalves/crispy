@@ -209,7 +209,8 @@ if __name__ == '__main__':
         .query('f_fdr < 0.05 & beta < -.5')\
         .sort_values(['overlap', 'f_fdr'], ascending=[False, True])\
         .to_csv('data/crispy_df_collateral_essentialities_interactions.csv', index=False)
-    print(lm_res.query('f_fdr < 0.05 & beta < -.5 & overlap > 75'))
+    # lm_res = pd.read_csv('data/crispy_df_collateral_essentialities_interactions.csv')
+    print(lm_res.query('f_fdr < 0.05 & beta < -.5').sort_values(['overlap', 'f_fdr'], ascending=[False, True]))
 
     # - Volcano
     plot_volcano(lm_res)
@@ -218,7 +219,7 @@ if __name__ == '__main__':
     plt.close('all')
 
     # - Boxplots
-    crispr_gene, ratio_gene, plot_df = association_boxplot(312524, lm_res, c_gdsc_fc, cnv, cnv_ratios, nexp)
+    crispr_gene, ratio_gene, plot_df = association_boxplot(149, lm_res, c_gdsc_fc, cnv, cnv_ratios, nexp)
     plt.gcf().set_size_inches(4, 3)
     plt.savefig('reports/crispy/collateral_essentiality_boxplot_{}_{}.png'.format(crispr_gene, ratio_gene), bbox_inches='tight', dpi=600)
     plt.close('all')
@@ -279,6 +280,7 @@ if __name__ == '__main__':
                 })
     coless = pd.DataFrame(coless)[['Gene_CRISPR', 'Cell_line', 'Cancer Type', 'Tissue', 'nexp', 'Gene_Amplified']]
     coless.to_csv('data/crispy_df_collateral_essentialities.csv', index=False)
+    # coless = pd.read_csv('data/crispy_df_collateral_essentialities.csv')
 
     print(
         'Collateral essentialies:\n\tUnique genes: {};\n\tUnique cell lines: {}\n\tUnique cancer type: {}'
