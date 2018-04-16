@@ -54,9 +54,6 @@ if __name__ == '__main__':
         ], axis=1).assign(sample=c).assign(sv=s) for c in svs_crispy['svs'] for s in svs_types
     ]).dropna().reset_index().rename({'index': 'chrm'}, axis=1)
 
-    sns.jointplot('copies', 'k_mean', data=df_svs.query("sv == 'tandemduplication'"))
-    plt.show()
-
     # -
     order = varexp.sort_values('all', ascending=False).head(10)
     # order = varexp['cnv'].sort_values(ascending=False).head(10)
@@ -99,7 +96,7 @@ if __name__ == '__main__':
     plot_df = plot_df[plot_df[svs_types].sum(1) > 0]
 
     # -
-    # sample, chrm, t = 'HCC1395', 'chr3', 'all'
+    # sample, chrm, t = 'HCC1954', 'chr5', 'all'
     # for sample, chrm in order.index:
     for sample in svs_crispy['all']:
         for chrm in set(svs_crispy['all']['HCC38']['chr']):
@@ -121,9 +118,9 @@ if __name__ == '__main__':
             crispr = pd.concat([svs_crispy[t][sample], crispr_lib], axis=1).dropna()
 
             # Plot
-            ax1, ax2, ax3 = plot_rearrangements(bedpe, crispr, ngsc, chrm, xlim=(120e6, 160e6), winsize=1e4)
-            # ax3.set_ylim(-5, 1)
+            # xlim = (60e6, 150e6)
+            ax1, ax2, ax3 = plot_rearrangements(bedpe, crispr, ngsc, chrm, winsize=1e4)
             plt.suptitle('{}'.format(sample))
-            plt.gcf().set_size_inches(3, 2)
+            plt.gcf().set_size_inches(7, 2)
             plt.savefig('reports/crispy/brass_svplot_{}_{}_{}.png'.format(sample, chrm, t), bbox_inches='tight', dpi=600)
             plt.close('all')

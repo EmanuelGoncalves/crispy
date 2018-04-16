@@ -115,7 +115,7 @@ def plot_rearrangements(brass, crispr, ngsc, chrm, winsize=1e5, chrm_size=None, 
     ax2.set_ylim(0.0, np.ceil(ngsc_['absolute_cn'].quantile(0.9999)))
 
     #
-    ax3.scatter(crispr_['location'] / scale, crispr_['crispr'], s=1, alpha=1., c=bipal_dbgd[1], label='CRISPR FC', zorder=1)
+    ax3.scatter(crispr_['location'] / scale, crispr_['crispr'], s=1, alpha=1., c=bipal_dbgd[1], label='CRISPR-Cas9', zorder=1)
     ax3.axhline(0.0, lw=.3, color=bipal_dbgd[0])
 
     #
@@ -123,7 +123,7 @@ def plot_rearrangements(brass, crispr, ngsc, chrm, winsize=1e5, chrm_size=None, 
         ax2.scatter(crispr_['location'] / scale, crispr_['cnv'], s=3, alpha=.5, c='#d9d9d9', zorder=2, label='ASCAT')
 
     if 'k_mean' in crispr.columns:
-        ax3.scatter(crispr_['location'] / scale, crispr_['k_mean'], s=3, alpha=.5, c='#d9d9d9', zorder=2, label='Crispy')
+        ax3.scatter(crispr_['location'] / scale, crispr_['k_mean'], s=3, alpha=1., c='#d9d9d9', zorder=6, label='Fitted mean')
 
     #
     for c1, s1, e1, c2, s2, e2, st1, st2, sv in brass_[['chr1', 'start1', 'end1', 'chr2', 'start2', 'end2', 'strand1', 'strand2', 'svclass']].values:
@@ -160,10 +160,10 @@ def plot_rearrangements(brass, crispr, ngsc, chrm, winsize=1e5, chrm_size=None, 
         # Translocation label
         if stype == 'translocation':
             if (c1 == chrm) and (xlim[0] <= x1_mean <= xlim[1]):
-                ax1.text(x1_mean / scale, 0, ' to {}'.format(c2), color=stype_col, ha='center', fontsize=3, rotation=90, va='bottom')
+                ax1.text(x1_mean / scale, 0, ' to {}'.format(c2), color=stype_col, ha='center', fontsize=5, rotation=90, va='bottom')
 
             if (c2 == chrm) and (xlim[0] <= x2_mean <= xlim[1]):
-                ax1.text(x2_mean / scale, 0, ' to {}'.format(c1), color=stype_col, ha='center', fontsize=3, rotation=90, va='bottom')
+                ax1.text(x2_mean / scale, 0, ' to {}'.format(c1), color=stype_col, ha='center', fontsize=5, rotation=90, va='bottom')
 
     #
     by_label = {l.capitalize(): p for p, l in zip(*(ax2.get_legend_handles_labels())) if l in PALETTE}
@@ -184,8 +184,8 @@ def plot_rearrangements(brass, crispr, ngsc, chrm, winsize=1e5, chrm_size=None, 
 
     #
     ax1.set_ylabel('SV')
-    ax2.set_ylabel('Copy-number')
-    ax3.set_ylabel('CRISPR')
+    ax2.set_ylabel('Copy-number', fontsize=7)
+    ax3.set_ylabel('CRISPR-Cas9', fontsize=7)
 
     #
     plt.xlabel('Position on chromosome {} (Mb)'.format(chrm.replace('chr', '')))
@@ -312,7 +312,7 @@ if __name__ == '__main__':
 
     # Count number of SVs
     svcount_barplot(brass)
-    plt.gcf().set_size_inches(2, 1)
+    plt.gcf().set_size_inches(2, 2)
     plt.savefig('reports/crispy/brass_svs_counts_barplot_brca.png', bbox_inches='tight', dpi=600)
     plt.close('all')
 

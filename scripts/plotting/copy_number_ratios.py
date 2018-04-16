@@ -59,8 +59,8 @@ def ratios_kmean(x, y, data, outfile):
     sns.boxplot(x, y, data=data, orient='h', linewidth=.3, fliersize=1, order=order, palette=pal, notch=True)
     plt.axvline(0, lw=.1, ls='-', c=bipal_dbgd[0])
 
-    plt.title('Copy-number ratio effect on CRISPR/Cas9\n(non-expressed genes)')
-    plt.xlabel('CRISPR/Cas9 fold-change (log2)')
+    plt.title('Copy-number ratio effect on CRISPR-Cas9\n(non-expressed genes)')
+    plt.xlabel('CRISPR-Cas9 fold-change (log2)')
     plt.ylabel('Copy-number ratio')
     plt.gcf().set_size_inches(4, 2)
     plt.savefig(outfile, bbox_inches='tight', dpi=600)
@@ -83,7 +83,7 @@ def ratios_arocs(y_true, y_pred, data, outfile, exclude_labels=set()):
     ax.set_ylim(0, 1)
     ax.set_xlabel('False positive rate')
     ax.set_ylabel('True positive rate')
-    ax.set_title('Copy-number ratio impact in CRISPR/Cas9\n(non-expressed genes)')
+    ax.set_title('Copy-number ratio impact in CRISPR-Cas9\n(non-expressed genes)')
     legend = ax.legend(loc=4, title='Copy-number ratio', prop={'size': 10})
     legend.get_title().set_fontsize('10')
 
@@ -130,7 +130,7 @@ def ratios_heatmap_bias(x, y, z, data, outfile, z_bin='1'):
     plt.setp(g.get_yticklabels(), rotation=0)
     plt.ylabel('# chromosome copies')
     plt.xlabel('# gene copies')
-    plt.title('Mean CRISPR/Cas9 fold-change\n(non-expressed genes with copy-number ratio ~1)')
+    plt.title('Mean CRISPR-Cas9 fold-change\n(non-expressed genes with copy-number ratio ~1)')
     plt.gcf().set_size_inches(5.5, 5.5)
     plt.savefig(outfile, bbox_inches='tight', dpi=600)
     plt.close('all')

@@ -121,10 +121,10 @@ def plot_chromosome(pos, original, mean, se=None, seg=None, highlight=None, ax=N
         ax = plt.gca()
 
     # Plot original values
-    ax.scatter(pos / scale, original, s=4, marker='.', lw=0, c=bipal_dbgd[0], alpha=.5, label=original.name)
+    ax.scatter(pos / scale, original, s=4, marker='.', lw=0, c=bipal_dbgd[1], alpha=.8, label=original.name)
 
     # Plot corrected values
-    ax.scatter(pos / scale, mean, s=6, marker='.', lw=0, c=bipal_dbgd[1], alpha=.9, label=mean.name)
+    ax.scatter(pos / scale, mean, s=6, marker='.', lw=0, c='#d9d9d9', alpha=1., label=mean.name)
 
     if se is not None:
         ax.fill_between(pos / scale, mean - se, mean + se, c=bipal_dbgd[1], alpha=0.2)

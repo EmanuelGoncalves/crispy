@@ -28,7 +28,7 @@ def tissue_coverage(x, y, data, outfile):
     plt.yticks(df['ypos'], df[y])
 
     plt.xlabel('# cell lines')
-    plt.title('CRISPR/Cas9 screen\n(%d cell lines)' % df['Counts'].sum())
+    plt.title('CRISPR-Cas9 screen\n(%d cell lines)' % df['Counts'].sum())
 
     plt.gcf().set_size_inches(2, 3)
     plt.savefig(outfile, bbox_inches='tight', dpi=600)
@@ -86,7 +86,7 @@ def copy_number_bias_arocs(y_true, y_pred, data, outfile):
     ax.set_ylim(0, 1)
     ax.set_xlabel('False positive rate')
     ax.set_ylabel('True positive rate')
-    ax.set_title('Copy-number effect on CRISPR/Cas9\n(non-expressed genes)')
+    ax.set_title('Copy-number effect on CRISPR-Cas9\n(non-expressed genes)')
     legend = ax.legend(loc=4, title='Copy-number', prop={'size': 6})
     legend.get_title().set_fontsize('7')
 
@@ -105,7 +105,7 @@ def copy_number_bias_arocs_per_sample(x, y, hue, data, outfile):
     sns.stripplot(x, y, data=data, order=thresholds, palette=thresholds_color, edgecolor='white', linewidth=.1, size=3, jitter=.4)
 
     plt.ylim(0, 1)
-    plt.title('Copy-number effect on CRISPR/Cas9\n(non-expressed genes)')
+    plt.title('Copy-number effect on CRISPR-Cas9\n(non-expressed genes)')
     plt.xlabel('Copy-number')
     plt.ylabel('Copy-number AUC (per cell line)')
     plt.axhline(0.5, ls='--', lw=.3, alpha=.5, c=bipal_dbgd[0])
@@ -123,7 +123,7 @@ def copy_number_bias_arocs_per_sample(x, y, hue, data, outfile):
     plt.ylim(0, 1)
     handles = [mpatches.Circle([.0, .0], .25, facecolor=c, label=l) for c, l in zip(*(hue_thresholds_color, hue_thresholds))]
     plt.legend(handles=handles, title='Ploidy', prop={'size': 6}).get_title().set_fontsize('6')
-    plt.title('Cell ploidy effect on CRISPR/Cas9\n(non-expressed genes)')
+    plt.title('Cell ploidy effect on CRISPR-Cas9\n(non-expressed genes)')
     plt.xlabel('Copy-number')
     plt.ylabel('Copy-number AUC (per cell line)')
     plt.axhline(0.5, ls='--', lw=.3, alpha=.5, c=bipal_dbgd[0])
@@ -148,7 +148,7 @@ def copy_number_bias_arocs_per_chrm(x, y, hue, data, outfile):
     plt.legend(handles=handles, title='Chr. copies', prop={'size': 5}).get_title().set_fontsize('5')
 
     plt.ylim(0, 1)
-    plt.title('Copy-number effect on CRISPR/Cas9\n(non-expressed genes)')
+    plt.title('Copy-number effect on CRISPR-Cas9\n(non-expressed genes)')
     plt.xlabel('Copy-number')
     plt.ylabel('Copy-number AUC (per chromossome)')
     plt.axhline(0.5, ls='--', lw=.3, alpha=.5, c=bipal_dbgd[0])
@@ -248,9 +248,9 @@ if __name__ == '__main__':
 
     sns.boxplot('cnv', 'fc', data=plot_df, notch=True, sym='', order=hue_thresholds, palette=hue_thresholds_color, linewidth=.3)
 
-    plt.title('Copy-number effect on CRISPR/Cas9\n(non-expressed genes)')
+    plt.title('Copy-number effect on CRISPR-Cas9\n(non-expressed genes)')
     plt.xlabel('Copy-number')
-    plt.ylabel('CRISPR/Cas9 FC (log2)')
+    plt.ylabel('CRISPR-Cas9 FC (log2)')
     plt.axhline(0., ls='--', lw=.3, alpha=.5, c=bipal_dbgd[0])
     plt.gcf().set_size_inches(3, 3)
 

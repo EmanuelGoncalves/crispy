@@ -92,7 +92,7 @@ def association_boxplot(idx, lm_res, c_gdsc_fc, cnv, cnv_ratios, nexp, cnv_bin_t
 
     ax1.axhline(0, ls='-', lw=.1, c=color)
 
-    ax1.set_ylabel('%s\nCRISPR/Cas9 fold-change (log2)' % y_feat)
+    ax1.set_ylabel('%s\nCRISPR-Cas9 fold-change (log2)' % y_feat)
     ax1.set_xlabel('%s\nCopy-number' % x_feat)
 
     # Ratio boxplot
@@ -219,7 +219,7 @@ if __name__ == '__main__':
     plt.close('all')
 
     # - Boxplots
-    crispr_gene, ratio_gene, plot_df = association_boxplot(149, lm_res, c_gdsc_fc, cnv, cnv_ratios, nexp)
+    crispr_gene, ratio_gene, plot_df = association_boxplot(100, lm_res, c_gdsc_fc, cnv, cnv_ratios, nexp)
     plt.gcf().set_size_inches(4, 3)
     plt.savefig('reports/crispy/collateral_essentiality_boxplot_{}_{}.png'.format(crispr_gene, ratio_gene), bbox_inches='tight', dpi=600)
     plt.close('all')
@@ -236,7 +236,7 @@ if __name__ == '__main__':
     seg = pd.read_csv('data/gdsc/copynumber/snp6_bed/{}.snp6.picnic.bed'.format(sample), sep='\t')
 
     ax = plot_chromosome(
-        plot_df['pos'], plot_df['fc'].rename('CRISPR FC'), plot_df['k_mean'].rename('Crispy'), seg=seg[seg['#chr'] == chrm],
+        plot_df['pos'], plot_df['fc'].rename('CRISPR-Cas9'), plot_df['k_mean'].rename('Fitted mean'), seg=seg[seg['#chr'] == chrm],
         highlight=[crispr_gene, ratio_gene, 'MED24'], cytobands=cytobands, legend=True
     )
 
@@ -244,9 +244,9 @@ if __name__ == '__main__':
     ax.set_ylabel('Fold-change')
     ax.set_title('{}'.format(sample))
 
-    # plt.xlim(30, 45)
+    plt.xlim(65, 75)
 
-    plt.gcf().set_size_inches(3, 1.5)
+    plt.gcf().set_size_inches(1, 2.5)
     plt.savefig('reports/crispy/collateral_essentiality_chromosomeplot_{}_{}.png'.format(sample, chrm), bbox_inches='tight', dpi=600)
     plt.close('all')
 
@@ -294,12 +294,12 @@ if __name__ == '__main__':
     ], axis=1).replace(np.nan, 0).astype(int).sort_values('Total')
     plot_df = plot_df.reset_index().assign(ypos=np.arange(plot_df.shape[0]))
 
-    plt.barh(plot_df['ypos'], plot_df['Total'], .8, color=bipal_dbgd[0], align='center', label='All')
-    plt.barh(plot_df['ypos'], plot_df['Count'], .8, color=bipal_dbgd[1], align='center', label='w/ Collateral Essentiality')
+    plt.barh(plot_df['ypos'], plot_df['Total'], .8, color=bipal_dbgd[0], align='center')
+    plt.barh(plot_df['ypos'], plot_df['Count'], .8, color=bipal_dbgd[1], align='center', label='Cell lines with\ncollateral essentiality')
 
     for xx, yy in plot_df[['ypos', 'Count']].values:
         if yy > 0:
-         plt.text(yy - .05, xx, '{}'.format(yy), color='white', ha='right', va='center', fontsize=6)
+         plt.text(yy + .08, xx - 0.05, '{}'.format(yy), color=bipal_dbgd[1], ha='left', va='center', fontsize=7)
 
     plt.yticks(plot_df['ypos'])
     plt.yticks(plot_df['ypos'], plot_df['index'])
@@ -310,7 +310,7 @@ if __name__ == '__main__':
     plt.xlabel('Number of collateral vulnerable genes')
     plt.title('Histogram of collateral vulnerabilities')
 
-    plt.legend(loc='center left', bbox_to_anchor=(1.02, 0.5), prop={'size': 6})
+    plt.legend(loc='center left', bbox_to_anchor=(1.02, 0.0), prop={'size': 8})
 
     plt.gcf().set_size_inches(2, 3)
     plt.savefig('reports/crispy/collateral_essentiality_type_count.png', bbox_inches='tight', dpi=600)

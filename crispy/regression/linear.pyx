@@ -7,11 +7,11 @@ from scipy import stats
 from sklearn.linear_model import LinearRegression
 
 
-"""
-Linear regression omiting NaNs in dependent variable (ys)
-
-"""
 def lr(xs, ys, ws=None):
+    """
+    Linear regression omiting NaNs in dependent variable (ys)
+
+    """
     outputs = __lr(xs.values, ys.values, ws.values if ws is not None else None)
     return {i: pd.DataFrame(outputs[i], index=xs.columns, columns=ys.columns) for i in outputs}
 
@@ -98,10 +98,12 @@ def __lr(xs, ys, ws):
     return res
 
 
-"""
-F-statistic
-"""
 def f_statistic(np.ndarray[np.float64_t, ndim=1] y_true, np.ndarray[np.float64_t, ndim=1] y_pred, np.int64_t n, np.int64_t p):
+    """
+    F-statistic
+
+    """
+
     msm = np.power(y_pred - y_true.mean(), 2).sum() / p
     mse = np.power(y_true - y_pred, 2).sum() / (n - p - 1)
 
@@ -112,11 +114,12 @@ def f_statistic(np.ndarray[np.float64_t, ndim=1] y_true, np.ndarray[np.float64_t
     return [f, f_pval]
 
 
-"""
-Coefficient of determination (r^2)
-
-"""
 def r_squared(np.ndarray[np.float64_t, ndim=1] y_true, np.ndarray[np.float64_t, ndim=1] y_pred):
+    """
+    Coefficient of determination (r^2)
+
+    """
+
     sse = np.power(y_true - y_pred, 2).sum()
     sst = np.power(y_true - y_true.mean(), 2).sum()
 
@@ -125,11 +128,12 @@ def r_squared(np.ndarray[np.float64_t, ndim=1] y_true, np.ndarray[np.float64_t, 
     return r
 
 
-"""
-Log-likelihood
-
-"""
 def log_likelihood(np.ndarray[np.float64_t, ndim=1] y_true, np.ndarray[np.float64_t, ndim=1] y_pred):
+    """
+    Log-likelihood
+
+    """
+
     n = len(y_true)
     ssr = np.power(y_true - y_pred, 2).sum()
     var = ssr / n
