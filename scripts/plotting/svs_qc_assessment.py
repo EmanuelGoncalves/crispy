@@ -96,7 +96,7 @@ if __name__ == '__main__':
     plot_df = plot_df[plot_df[svs_types].sum(1) > 0]
 
     # -
-    # sample, chrm, t = 'HCC1954', 'chr5', 'all'
+    # sample, chrm, t = 'HCC38', 'chr5', 'all'
     # for sample, chrm in order.index:
     for sample in svs_crispy['all']:
         for chrm in set(svs_crispy['all']['HCC38']['chr']):
@@ -118,8 +118,8 @@ if __name__ == '__main__':
             crispr = pd.concat([svs_crispy[t][sample], crispr_lib], axis=1).dropna()
 
             # Plot
-            # xlim = (60e6, 150e6)
-            ax1, ax2, ax3 = plot_rearrangements(bedpe, crispr, ngsc, chrm, winsize=1e4)
+            xlim = (0e6, 100e6)
+            ax1, ax2, ax3 = plot_rearrangements(bedpe, crispr, ngsc, chrm, winsize=1e4, xlim=xlim)
             plt.suptitle('{}'.format(sample))
             plt.gcf().set_size_inches(7, 2)
             plt.savefig('reports/crispy/brass_svplot_{}_{}_{}.png'.format(sample, chrm, t), bbox_inches='tight', dpi=600)

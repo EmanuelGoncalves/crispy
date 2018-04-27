@@ -177,7 +177,7 @@ def arocs_scatter(x, y, data, outfile):
 
 if __name__ == '__main__':
     # - Import
-    # (non)essential genes
+    # Hart et al (non)essential genes
     essential = pd.read_csv(mp.HART_ESSENTIAL, sep='\t')['gene'].rename('essential')
     nessential = pd.read_csv(mp.HART_NON_ESSENTIAL, sep='\t')['gene'].rename('non-essential')
 
