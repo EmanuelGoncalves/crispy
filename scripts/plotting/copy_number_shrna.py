@@ -6,36 +6,9 @@ import pandas as pd
 import scripts as mp
 import seaborn as sns
 import matplotlib.pyplot as plt
-from natsort import natsorted
-from crispy import bipal_dbgd
 from crispy.utils import bin_cnv
-from sklearn.metrics import roc_curve, auc
 from scripts.plotting.qc_bias_assessment import auc_curves
-
-
-def ratios_arocs(y_true, y_pred, data, outfile, exclude_labels=set()):
-    order = natsorted(set(data[y_true]).difference(exclude_labels))
-
-    pal = sns.light_palette(bipal_dbgd[0], n_colors=len(order) + 1).as_hex()[1:]
-
-    ax = plt.gca()
-
-    for c, thres in zip(pal, order):
-        fpr, tpr, _ = roc_curve((data[y_true] == thres).astype(int), -data[y_pred])
-        ax.plot(fpr, tpr, label='%s: AUC=%.2f' % (thres, auc(fpr, tpr)), lw=1.5, c=c)
-
-    ax.plot((0, 1), (0, 1), 'k--', lw=.3, alpha=.5)
-    ax.set_xlim(0, 1)
-    ax.set_ylim(0, 1)
-    ax.set_xlabel('False positive rate')
-    ax.set_ylabel('True positive rate')
-    ax.set_title('Copy-number ratio impact in shRNA\n(non-expressed genes)')
-    legend = ax.legend(loc=4, title='Copy-number ratio', prop={'size': 10})
-    legend.get_title().set_fontsize('10')
-
-    plt.gcf().set_size_inches(3.5, 3.5)
-    plt.savefig(outfile, bbox_inches='tight', dpi=600)
-    plt.close('all')
+from scripts.plotting.qc_bias_assessment import copy_number_bias_aucs
 
 
 if __name__ == '__main__':
@@ -83,4 +56,4 @@ if __name__ == '__main__':
     df = df.assign(ratio_bin=df['ratio'].apply(lambda v: bin_cnv(v, thresold=4)))
 
     # - Plot: Copy-number ratio vs CRISPR bias
-    ratios_arocs('ratio_bin', 'shrna', df, 'reports/crispy/copynumber_ratio_shrna.png')
+    copy_number_bias_aucs(df, rank_label='shrna', thres_label='ratio_bin', outfile='reports/crispy/copynumber_ratio_shrna.png')

@@ -10,6 +10,7 @@ from crispy import bipal_dbgd
 from natsort import natsorted
 from crispy.utils import bin_cnv
 from sklearn.metrics import roc_curve, auc
+from scripts.plotting.qc_bias_assessment import copy_number_bias_aucs
 
 
 def ratios_histogram(x, data, outfile):
@@ -63,31 +64,6 @@ def ratios_kmean(x, y, data, outfile):
     plt.xlabel('CRISPR-Cas9 fold-change (log2)')
     plt.ylabel('Copy-number ratio')
     plt.gcf().set_size_inches(4, 2)
-    plt.savefig(outfile, bbox_inches='tight', dpi=600)
-    plt.close('all')
-
-
-def ratios_arocs(y_true, y_pred, data, outfile, exclude_labels=set()):
-    order = natsorted(set(data[y_true]).difference(exclude_labels))
-
-    pal = sns.light_palette(bipal_dbgd[0], n_colors=len(order) + 1).as_hex()[1:]
-
-    ax = plt.gca()
-
-    for c, thres in zip(pal, order):
-        fpr, tpr, _ = roc_curve((data[y_true] == thres).astype(int), -data[y_pred])
-        ax.plot(fpr, tpr, label='%s: AUC=%.2f' % (thres, auc(fpr, tpr)), lw=1.5, c=c)
-
-    ax.plot((0, 1), (0, 1), 'k--', lw=.3, alpha=.5)
-    ax.set_xlim(0, 1)
-    ax.set_ylim(0, 1)
-    ax.set_xlabel('False positive rate')
-    ax.set_ylabel('True positive rate')
-    ax.set_title('Copy-number ratio impact in CRISPR-Cas9\n(non-expressed genes)')
-    legend = ax.legend(loc=4, title='Copy-number ratio', prop={'size': 10})
-    legend.get_title().set_fontsize('10')
-
-    plt.gcf().set_size_inches(3.5, 3.5)
     plt.savefig(outfile, bbox_inches='tight', dpi=600)
     plt.close('all')
 
@@ -165,7 +141,7 @@ if __name__ == '__main__':
     df = pd.DataFrame({c: c_gdsc_fc[c].reindex(nexp.loc[nexp[c] == 1, c].index) for c in samples})
 
     # Concat copy-number information
-    df = pd.concat([df[samples].unstack().rename('crispy'), cnv[samples].unstack().rename('cnv'), cnv_ratios[samples].unstack().rename('ratio')], axis=1).dropna()
+    df = pd.concat([df[samples].unstack().rename('fc'), cnv[samples].unstack().rename('cnv'), cnv_ratios[samples].unstack().rename('ratio')], axis=1).dropna()
     df = df.reset_index().rename(columns={'level_0': 'sample', 'level_1': 'gene'})
 
     # Append chromossome copy-number information
@@ -179,8 +155,11 @@ if __name__ == '__main__':
 
     # - Plot: Copy-number ratio vs CRISPR bias
     ratios_histogram('ratio', df, 'reports/crispy/copynumber_ratio_histogram.png')
+
     ratios_kmean('crispy', 'ratio_bin', df, 'reports/crispy/copynumber_ratio_kmean_boxplot.png')
-    ratios_arocs('ratio_bin', 'crispy', df, 'reports/crispy/copynumber_ratio_kmean_arocs.png')
+
+    copy_number_bias_aucs(df, rank_label='fc', thres_label='ratio_bin', outfile='reports/crispy/copynumber_ratio_kmean_aucs.png')
+
     sns.set(style='white')
     ratios_heatmap('cnv_bin', 'chr_cnv_bin', 'ratio_bin', df, 'reports/crispy/copynumber_ratio_heatmap.png', z_bin='1')
     ratios_heatmap_bias('cnv_bin', 'chr_cnv_bin', 'crispy', df, 'reports/crispy/copynumber_ratio_heatmap_crispr.png')
