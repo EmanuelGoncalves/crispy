@@ -71,7 +71,7 @@ def aucs_scatter(x, y, data, outfile, title):
     plt.close('all')
 
 
-def copy_number_bias_aucs(df, outfile=None, thres_label='cnv', rank_label='fc', min_events=5):
+def copy_number_bias_aucs(df, outfile=None, thres_label='cnv', rank_label='fc', min_events=5, legend_size=6):
     aucs = {}
 
     ax = plt.gca() if outfile is not None else None
@@ -116,7 +116,7 @@ def copy_number_bias_aucs(df, outfile=None, thres_label='cnv', rank_label='fc', 
         ax.legend(loc=4)
 
         ax.set_title('Copy-number effect on CRISPR-Cas9\n(non-expressed genes)')
-        legend = ax.legend(loc=4, title='Copy-number', prop={'size': 6})
+        legend = ax.legend(loc=4, title='Copy-number', prop={'size': legend_size})
         legend.get_title().set_fontsize('7')
 
         # plt.show()
