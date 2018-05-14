@@ -7,7 +7,7 @@ import pandas as pd
 import scripts as mp
 from bsub import bsub
 from datetime import datetime as dt
-from crispy.biases_correction import CRISPRCorrection
+from crispy.association import CRISPRCorrection
 
 
 # BSUB options
