@@ -1,17 +1,17 @@
 Crispy
 ============
 
-Use Crispy to identify associations between genomic alterations (e.g. structural variation, copy-number alterations) and CRISPR-Cas9 knockout response.
+Identify associations between genomic alterations (e.g. structural variation, copy-number variation) and CRISPR-Cas9 knockout response.
 
 Description
 --
-Crispy is trained on a per chromosome and per sample
+Crispy uses [Sklearn](http://scikit-learn.org/stable/index.html) implementation of [Gaussian Process Regression](http://scikit-learn.org/stable/modules/generated/sklearn.gaussian_process.GaussianProcessRegressor.html#sklearn.gaussian_process.GaussianProcessRegressor) fitting by default per sample per chromosome.
 
 
 Example
 --
 
-```python
+```
 import pandas as pd
 from crispy.association import CRISPRCorrection
 
@@ -25,9 +25,8 @@ crispy = CRISPRCorrection()\
 # Export
 crispy = pd.concat([v.to_dataframe() for k, v in crispy.items()])\
     .sort_values(['cnv', 'k_mean'], ascending=[False, True])
-
-print(crispy)
 ```
+
 
 Install
 --
