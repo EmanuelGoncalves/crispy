@@ -56,4 +56,8 @@ if __name__ == '__main__':
     df = df.assign(ratio_bin=df['ratio'].apply(lambda v: bin_cnv(v, thresold=4)))
 
     # - Plot: Copy-number ratio vs CRISPR bias
-    copy_number_bias_aucs(df, rank_label='shrna', thres_label='ratio_bin', outfile='reports/crispy/copynumber_ratio_shrna.png')
+    copy_number_bias_aucs(
+        df, rank_label='shrna', thres_label='ratio_bin',
+        outfile='reports/crispy/copynumber_ratio_shrna.png',
+        title='Copy-number effect on shRNA\n(non-expressed genes)'
+    )
