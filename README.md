@@ -10,8 +10,7 @@ Crispy uses [Sklearn](http://scikit-learn.org/stable/index.html) implementation 
 
 Example
 --
-
-```
+```python
 import pandas as pd
 from crispy.association import CRISPRCorrection
 
