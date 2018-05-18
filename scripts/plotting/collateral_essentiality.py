@@ -161,7 +161,7 @@ def plot_overall_collateral_essentialities():
     # plt.xticks(np.arange(0, 41, 10))
     plt.grid(True, color=bipal_dbgd[0], linestyle='-', linewidth=.1, axis='x')
 
-    plt.xlabel('Number of collateral vulnerable genes')
+    plt.xlabel('Number of cell lines')
     plt.title('Histogram of collateral vulnerabilities')
 
     plt.legend(loc='center left', bbox_to_anchor=(1.02, 0.0), prop={'size': 8})
