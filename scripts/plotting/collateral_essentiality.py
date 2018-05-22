@@ -71,7 +71,7 @@ def association_boxplot(plot_df, gr, gc, cnv_bin_thres=10, ratio_bin_thres=4):
     cnvorder = natsorted(set(plot_df['cnv_bin']))
 
     sns.boxplot('cnv_bin', 'crispy', data=plot_df, order=cnvorder, color=color, sym='', linewidth=.3, saturation=.1, ax=ax1)
-    sns.stripplot('cnv_bin', 'crispy', 'Expressed', data=plot_df, order=cnvorder, palette=pal, edgecolor='white', linewidth=.1, size=2, jitter=.1, alpha=.8, ax=ax1)
+    sns.stripplot('cnv_bin', 'crispy', 'Expressed', data=plot_df, order=cnvorder, palette=pal, edgecolor='white', linewidth=.3, size=3.5, jitter=.1, alpha=.9, ax=ax1)
 
     ax1.axhline(0, ls='-', lw=.1, c=color)
 
@@ -82,7 +82,7 @@ def association_boxplot(plot_df, gr, gc, cnv_bin_thres=10, ratio_bin_thres=4):
     order = natsorted(set(plot_df['ratio_bin']))
 
     sns.boxplot('ratio_bin', 'crispy', data=plot_df, order=order, color=color, sym='', linewidth=.3, saturation=.1, ax=ax2)
-    sns.stripplot('ratio_bin', 'crispy', 'Expressed', data=plot_df, order=order, palette=pal, edgecolor='white', linewidth=.1, size=2, jitter=.1, alpha=.8, ax=ax2)
+    sns.stripplot('ratio_bin', 'crispy', 'Expressed', data=plot_df, order=order, palette=pal, edgecolor='white', linewidth=.3, size=3.5, jitter=.1, alpha=.8, ax=ax2)
 
     ax2.axhline(0, ls='-', lw=.1, c=color)
 
@@ -211,6 +211,9 @@ if __name__ == '__main__':
     # CRISPR
     c_gdsc_fc = pd.read_csv(mp.CRISPR_GENE_FC, index_col=0)
 
+    # COSMIC cancer genes
+    cgenes = pd.read_csv('data/cancer_gene_census.csv')
+
     # - CRISPR lib
     lib = pd.read_csv(mp.LIBRARY, index_col=0)
     lib = lib.assign(pos=lib[['start', 'end']].mean(1).values)
@@ -267,11 +270,14 @@ if __name__ == '__main__':
                     'Cell_line': s,
                     'Cancer Type': ss.loc[s, 'Cancer Type'],
                     'Tissue': ss.loc[s, 'Tissue'],
+                    'Tissue non-expression (%)': perc_tissue_expressed,
                     'Gene_Amplified': ';'.join(grs),
                     'Chr': gene_chrm.loc[grs].iloc[0]
                 })
 
-    coless = pd.DataFrame(coless)[['Gene_CRISPR', 'Cell_line', 'Cancer Type', 'Tissue', 'Chr', 'Gene_Amplified']]
+    coless = pd.DataFrame(coless)
+    coless = coless.assign(Cancer_Gene=[len(set(i.split(';')).intersection(cgenes['Gene Symbol'])) > 0 for i in coless['Gene_Amplified']])
+    coless = coless[['Gene_CRISPR', 'Cell_line', 'Cancer Type', 'Tissue', 'Tissue non-expression (%)', 'Chr', 'Cancer_Gene', 'Gene_Amplified']]
     coless.to_csv('data/crispy_df_collateral_essentialities.csv', index=False)
 
     print(

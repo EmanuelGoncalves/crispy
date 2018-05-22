@@ -6,6 +6,7 @@ import pandas as pd
 import seaborn as sns
 import scipy.stats as st
 import matplotlib.pyplot as plt
+import matplotlib.ticker as plticker
 from crispy import bipal_dbgd
 from sklearn.metrics.ranking import auc
 
@@ -76,7 +77,7 @@ def plot_cumsum_auc(X, index_set, ax=None, palette=None, legend=True, plot_mean=
 
     # Labels
     ax.set_xlabel('Ranked')
-    ax.set_ylabel('Cumulative sum %s' % index_set.name)
+    ax.set_ylabel('Recall %s' % index_set.name)
 
     ax.legend(loc=4)
 
@@ -116,15 +117,15 @@ def plot_cnv_rank(x, y, ax=None, stripplot=False, hline=0.5, order=None, color='
     return ax
 
 
-def plot_chromosome(pos, original, mean, se=None, seg=None, highlight=None, ax=None, legend=False, cytobands=True, seg_label='Copy-number', scale=1e6):
+def plot_chromosome(pos, original, mean, se=None, seg=None, highlight=None, ax=None, legend=False, cytobands=True, seg_label='Copy-number', scale=1e6, tick_base=1):
     if ax is None:
         ax = plt.gca()
 
     # Plot original values
-    ax.scatter(pos / scale, original, s=4, marker='.', lw=0, c=bipal_dbgd[1], alpha=.8, label=original.name)
+    ax.scatter(pos / scale, original, s=6, marker='.', lw=0, c=bipal_dbgd[1], alpha=.8, label=original.name)
 
     # Plot corrected values
-    ax.scatter(pos / scale, mean, s=6, marker='.', lw=0, c='#d9d9d9', alpha=1., label=mean.name)
+    ax.scatter(pos / scale, mean, s=10, marker='.', lw=0, c='#999999', alpha=1., label=mean.name, edgecolor='#d9d9d9')
 
     if se is not None:
         ax.fill_between(pos / scale, mean - se, mean + se, c=bipal_dbgd[1], alpha=0.2)
@@ -132,13 +133,13 @@ def plot_chromosome(pos, original, mean, se=None, seg=None, highlight=None, ax=N
     # Plot segments
     if seg is not None:
         for i, (s, e, c) in enumerate(seg[['start', 'end', 'total_cn']].values):
-            ax.plot([s / scale, e / scale], [c, c], lw=1., c=bipal_dbgd[0], alpha=1., label=seg_label if i == 0 else None)
+            ax.plot([s / scale, e / scale], [c, c], lw=1.5, c=bipal_dbgd[0], alpha=1., label=seg_label if i == 0 else None)
 
     # Highlight
     if highlight is not None:
         for ic, i in zip(*(sns.color_palette('tab20', n_colors=len(highlight)), highlight)):
             if i in pos.index:
-                ax.scatter(pos.loc[i] / scale, original.loc[i], s=8, marker='X', lw=0, c=ic, alpha=.9, label=i)
+                ax.scatter(pos.loc[i] / scale, original.loc[i], s=14, marker='X', lw=0, c=ic, alpha=.9, label=i)
     # Misc
     ax.axhline(0, lw=.3, ls='-', color='black')
 
@@ -154,9 +155,13 @@ def plot_chromosome(pos, original, mean, se=None, seg=None, highlight=None, ax=N
 
     # Legend
     if legend:
-        ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+        ax.legend(loc='center left', bbox_to_anchor=(1, 0.5), prop={'size': 5})
 
     ax.set_xlim(pos.min() / scale, pos.max() / scale)
+
+    ax.tick_params(axis='both', which='major', labelsize=5)
+
+    ax.yaxis.set_major_locator(plticker.MultipleLocator(base=tick_base))
 
     return ax
 

@@ -159,7 +159,8 @@ if __name__ == '__main__':
     ratios_kmean('fc', 'ratio_bin', df, 'reports/crispy/copynumber_ratio_kmean_boxplot.png')
 
     copy_number_bias_aucs(
-        df, rank_label='fc', thres_label='ratio_bin', outfile='reports/crispy/copynumber_ratio_kmean_aucs.png', legend_size=9, legend_title='Copy-number ratio'
+        df, rank_label='fc', thres_label='ratio_bin', outfile='reports/crispy/copynumber_ratio_kmean_aucs.png', legend_size=9,
+        title='Copy-number ratio effect on CRISPR-Cas9\n(non-expressed genes)', legend_title='Copy-number ratio'
     )
 
     sns.set(style='white')

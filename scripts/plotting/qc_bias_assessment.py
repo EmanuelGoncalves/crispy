@@ -41,7 +41,7 @@ def auc_curves(df, geneset, outfile):
 
     # AUCs fold-changes
     ax, stats_ess = plot_cumsum_auc(df, geneset, plot_mean=False, legend=False, palette=pal)
-    plt.title('Mean AUC = {:.2f}'.format(pd.Series(stats_ess['auc']).mean()))
+    plt.title('Mean AURC = {:.2f}'.format(pd.Series(stats_ess['auc']).mean()))
     plt.gcf().set_size_inches(3, 3)
     plt.savefig(outfile, bbox_inches='tight', dpi=600)
     plt.close('all')
@@ -62,8 +62,8 @@ def aucs_scatter(x, y, data, outfile, title):
     ax.set_xlim(x_lim)
     ax.set_ylim(y_lim)
 
-    ax.set_xlabel('{} fold-changes AUCs'.format(x))
-    ax.set_ylabel('{} fold-changes AUCs'.format(y))
+    ax.set_xlabel('{} fold-changes AURCs'.format(x))
+    ax.set_ylabel('{} fold-changes AURCs'.format(y))
     ax.set_title(title)
 
     plt.gcf().set_size_inches(2, 2)
@@ -99,7 +99,7 @@ def copy_number_bias_aucs(df, outfile=None, thres_label='cnv', rank_label='fc', 
 
             # Plot
             if outfile is not None:
-                ax.plot(x, y, label='{}: AUC={:.2f}'.format(t, f_auc), lw=1., c=thresholds_color[i])
+                ax.plot(x, y, label='{}: AURC={:.2f}'.format(t, f_auc), lw=1., c=thresholds_color[i])
 
     if outfile is not None:
         # Random
@@ -111,13 +111,13 @@ def copy_number_bias_aucs(df, outfile=None, thres_label='cnv', rank_label='fc', 
 
         # Labels
         ax.set_xlabel('Ranked')
-        ax.set_ylabel('Cumulative sum')
+        ax.set_ylabel('Recall')
 
         ax.legend(loc=4)
 
         ax.set_title('Copy-number effect on CRISPR-Cas9\n(non-expressed genes)' if title is None else title)
         legend = ax.legend(loc=4, title='Copy-number' if legend_title is None else legend_title, prop={'size': legend_size})
-        legend.get_title().set_fontsize('7')
+        legend.get_title().set_fontsize('{}'.format(legend_size))
 
         # plt.show()
         plt.gcf().set_size_inches(3, 3)
@@ -138,7 +138,7 @@ def copy_number_bias_aucs_per_sample(x, y, hue, data, outfile):
     plt.ylim(0, 1)
     plt.title('Copy-number effect on CRISPR-Cas9\n(non-expressed genes)')
     plt.xlabel('Copy-number')
-    plt.ylabel('Copy-number AUC (per cell line)')
+    plt.ylabel('Copy-number AURC (per cell line)')
     plt.axhline(0.5, ls='--', lw=.3, alpha=.5, c=bipal_dbgd[0])
     plt.gcf().set_size_inches(3, 3)
     plt.savefig(outfile, bbox_inches='tight', dpi=600)
@@ -156,7 +156,7 @@ def copy_number_bias_aucs_per_sample(x, y, hue, data, outfile):
     plt.legend(handles=handles, title='Ploidy', prop={'size': 6}).get_title().set_fontsize('6')
     plt.title('Cell ploidy effect on CRISPR-Cas9\n(non-expressed genes)')
     plt.xlabel('Copy-number')
-    plt.ylabel('Copy-number AUC (per cell line)')
+    plt.ylabel('Copy-number AURC (per cell line)')
     plt.axhline(0.5, ls='--', lw=.3, alpha=.5, c=bipal_dbgd[0])
     plt.gcf().set_size_inches(3, 3)
 
@@ -181,7 +181,7 @@ def copy_number_bias_aucs_per_chrm(x, y, hue, data, outfile):
     plt.ylim(0, 1)
     plt.title('Copy-number effect on CRISPR-Cas9\n(non-expressed genes)')
     plt.xlabel('Copy-number')
-    plt.ylabel('Copy-number AUC (per chromossome)')
+    plt.ylabel('Copy-number AURC (per chromossome)')
     plt.axhline(0.5, ls='--', lw=.3, alpha=.5, c=bipal_dbgd[0])
     plt.gcf().set_size_inches(3, 3)
     plt.savefig(outfile, bbox_inches='tight', dpi=600)
@@ -199,7 +199,7 @@ def arocs_scatter(x, y, data, outfile):
     g.ax_joint.set_xlim(x_lim)
     g.ax_joint.set_ylim(y_lim)
 
-    g.set_axis_labels('{} fold-changes AUCs'.format(x), '{} fold-changes AUCs'.format(y))
+    g.set_axis_labels('{} fold-changes AURCs'.format(x), '{} fold-changes AURCs'.format(y))
 
     plt.gcf().set_size_inches(3, 3)
     plt.savefig(outfile, bbox_inches='tight', dpi=600)

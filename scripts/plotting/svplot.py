@@ -74,7 +74,7 @@ def bin_bkdist(distance):
     return bin_distance
 
 
-def plot_rearrangements(brass, crispr, ngsc, chrm, winsize=1e5, chrm_size=None, xlim=None, scale=1e6, unfold_inversions=False):
+def plot_rearrangements(brass, crispr, ngsc, chrm, winsize=1e5, chrm_size=None, xlim=None, scale=1e6, show_legend=True, unfold_inversions=False, sv_alpha=1., sv_lw=.5):
     chrm_size = CHR_SIZES_HG19 if chrm_size is None else chrm_size
 
     #
@@ -96,8 +96,6 @@ def plot_rearrangements(brass, crispr, ngsc, chrm, winsize=1e5, chrm_size=None, 
     # CRISPR
     crispr_ = crispr[crispr['chr'] == chrm]
     crispr_ = crispr_.assign(location=crispr_[['start', 'end']].mean(1))
-    # crispr_ = crispr_.assign(interval=pd.cut(crispr_['location'], intervals, include_lowest=True, right=False))
-    # crispr_ = crispr_.groupby('interval').mean()
 
     #
     if brass_.shape[0] == 0:
@@ -111,26 +109,25 @@ def plot_rearrangements(brass, crispr, ngsc, chrm, winsize=1e5, chrm_size=None, 
     ax1.set_ylim(-1, 1)
 
     #
-    ax2.scatter(ngsc_['location'] / scale, ngsc_['absolute_cn'], s=1, alpha=1., c=bipal_dbgd[0], label='Copy-number', zorder=1)
-    ax2.set_ylim(0.0, np.ceil(ngsc_['absolute_cn'].quantile(0.9999)))
+    ax2.scatter(ngsc_['location'] / scale, ngsc_['absolute_cn'], s=2, alpha=.8, c=bipal_dbgd[0], label='Copy-number', zorder=1)
+    ax2.set_ylim(0, np.ceil(ngsc_['absolute_cn'].quantile(0.9999)))
 
     #
-    ax3.scatter(crispr_['location'] / scale, crispr_['crispr'], s=1, alpha=1., c=bipal_dbgd[1], label='CRISPR-Cas9', zorder=1)
+    ax3.scatter(crispr_['location'] / scale, crispr_['crispr'], s=2, alpha=.8, c=bipal_dbgd[1], label='CRISPR-Cas9', zorder=1)
     ax3.axhline(0.0, lw=.3, color=bipal_dbgd[0])
 
     #
     if 'cnv' in crispr.columns:
-        ax2.scatter(crispr_['location'] / scale, crispr_['cnv'], s=3, alpha=.5, c='#d9d9d9', zorder=2, label='ASCAT')
+        ax2.scatter(crispr_['location'] / scale, crispr_['cnv'], s=5, alpha=1., c='#999999', zorder=2, label='ASCAT', edgecolor='#d9d9d9')
 
     if 'k_mean' in crispr.columns:
-        ax3.scatter(crispr_['location'] / scale, crispr_['k_mean'], s=3, alpha=1., c='#d9d9d9', zorder=6, label='Fitted mean')
+        ax3.scatter(crispr_['location'] / scale, crispr_['k_mean'], s=5, alpha=1., c='#999999', zorder=2, label='Fitted mean', edgecolor='#d9d9d9')
 
     #
     for c1, s1, e1, c2, s2, e2, st1, st2, sv in brass_[['chr1', 'start1', 'end1', 'chr2', 'start2', 'end2', 'strand1', 'strand2', 'svclass']].values:
         stype = svtype(st1, st2, sv, unfold_inversions)
         stype_col = PALETTE[stype]
 
-        lw = .3 if stype == 'tandem-duplication' else .1
         zorder = 3 if stype == 'tandem-duplication' else 1
 
         x1_mean, x2_mean = np.mean([s1, e1]), np.mean([s2, e2])
@@ -142,19 +139,19 @@ def plot_rearrangements(brass, crispr, ngsc, chrm, winsize=1e5, chrm_size=None, 
             xy = (np.mean([x1_mean, x2_mean]) / scale, 0)
 
             ax1.add_patch(
-                Arc(xy, (x2_mean - x1_mean) / scale, 1., angle=angle, theta1=0, theta2=180, edgecolor=stype_col, lw=lw, zorder=zorder)
+                Arc(xy, (x2_mean - x1_mean) / scale, 1., angle=angle, theta1=0, theta2=180, edgecolor=stype_col, lw=sv_lw, zorder=zorder, alpha=sv_alpha)
             )
 
         # Plot segments
         for ymin, ymax, ax in [(-1, 0.5, ax1), (-1, 1, ax2), (0, 1, ax3)]:
             if (c1 == chrm) and (xlim[0] <= x1_mean <= xlim[1]):
                 ax.axvline(
-                    x=x1_mean / scale, ymin=ymin, ymax=ymax, c=stype_col, linewidth=lw, zorder=zorder, clip_on=False, label=stype
+                    x=x1_mean / scale, ymin=ymin, ymax=ymax, c=stype_col, linewidth=sv_lw, zorder=zorder, clip_on=False, label=stype, alpha=sv_alpha
                 )
 
             if (c2 == chrm) and (xlim[0] <= x2_mean <= xlim[1]):
                 ax.axvline(
-                    x=x2_mean / scale, ymin=ymin, ymax=ymax, c=stype_col, linewidth=lw, zorder=zorder, clip_on=False, label=stype
+                    x=x2_mean / scale, ymin=ymin, ymax=ymax, c=stype_col, linewidth=sv_lw, zorder=zorder, clip_on=False, label=stype, alpha=sv_alpha
                 )
 
         # Translocation label
@@ -166,14 +163,15 @@ def plot_rearrangements(brass, crispr, ngsc, chrm, winsize=1e5, chrm_size=None, 
                 ax1.text(x2_mean / scale, 0, ' to {}'.format(c1), color=stype_col, ha='center', fontsize=5, rotation=90, va='bottom')
 
     #
-    by_label = {l.capitalize(): p for p, l in zip(*(ax2.get_legend_handles_labels())) if l in PALETTE}
-    ax1.legend(by_label.values(), by_label.keys(), loc='center left', bbox_to_anchor=(1.02, 0.5), prop={'size': 6})
+    if show_legend:
+        by_label = {l.capitalize(): p for p, l in zip(*(ax2.get_legend_handles_labels())) if l in PALETTE}
+        ax1.legend(by_label.values(), by_label.keys(), loc='center left', bbox_to_anchor=(1.02, 0.5), prop={'size': 6})
 
-    by_label = {l: p for p, l in zip(*(ax2.get_legend_handles_labels())) if l not in PALETTE}
-    ax2.legend(by_label.values(), by_label.keys(), loc='center left', bbox_to_anchor=(1.02, 0.5), prop={'size': 6})
+        by_label = {l: p for p, l in zip(*(ax2.get_legend_handles_labels())) if l not in PALETTE}
+        ax2.legend(by_label.values(), by_label.keys(), loc='center left', bbox_to_anchor=(1.02, 0.5), prop={'size': 6})
 
-    by_label = {l: p for p, l in zip(*(ax3.get_legend_handles_labels())) if l not in PALETTE}
-    ax3.legend(by_label.values(), by_label.keys(), loc='center left', bbox_to_anchor=(1.02, 0.5), prop={'size': 6})
+        by_label = {l: p for p, l in zip(*(ax3.get_legend_handles_labels())) if l not in PALETTE}
+        ax3.legend(by_label.values(), by_label.keys(), loc='center left', bbox_to_anchor=(1.02, 0.5), prop={'size': 6})
 
     #
     ax1.axis('off')
@@ -183,9 +181,13 @@ def plot_rearrangements(brass, crispr, ngsc, chrm, winsize=1e5, chrm_size=None, 
     ax3.yaxis.set_major_locator(plticker.MultipleLocator(base=2.))
 
     #
+    ax2.tick_params(axis='both', which='major', labelsize=6)
+    ax3.tick_params(axis='both', which='major', labelsize=6)
+
+    #
     ax1.set_ylabel('SV')
     ax2.set_ylabel('Copy-number', fontsize=7)
-    ax3.set_ylabel('CRISPR-Cas9', fontsize=7)
+    ax3.set_ylabel('Loss of fitness', fontsize=7)
 
     #
     plt.xlabel('Position on chromosome {} (Mb)'.format(chrm.replace('chr', '')))
@@ -266,7 +268,7 @@ def svcount_barplot(brass):
     plt.yticks(plot_df['ypos'], plot_df.index)
 
     plt.xlabel('Count')
-    plt.title('BRCA cell lines\nstructural rearrangements')
+    plt.title('Breast carcinoma cell lines\nstructural rearrangements')
 
     plt.legend(loc=4, prop={'size': 4})
 
@@ -312,7 +314,7 @@ if __name__ == '__main__':
 
     # Count number of SVs
     svcount_barplot(brass)
-    plt.gcf().set_size_inches(2, 2)
+    plt.gcf().set_size_inches(2, 1)
     plt.savefig('reports/crispy/brass_svs_counts_barplot_brca.png', bbox_inches='tight', dpi=600)
     plt.close('all')
 

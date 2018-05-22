@@ -59,5 +59,6 @@ if __name__ == '__main__':
     copy_number_bias_aucs(
         df, rank_label='shrna', thres_label='ratio_bin',
         outfile='reports/crispy/copynumber_ratio_shrna.png',
-        title='Copy-number effect on shRNA\n(non-expressed genes)'
+        title='Copy-number ratio effect on shRNA\n(non-expressed genes)',
+        legend_size=7
     )
