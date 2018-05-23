@@ -117,7 +117,7 @@ def plot_cnv_rank(x, y, ax=None, stripplot=False, hline=0.5, order=None, color='
     return ax
 
 
-def plot_chromosome(pos, original, mean, se=None, seg=None, highlight=None, ax=None, legend=False, cytobands=True, seg_label='Copy-number', scale=1e6, tick_base=1):
+def plot_chromosome(pos, original, mean, se=None, seg=None, highlight=None, ax=None, legend=False, cytobands=True, seg_label='Copy-number', scale=1e6, tick_base=1, legend_size=5):
     if ax is None:
         ax = plt.gca()
 
@@ -155,7 +155,7 @@ def plot_chromosome(pos, original, mean, se=None, seg=None, highlight=None, ax=N
 
     # Legend
     if legend:
-        ax.legend(loc='center left', bbox_to_anchor=(1, 0.5), prop={'size': 5})
+        ax.legend(loc='center left', bbox_to_anchor=(1, 0.5), prop={'size': legend_size})
 
     ax.set_xlim(pos.min() / scale, pos.max() / scale)
 

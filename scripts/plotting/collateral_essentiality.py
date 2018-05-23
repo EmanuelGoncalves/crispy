@@ -106,7 +106,7 @@ def chromosome_plot_sample(sample, chrm, xlim=None):
 
     ax = plot_chromosome(
         plot_df['pos'], plot_df['fc'].rename('CRISPR-Cas9'), plot_df['k_mean'].rename('Fitted mean'), seg=seg[seg['#chr'] == chrm],
-        highlight=[gc, gr], cytobands=cytobands, legend=True
+        highlight=[gc, gr], cytobands=cytobands, legend=True, legend_size=7
     )
 
     if xlim is not None:
@@ -286,8 +286,9 @@ if __name__ == '__main__':
     )
 
     # - Plot collateral essentiality
-    gc, gr = 'NEUROD2', 'ERBB2'
-    plot_collateral_essentiality(gc, gr, xlim=(32, 45), c_size=(3, 1.5))
+    # gc, gr, xlim = 'NEUROD2', 'ERBB2', (32, 45)
+    gc, gr, xlim = 'MRGPRD', 'CCND1', (60, 80)
+    plot_collateral_essentiality(gc, gr, xlim=xlim, c_size=(2, 3))
 
     # - Plot number of collateral essentialities per Cancer Type
     plot_overall_collateral_essentialities()
