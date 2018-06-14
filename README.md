@@ -1,4 +1,4 @@
-Crispy
+![Crispy logo](images/logo.png)
 ============
 
 Identify associations between genomic alterations (e.g. structural variation, copy-number variation) and CRISPR-Cas9 knockout response.
