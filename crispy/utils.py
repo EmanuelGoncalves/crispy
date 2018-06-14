@@ -38,7 +38,7 @@ def qnorm(x):
 
 
 def get_example_data(dfile='association_example_data.csv'):
-    DATA_PATH = pkg_resources.resource_filename('crispy', 'extdata/')
+    DATA_PATH = pkg_resources.resource_filename('crispy', 'data/')
     return pd.read_csv('{}/{}'.format(DATA_PATH, dfile), index_col=0)
 
 
