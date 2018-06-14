@@ -15,18 +15,20 @@ Example
 --
 ```python
 import pandas as pd
-from crispy.association import CRISPRCorrection
+import crispy as cy
 
 # Import data
-data = pd.read_csv('extdata/association_example_data.csv', index_col=0)
+data = cy.get_example_data()
 
 # Association analysis
-crispy = CRISPRCorrection()\
+crispy = cy.CRISPRCorrection()\
     .fit_by(by=data['chr'], X=data[['cnv']], y=data['fc'])
 
 # Export
 crispy = pd.concat([v.to_dataframe() for k, v in crispy.items()])\
     .sort_values(['cnv', 'k_mean'], ascending=[False, True])
+
+print(crispy)
 ```
 
 
