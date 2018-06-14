@@ -8,7 +8,7 @@ with open('README.md', 'r') as fh:
 
 setuptools.setup(
     name='cy',
-    version='0.1.5',
+    version='0.1.6',
     author='Emanuel Goncalves',
     author_email='eg14@sanger.ac.uk',
     description='Modelling CRISPR dropout data',

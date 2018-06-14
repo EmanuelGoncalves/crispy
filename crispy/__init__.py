@@ -9,7 +9,7 @@ from crispy.utils import get_example_data
 
 name = 'crispy'
 
-__version__ = '0.1.5'
+__version__ = '0.1.6'
 
 # Set plotting aesthetics
 sns_rc = {

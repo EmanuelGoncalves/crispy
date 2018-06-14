@@ -2,6 +2,7 @@
 # Copyright (C) 2018 Emanuel Goncalves
 
 import numpy as np
+import pandas as pd
 import pkg_resources
 import scipy.stats as st
 from sklearn.metrics import roc_auc_score
