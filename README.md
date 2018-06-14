@@ -36,7 +36,7 @@ Install
 --
 
 ```
-python setup.py install
+pip install cy
 ```
 
 Enrichment module has Cython files, to compile run:
