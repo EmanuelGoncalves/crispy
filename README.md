@@ -5,8 +5,6 @@
 
 Identify associations between genomic alterations (e.g. structural variation, copy-number variation) and CRISPR-Cas9 knockout response.
 
-[Tandem duplications lead to loss of fitness effects in CRISPR-Cas9 data](https://www.biorxiv.org/content/early/2018/05/25/325076)
-
 
 Description
 --
@@ -41,14 +39,17 @@ Install
 pip install cy
 ```
 
-Enrichment module has Cython files, to compile run:
+Enrichment and Regression module has Cython files, to compile run:
 
 ```
 python crispy/enrichment/gsea_setup.py build_ext --inplace
-```
 
-Regression module has Cython files, to compile run:
-
-```
 python crispy/regression/linear_setup.py build_ext --inplace
 ```
+
+Credits and License
+--
+
+Developed at the Wellcome Sanger Institue (2017-2018).
+
+For citation please refer to: [current biorxiv pre-print](https://www.biorxiv.org/content/early/2018/05/25/325076)
