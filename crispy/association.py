@@ -135,31 +135,3 @@ class CRISPRCorrection(GaussianProcessRegressor):
         estimator.y_name = y.name
 
         return estimator.fit(X.loc[by_index], y.loc[by_index])
-
-
-# TODO: separate data for testing
-if __name__ == '__main__':
-    # Sample
-    sample = 'AU565'
-    print('Crispy bias correction test: {}'.format(sample))
-
-    # Import sgRNA library
-    lib = pd.read_csv('data/crispr_libs/KY_Library_v1.1_updated.csv', index_col=0).groupby('gene')['chr'].first().dropna()
-
-    # CRISPR fold-changes
-    crispr = pd.read_csv('data/crispr_gdsc_logfc.csv', index_col=0)[sample]
-
-    # Copy-number
-    cnv = pd.read_csv('data/crispy_copy_number_gene_snp.csv', index_col=0)[sample]
-
-    # Build data-frame
-    df = pd.concat([crispr.rename('fc'), cnv.rename('cnv'), lib.rename('chr')], axis=1).dropna()
-    df = df[df['chr'].isin(['chr1', 'chr17'])]
-    assert df.shape[0] > 0, 'Empty data-frame'
-
-    # Correction
-    crispy = CRISPRCorrection().rename(sample).fit_by(by=df['chr'], X=df[['cnv']], y=df['fc'])
-    crispy = pd.concat([v.to_dataframe() for k, v in crispy.items()])
-    assert crispy.groupby('fit_by')['var_exp'].first()['chr17'] > crispy.groupby('fit_by')['var_exp'].first()['chr1'], 'Var explained failled fitting'
-
-    print(crispy)

@@ -36,6 +36,11 @@ def qnorm(x):
     return y
 
 
+def get_example_data(dfile='association_example_data.csv'):
+    DATA_PATH = pkg_resources.resource_filename('crispy', 'extdata/')
+    return pd.read_csv('{}/{}'.format(DATA_PATH, dfile), index_col=0)
+
+
 class DotDict(dict):
     __getattr__ = dict.get
     __setattr__ = dict.__setitem__
