@@ -6,3 +6,4 @@ matplotlib>=2.0
 seaborn>=0.7
 natsort>=5.1.0
 statsmodels>=0.8.0
+pybedtools>=0.7.10

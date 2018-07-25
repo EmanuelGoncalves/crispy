@@ -5,7 +5,7 @@ import os
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
-from crispy import bipal_dbgd
+from crispy import PAL_DBGD
 from pybedtools import BedTool
 from matplotlib.colors import rgb2hex
 from sklearn.metrics import roc_curve, auc
@@ -93,7 +93,7 @@ def plot_sv_ratios_arocs(plot_df, x='ratio', order=None):
 
     ax = plt.gca()
 
-    for t, c in zip(order, map(rgb2hex, sns.light_palette(bipal_dbgd[0], len(order) + 1)[1:])):
+    for t, c in zip(order, map(rgb2hex, sns.light_palette(PAL_DBGD[0], len(order) + 1)[1:])):
         y_true, y_score = plot_df['collapse'].map(lambda x: t in x).astype(int), plot_df[x]
 
         fpr, tpr, _ = roc_curve(y_true, y_score)
@@ -114,7 +114,7 @@ def plot_sv_ratios_arocs(plot_df, x='ratio', order=None):
 
 def plot_sv_ratios_arocs_per_sample(plot_df, groupby, x='ratio', y='collapse', order=None):
     order = ['deletion', 'inversion', 'tandem-duplication'] if order is None else order
-    order_color = list(map(rgb2hex, sns.light_palette(bipal_dbgd[0], len(order) + 1)[1:]))
+    order_color = list(map(rgb2hex, sns.light_palette(PAL_DBGD[0], len(order) + 1)[1:]))
 
     y_aucs = {}
 
@@ -130,7 +130,7 @@ def plot_sv_ratios_arocs_per_sample(plot_df, groupby, x='ratio', y='collapse', o
 
     sns.boxplot('auc', 'svclass', data=y_aucs, orient='h', order=order, palette=order_color, notch=True, linewidth=.5, fliersize=1, ax=ax)
     # sns.stripplot('auc', 'svclass', data=y_aucs, orient='h', order=order, palette=order_color, edgecolor='white', linewidth=.1, size=3, jitter=.4, ax=ax)
-    plt.axvline(.5, lw=.3, c=bipal_dbgd[0])
+    plt.axvline(.5, lw=.3, c=PAL_DBGD[0])
     plt.title('Structural rearrangements relation with\ncopy-number ratio')
     plt.xlabel('Structural rearrangements ~ Copy-number ratio (AUC)')
     plt.ylabel('')
@@ -143,8 +143,8 @@ def plot_sv_ratios_boxplots(plot_df, x='ratio', y='collapse', order=None):
 
     ax = plt.gca()
 
-    sns.boxplot(x, y, data=plot_df, orient='h', order=order, color=bipal_dbgd[0], notch=True, linewidth=.5, fliersize=1, ax=ax)
-    plt.axvline(1., lw=.3, c=bipal_dbgd[0])
+    sns.boxplot(x, y, data=plot_df, orient='h', order=order, color=PAL_DBGD[0], notch=True, linewidth=.5, fliersize=1, ax=ax)
+    plt.axvline(1., lw=.3, c=PAL_DBGD[0])
     plt.title('Structural rearrangements relation with\ncopy-number ratio')
     plt.xlabel('Copy-number ratio (rank)')
     plt.ylabel('')

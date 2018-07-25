@@ -8,7 +8,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import matplotlib.ticker as plticker
 from pybedtools import BedTool
-from crispy import bipal_dbgd
+from crispy import PAL_DBGD
 from crispy.utils import bin_cnv
 from matplotlib.patches import Arc
 from sklearn.metrics import roc_auc_score
@@ -105,16 +105,16 @@ def plot_rearrangements(brass, crispr, ngsc, chrm, winsize=1e5, chrm_size=None, 
     f, (ax1, ax2, ax3) = plt.subplots(3, 1, sharex=True, sharey=False, gridspec_kw={'height_ratios': [1, 2, 2]})
 
     #
-    ax1.axhline(0.0, lw=.3, color=bipal_dbgd[0])
+    ax1.axhline(0.0, lw=.3, color=PAL_DBGD[0])
     ax1.set_ylim(-1, 1)
 
     #
-    ax2.scatter(ngsc_['location'] / scale, ngsc_['absolute_cn'], s=2, alpha=.8, c=bipal_dbgd[0], label='Copy-number', zorder=1)
+    ax2.scatter(ngsc_['location'] / scale, ngsc_['absolute_cn'], s=2, alpha=.8, c=PAL_DBGD[0], label='Copy-number', zorder=1)
     ax2.set_ylim(0, np.ceil(ngsc_['absolute_cn'].quantile(0.9999)))
 
     #
-    ax3.scatter(crispr_['location'] / scale, crispr_['crispr'], s=2, alpha=.8, c=bipal_dbgd[1], label='CRISPR-Cas9', zorder=1)
-    ax3.axhline(0.0, lw=.3, color=bipal_dbgd[0])
+    ax3.scatter(crispr_['location'] / scale, crispr_['crispr'], s=2, alpha=.8, c=PAL_DBGD[1], label='CRISPR-Cas9', zorder=1)
+    ax3.axhline(0.0, lw=.3, color=PAL_DBGD[0])
 
     #
     if 'cnv' in crispr.columns:
@@ -261,7 +261,7 @@ def svcount_barplot(brass):
     plot_df = plot_df.assign(ypos=np.arange(plot_df.shape[0]))
     plot_df.index = [i.capitalize() for i in plot_df.index]
 
-    plt.barh(plot_df['ypos'], plot_df['svclass'], .8, color=bipal_dbgd[0], align='center')
+    plt.barh(plot_df['ypos'], plot_df['svclass'], .8, color=PAL_DBGD[0], align='center')
 
     plt.xticks(np.arange(0, 1001, 250))
     plt.yticks(plot_df['ypos'])
@@ -272,7 +272,7 @@ def svcount_barplot(brass):
 
     plt.legend(loc=4, prop={'size': 4})
 
-    plt.grid(color=bipal_dbgd[0], ls='-', lw=.1, axis='x')
+    plt.grid(color=PAL_DBGD[0], ls='-', lw=.1, axis='x')
 
 
 def aucs_samples(plot_df, order, min_events=5):
@@ -290,12 +290,12 @@ def aucs_samples(plot_df, order, min_events=5):
 
     y_aucs = pd.DataFrame(y_aucs)
 
-    pal = sns.light_palette(bipal_dbgd[0], len(order) + 1).as_hex()[1:]
+    pal = sns.light_palette(PAL_DBGD[0], len(order) + 1).as_hex()[1:]
 
     sns.boxplot(
         'auc', 'svclass', data=y_aucs, orient='h', order=order, palette=pal, notch=True, linewidth=.5, fliersize=1
     )
-    plt.axvline(.5, lw=.3, c=bipal_dbgd[0])
+    plt.axvline(.5, lw=.3, c=PAL_DBGD[0])
     plt.legend(loc='center left', bbox_to_anchor=(1.02, 0.5), prop={'size': 6})
     plt.title('Structural rearrangements relation with\ncopy-number ratio')
     plt.xlabel('AROC')

@@ -39,17 +39,8 @@ Install
 pip install cy
 ```
 
-Enrichment and Regression module has Cython files, to compile run:
-
-```
-python crispy/enrichment/gsea_setup.py build_ext --inplace
-
-python crispy/regression/linear_setup.py build_ext --inplace
-```
-
 Credits and License
 --
-
 Developed at the [Wellcome Sanger Institue](https://www.sanger.ac.uk/) (2017-2018).
 
-For citation please refer to: [biorxiv pre-print - Tandem duplications lead to loss of fitness effects in CRISPR-Cas9 data](https://www.biorxiv.org/content/early/2018/05/25/325076)
+For citation please refer to: [biorxiv pre-print](https://www.biorxiv.org/content/early/2018/05/25/325076)

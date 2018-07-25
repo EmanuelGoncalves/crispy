@@ -5,9 +5,7 @@ import os
 import numpy as np
 import pandas as pd
 import scripts as mp
-import seaborn as sns
 import matplotlib.pyplot as plt
-from crispy import bipal_dbgd
 from scripts.plotting.svplot import import_brass_bedpe, plot_rearrangements
 
 

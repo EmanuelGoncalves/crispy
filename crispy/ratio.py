@@ -4,8 +4,9 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from crispy import bipal_dbgd
+from crispy import PAL_DBGD
 from pybedtools import BedTool
+
 
 SEX_CHR = ['chrX', 'chrY']
 
@@ -131,6 +132,6 @@ def plot_gene(gene, bed_file, ax=None):
 
     # Plot original values
     for seg_start, seg_end, seg_cn in gff_int_df.loc[gene, ['start', 'end', 'total_cn_bed']].values:
-        ax.plot([seg_start, seg_end], [seg_cn, seg_cn], lw=1., c=bipal_dbgd[0], alpha=1.)
+        ax.plot([seg_start, seg_end], [seg_cn, seg_cn], lw=1., c=PAL_DBGD[0], alpha=1.)
 
     return ax

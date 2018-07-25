@@ -9,7 +9,7 @@ import seaborn as sns
 import scipy.stats as st
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
-from crispy import bipal_dbgd
+from crispy import PAL_DBGD
 from natsort import natsorted
 from sklearn.metrics import auc
 from crispy.utils import bin_cnv
@@ -19,7 +19,7 @@ from crispy.benchmark_plot import plot_cumsum_auc
 def tissue_coverage(x, y, data, outfile):
     df = data.assign(ypos=np.arange(data.shape[0]))
 
-    plt.barh(df['ypos'], df[x], .8, color=bipal_dbgd[0], align='center')
+    plt.barh(df['ypos'], df[x], .8, color=PAL_DBGD[0], align='center')
 
     for xx, yy in df[['ypos', x]].values:
         plt.text(yy - .25, xx, str(yy), color='white', ha='right', va='center', fontsize=6)
@@ -37,7 +37,7 @@ def tissue_coverage(x, y, data, outfile):
 
 def auc_curves(df, geneset, outfile):
     # Palette
-    pal = sns.light_palette(bipal_dbgd[0], n_colors=df.shape[1]).as_hex()
+    pal = sns.light_palette(PAL_DBGD[0], n_colors=df.shape[1]).as_hex()
 
     # AUCs fold-changes
     ax, stats_ess = plot_cumsum_auc(df, geneset, plot_mean=False, legend=False, palette=pal)
@@ -52,9 +52,9 @@ def auc_curves(df, geneset, outfile):
 def aucs_scatter(x, y, data, outfile, title):
     ax = plt.gca()
 
-    ax.scatter(data[x], data[y], c=bipal_dbgd[0], s=3, marker='x', lw=0.5)
-    sns.rugplot(data[x], height=.02, axis='x', c=bipal_dbgd[0], lw=.3, ax=ax)
-    sns.rugplot(data[y], height=.02, axis='y', c=bipal_dbgd[0], lw=.3, ax=ax)
+    ax.scatter(data[x], data[y], c=PAL_DBGD[0], s=3, marker='x', lw=0.5)
+    sns.rugplot(data[x], height=.02, axis='x', c=PAL_DBGD[0], lw=.3, ax=ax)
+    sns.rugplot(data[y], height=.02, axis='y', c=PAL_DBGD[0], lw=.3, ax=ax)
 
     x_lim, y_lim = ax.get_xlim(), ax.get_ylim()
     ax.plot(x_lim, y_lim, 'k--', lw=.3)
@@ -77,7 +77,7 @@ def copy_number_bias_aucs(df, outfile=None, thres_label='cnv', rank_label='fc', 
     ax = plt.gca() if outfile is not None else None
 
     thresholds = natsorted(set(df[thres_label]))
-    thresholds_color = sns.light_palette(bipal_dbgd[0], n_colors=len(thresholds)).as_hex()
+    thresholds_color = sns.light_palette(PAL_DBGD[0], n_colors=len(thresholds)).as_hex()
 
     for i, t in enumerate(thresholds):
         index_set = set(df[df[thres_label] == t].index)
@@ -129,7 +129,7 @@ def copy_number_bias_aucs(df, outfile=None, thres_label='cnv', rank_label='fc', 
 
 def copy_number_bias_aucs_per_sample(x, y, hue, data, outfile):
     thresholds = natsorted(set(data[x]))
-    thresholds_color = sns.light_palette(bipal_dbgd[0], n_colors=len(thresholds)).as_hex()
+    thresholds_color = sns.light_palette(PAL_DBGD[0], n_colors=len(thresholds)).as_hex()
 
     # Plot per sample
     sns.boxplot(x, y, data=data, sym='', order=thresholds, palette=thresholds_color, linewidth=.3)
@@ -139,14 +139,14 @@ def copy_number_bias_aucs_per_sample(x, y, hue, data, outfile):
     plt.title('Copy-number effect on CRISPR-Cas9\n(non-expressed genes)')
     plt.xlabel('Copy-number')
     plt.ylabel('Copy-number AURC (per cell line)')
-    plt.axhline(0.5, ls='--', lw=.3, alpha=.5, c=bipal_dbgd[0])
+    plt.axhline(0.5, ls='--', lw=.3, alpha=.5, c=PAL_DBGD[0])
     plt.gcf().set_size_inches(3, 3)
     plt.savefig(outfile, bbox_inches='tight', dpi=600)
     plt.close('all')
 
     # Plot per sample hue by ploidy
     hue_thresholds = natsorted(set(data[hue]))
-    hue_thresholds_color = sns.light_palette(bipal_dbgd[0], n_colors=len(hue_thresholds)).as_hex()
+    hue_thresholds_color = sns.light_palette(PAL_DBGD[0], n_colors=len(hue_thresholds)).as_hex()
 
     sns.boxplot(x, y, hue, data=data, sym='', order=thresholds, hue_order=hue_thresholds, palette=hue_thresholds_color, linewidth=.3)
     sns.stripplot(x, y, hue, data=data, order=thresholds, hue_order=hue_thresholds, palette=hue_thresholds_color, edgecolor='white', linewidth=.1, size=1, jitter=.2, split=True)
@@ -157,7 +157,7 @@ def copy_number_bias_aucs_per_sample(x, y, hue, data, outfile):
     plt.title('Cell ploidy effect on CRISPR-Cas9\n(non-expressed genes)')
     plt.xlabel('Copy-number')
     plt.ylabel('Copy-number AURC (per cell line)')
-    plt.axhline(0.5, ls='--', lw=.3, alpha=.5, c=bipal_dbgd[0])
+    plt.axhline(0.5, ls='--', lw=.3, alpha=.5, c=PAL_DBGD[0])
     plt.gcf().set_size_inches(3, 3)
 
     outfile_dir, outfile_exp = os.path.splitext(outfile)
@@ -170,7 +170,7 @@ def copy_number_bias_aucs_per_chrm(x, y, hue, data, outfile):
     order = natsorted(set(data[x]))
 
     hue_order = natsorted(set(data[hue]))
-    hue_color = sns.light_palette(bipal_dbgd[0], n_colors=len(hue_order)).as_hex()
+    hue_color = sns.light_palette(PAL_DBGD[0], n_colors=len(hue_order)).as_hex()
 
     sns.boxplot(x, y, hue, data=data, hue_order=hue_order, order=order, sym='', palette=hue_color, linewidth=.3)
     sns.stripplot(x, y, hue, data=data, hue_order=hue_order, order=order, palette=hue_color, edgecolor='white', size=.5, jitter=.2, split=True)
@@ -182,19 +182,19 @@ def copy_number_bias_aucs_per_chrm(x, y, hue, data, outfile):
     plt.title('Copy-number effect on CRISPR-Cas9\n(non-expressed genes)')
     plt.xlabel('Copy-number')
     plt.ylabel('Copy-number AURC (per chromossome)')
-    plt.axhline(0.5, ls='--', lw=.3, alpha=.5, c=bipal_dbgd[0])
+    plt.axhline(0.5, ls='--', lw=.3, alpha=.5, c=PAL_DBGD[0])
     plt.gcf().set_size_inches(3, 3)
     plt.savefig(outfile, bbox_inches='tight', dpi=600)
     plt.close('all')
 
 
 def arocs_scatter(x, y, data, outfile):
-    g = sns.jointplot(data[x], data[y], color=bipal_dbgd[0], space=0, kind='scatter', joint_kws={'s': 5, 'edgecolor': 'w', 'linewidth': .3}, stat_func=None)
+    g = sns.jointplot(data[x], data[y], color=PAL_DBGD[0], space=0, kind='scatter', joint_kws={'s': 5, 'edgecolor': 'w', 'linewidth': .3}, stat_func=None)
 
     x_lim, y_lim = g.ax_joint.get_xlim(), g.ax_joint.get_ylim()
-    g.ax_joint.plot(x_lim, y_lim, ls='--', lw=.3, c=bipal_dbgd[0])
-    g.ax_joint.axhline(0.5, ls='-', lw=.1, c=bipal_dbgd[0])
-    g.ax_joint.axvline(0.5, ls='-', lw=.1, c=bipal_dbgd[0])
+    g.ax_joint.plot(x_lim, y_lim, ls='--', lw=.3, c=PAL_DBGD[0])
+    g.ax_joint.axhline(0.5, ls='-', lw=.1, c=PAL_DBGD[0])
+    g.ax_joint.axvline(0.5, ls='-', lw=.1, c=PAL_DBGD[0])
 
     g.ax_joint.set_xlim(x_lim)
     g.ax_joint.set_ylim(y_lim)
@@ -209,33 +209,32 @@ def arocs_scatter(x, y, data, outfile):
 if __name__ == '__main__':
     # - Import
     # Hart et al (non)essential genes
-    essential = pd.read_csv(mp.HART_ESSENTIAL, sep='\t')['gene'].rename('essential')
-    nessential = pd.read_csv(mp.HART_NON_ESSENTIAL, sep='\t')['gene'].rename('non-essential')
+    essential, nessential = mp.get_essential_genes(), mp.get_non_essential_genes()
 
     # CRISPR library
-    lib = pd.read_csv(mp.LIBRARY, index_col=0).groupby('gene')['chr'].first()
+    lib = mp.get_crispr_lib().groupby('gene')['chr'].first()
 
     # Samplesheet
-    ss = pd.read_csv(mp.SAMPLESHEET, index_col=0)
+    ss = mp.get_samplesheet()
 
     # Non-expressed genes
-    nexp = pd.read_csv(mp.NON_EXP, index_col=0)
+    nexp = mp.get_non_exp()
 
     # Copy-number
-    cnv = pd.read_csv(mp.CN_GENE.format('snp'), index_col=0)
+    cnv = mp.get_copynumber()
 
     # Ploidy
-    ploidy = pd.read_csv(mp.CN_PLOIDY.format('snp'), index_col=0, names=['sample', 'ploidy'])['ploidy']
+    ploidy = mp.get_ploidy()
 
     # Chromosome copies
-    chrm = pd.read_csv(mp.CN_CHR.format('snp'), index_col=0)
+    chrm = mp.get_chr_copies()
 
     # CRISPR
-    c_gdsc_fc = pd.read_csv(mp.CRISPR_GENE_FC, index_col=0)
-    c_gdsc_crispy = pd.read_csv(mp.CRISPR_GENE_CORRECTED_FC, index_col=0)
+    crispr = mp.get_crispr(mp.CRISPR_GENE_FC)
+    crispy = mp.get_crispr(mp.CRISPR_GENE_CORRECTED_FC)
 
     # - Overlap samples
-    samples = list(set(cnv).intersection(c_gdsc_fc).intersection(c_gdsc_crispy).intersection(nexp))
+    samples = list(set(cnv).intersection(crispr).intersection(nexp))
     print('[INFO] Samples overlap: {}'.format(len(samples)))
 
     # - Plot: Cancer type coverage
@@ -275,14 +274,14 @@ if __name__ == '__main__':
     plot_df = plot_df.assign(chr=lib.loc[plot_df['gene']].values)
 
     hue_thresholds = natsorted(set(plot_df['cnv']))
-    hue_thresholds_color = sns.light_palette(bipal_dbgd[0], n_colors=len(hue_thresholds)).as_hex()
+    hue_thresholds_color = sns.light_palette(PAL_DBGD[0], n_colors=len(hue_thresholds)).as_hex()
 
     sns.boxplot('cnv', 'fc', data=plot_df, notch=True, sym='', order=hue_thresholds, palette=hue_thresholds_color, linewidth=.3)
 
     plt.title('Copy-number effect on CRISPR-Cas9\n(non-expressed genes)')
     plt.xlabel('Copy-number')
     plt.ylabel('CRISPR-Cas9 FC (log2)')
-    plt.axhline(0., ls='--', lw=.3, alpha=.5, c=bipal_dbgd[0])
+    plt.axhline(0., ls='--', lw=.3, alpha=.5, c=PAL_DBGD[0])
     plt.gcf().set_size_inches(3, 3)
 
     plt.savefig('reports/crispy/copynumber_bias_boxplot.png', bbox_inches='tight', dpi=600)

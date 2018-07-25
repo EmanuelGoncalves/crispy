@@ -8,7 +8,7 @@ import pandas as pd
 import itertools as it
 import seaborn as sns
 import matplotlib.pyplot as plt
-from crispy import bipal_dbgd
+from crispy import PAL_DBGD
 from natsort import natsorted
 from pybedtools import BedTool
 from crispy.utils import bin_cnv
@@ -153,7 +153,7 @@ if __name__ == '__main__':
     # hue_order = ['1-10 kb', '1-100 kb', '0.1-1 Mb', '1-10 Mb', '>10 Mb']
 
     sns.boxplot(
-        'ratio_bin', 'crispr', 'collapse', data=df, order=order, hue_order=hue_order, notch=True, palette=sns.light_palette(bipal_dbgd[0]), fliersize=1
+        'ratio_bin', 'crispr', 'collapse', data=df, order=order, hue_order=hue_order, notch=True, palette=sns.light_palette(PAL_DBGD[0]), fliersize=1
     )
     plt.savefig('reports/crispy/td_size_bias.png', bbox_inches='tight', dpi=600)
     plt.close('all')

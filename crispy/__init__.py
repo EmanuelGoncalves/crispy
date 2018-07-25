@@ -5,13 +5,13 @@ import pandas as pd
 import pkg_resources
 import seaborn as sns
 from crispy.association import CRISPRCorrection
-from crispy.utils import get_example_data
 
-name = 'crispy'
 
 __version__ = '0.1.7'
 
-# Set plotting aesthetics
+PAL_DBGD = {1: '#F2C500', 0: '#656565'}
+
+# PLOT AESTHETICS
 sns_rc = {
     'axes.linewidth': .3,
     'xtick.major.width': .3, 'ytick.major.width': .3,
@@ -20,15 +20,39 @@ sns_rc = {
 }
 sns.set(style='ticks', context='paper', rc=sns_rc)
 
-# Define color palettes
-bipal_gray = {1: '#FF8200', 0: '#58595B'}
-bipal_dbgd = {1: '#F2C500', 0: '#37454B'}
 
+# GENE-SETS
+HART_ESSENTIAL = 'data/gene_sets/curated_BAGEL_essential.csv'
+HART_NON_ESSENTIAL = 'data/gene_sets/curated_BAGEL_nonEssential.csv'
+
+# CRISPR LIBRARIES
+CRISPR_LIBS = ['data/crispr_libs/KY_Library_v1.1_updated.csv']
+
+
+# - METHODS
+def get_example_data(dfile='association_example_data.csv'):
+    dpath = pkg_resources.resource_filename('crispy', 'data/')
+    return pd.read_csv('{}/{}'.format(dpath, dfile), index_col=0)
+
+
+def get_essential_genes():
+    return set(pd.read_csv(HART_ESSENTIAL, sep='\t')['gene'].rename('essential'))
+
+
+def get_non_essential_genes():
+    return set(pd.read_csv(HART_NON_ESSENTIAL, sep='\t')['gene'].rename('non-essential'))
+
+
+def get_crispr_lib(flib):
+    return pd.read_csv(CRISPR_LIBS[0] if flib is None else flib, index_col=0)
+
+
+# - HANDLES
 __all__ = [
-    'name',
     'CRISPRCorrection',
     'get_example_data',
-    'sns_rc',
-    'bipal_gray',
-    'bipal_dbgd'
+    'PAL_DBGD',
+    'get_essential_genes',
+    'get_non_essential_genes',
+    'get_crispr_lib'
 ]

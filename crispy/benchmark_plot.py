@@ -7,7 +7,7 @@ import seaborn as sns
 import scipy.stats as st
 import matplotlib.pyplot as plt
 import matplotlib.ticker as plticker
-from crispy import bipal_dbgd
+from crispy import PAL_DBGD
 from sklearn.metrics.ranking import auc
 
 CYTOBANDS_FILE = 'data/cytoBand.txt'
@@ -122,18 +122,18 @@ def plot_chromosome(pos, original, mean, se=None, seg=None, highlight=None, ax=N
         ax = plt.gca()
 
     # Plot original values
-    ax.scatter(pos / scale, original, s=6, marker='.', lw=0, c=bipal_dbgd[1], alpha=.8, label=original.name)
+    ax.scatter(pos / scale, original, s=6, marker='.', lw=0, c=PAL_DBGD[1], alpha=.8, label=original.name)
 
     # Plot corrected values
     ax.scatter(pos / scale, mean, s=10, marker='.', lw=0, c='#999999', alpha=1., label=mean.name, edgecolor='#d9d9d9')
 
     if se is not None:
-        ax.fill_between(pos / scale, mean - se, mean + se, c=bipal_dbgd[1], alpha=0.2)
+        ax.fill_between(pos / scale, mean - se, mean + se, c=PAL_DBGD[1], alpha=0.2)
 
     # Plot segments
     if seg is not None:
         for i, (s, e, c) in enumerate(seg[['start', 'end', 'total_cn']].values):
-            ax.plot([s / scale, e / scale], [c, c], lw=1.5, c=bipal_dbgd[0], alpha=1., label=seg_label if i == 0 else None)
+            ax.plot([s / scale, e / scale], [c, c], lw=1.5, c=PAL_DBGD[0], alpha=1., label=seg_label if i == 0 else None)
 
     # Highlight
     if highlight is not None:
@@ -147,11 +147,11 @@ def plot_chromosome(pos, original, mean, se=None, seg=None, highlight=None, ax=N
     if cytobands is not None:
         for i, (s, e, t) in enumerate(cytobands[['start', 'end', 'band']].values):
             if t == 'acen':
-                ax.axvline(s / scale, lw=.2, ls='-', color=bipal_dbgd[0], alpha=.1)
-                ax.axvline(e / scale, lw=.2, ls='-', color=bipal_dbgd[0], alpha=.1)
+                ax.axvline(s / scale, lw=.2, ls='-', color=PAL_DBGD[0], alpha=.1)
+                ax.axvline(e / scale, lw=.2, ls='-', color=PAL_DBGD[0], alpha=.1)
 
             elif not i % 2:
-                ax.axvspan(s / scale, e / scale, alpha=0.1, facecolor=bipal_dbgd[0])
+                ax.axvspan(s / scale, e / scale, alpha=0.1, facecolor=PAL_DBGD[0])
 
     # Legend
     if legend:
