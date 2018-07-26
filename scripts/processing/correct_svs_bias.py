@@ -7,10 +7,9 @@ import numpy as np
 import pandas as pd
 import scripts as mp
 from bsub import bsub
-from crispy.utils import DotDict
 from datetime import datetime as dt
 from crispy.association import CRISPRCorrection
-from scripts.plotting.annotate_bedpe import annotate_brass_bedpe
+from scripts.plotting.wgs.annotate_bedpe import annotate_brass_bedpe
 
 # BSUB options
 BSUB_CORES = 16

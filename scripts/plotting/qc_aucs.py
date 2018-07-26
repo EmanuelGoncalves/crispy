@@ -30,8 +30,6 @@ def tissue_coverage(samples):
 
     plt.grid(color=cy.PAL_DBGD[2], ls='-', lw=.3, axis='x')
 
-    sns.despine()
-
     plt.xlabel('Number cell lines')
     plt.title('CRISPR-Cas9 screens\n({} cell lines)'.format(plot_df['Counts'].sum()))
 
@@ -128,4 +126,4 @@ if __name__ == '__main__':
         plt.close('all')
 
     # - Export
-    aucs.to_csv('data/qc_aucs.csv')
+    aucs.to_csv('data/qc_aucs.csv', index=False)

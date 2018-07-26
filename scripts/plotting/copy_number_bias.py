@@ -1,17 +1,11 @@
 #!/usr/bin/env python
 # Copyright (C) 2018 Emanuel Goncalves
 
-import os
-import numpy as np
 import crispy as cy
 import pandas as pd
 import scripts as mp
 import seaborn as sns
-import scipy.stats as st
 import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
-from natsort import natsorted
-from sklearn.metrics import auc
 from crispy.utils import bin_cnv
 from scripts.plotting import bias_boxplot, bias_arocs, aucs_boxplot
 
@@ -73,6 +67,9 @@ if __name__ == '__main__':
     samples = list(set(cnv).intersection(crispr).intersection(nexp))
     print('[INFO] Samples overlap: {}'.format(len(samples)))
 
+    # - Essential genes AURCs
+    essential_aurc = pd.read_csv('data/qc_aucs.csv').query("type == 'original'").query("geneset == 'essential'")['aurc'].mean()
+
     # - Build data-frame
     df = pd.concat([
         pd.DataFrame({c: crispr[c].reindex(nexp.loc[nexp[c] == 1, c].index) for c in samples}).unstack().rename('fc'),
@@ -107,21 +104,21 @@ if __name__ == '__main__':
     plt.close('all')
 
     # Per sample copy-number bias boxplots
-    aucs_boxplot(aucs_samples, x='cnv', y='auc')
+    aucs_boxplot(aucs_samples, x='cnv', y='auc', essential_line=essential_aurc)
 
     plt.gcf().set_size_inches(3, 3)
     plt.savefig('reports/bias_copynumber_per_sample.png', bbox_inches='tight', dpi=600)
     plt.close('all')
 
     # Per sample copy-number bias boxplots by ploidy
-    aucs_boxplot(aucs_samples, x='cnv', y='auc', hue='ploidy')
+    aucs_boxplot(aucs_samples, x='cnv', y='auc', hue='ploidy', essential_line=essential_aurc)
 
     plt.gcf().set_size_inches(3, 3)
     plt.savefig('reports/bias_copynumber_per_sample_ploidy.png', bbox_inches='tight', dpi=600)
     plt.close('all')
 
     # Per chromosome copy-number bias boxplots
-    ax = aucs_boxplot(aucs_chr, x='cnv', y='auc')
+    ax = aucs_boxplot(aucs_chr, x='cnv', y='auc', essential_line=essential_aurc)
 
     ax.set_ylabel('Copy-number AURC (per chromossome)')
 
@@ -130,7 +127,7 @@ if __name__ == '__main__':
     plt.close('all')
 
     # Per chromosome copy-number bias boxplots by ploidy
-    ax = aucs_boxplot(aucs_chr, x='cnv', y='auc', hue='ploidy')
+    ax = aucs_boxplot(aucs_chr, x='cnv', y='auc', hue='ploidy', essential_line=essential_aurc)
 
     ax.set_ylabel('Copy-number AURC (per chromossome)')
 

@@ -74,7 +74,7 @@ def add_essential_genes_line(ax, x=0, pos=-1):
     return ax
 
 
-def bias_boxplot(plot_df, x='cnv', y='fc', despine=True, notch=True, essential=True, add_n=False, ax=None):
+def bias_boxplot(plot_df, x='cnv', y='fc', despine=False, notch=True, essential=True, add_n=False, ax=None):
     ax = plt.gca() if ax is None else ax
 
     order = natsorted(set(plot_df[x]))
@@ -97,7 +97,8 @@ def bias_boxplot(plot_df, x='cnv', y='fc', despine=True, notch=True, essential=T
 
     return ax
 
-def aucs_boxplot(plot_df, x='cnv', y='auc', hue=None, notch=False, ax=None):
+
+def aucs_boxplot(plot_df, x='cnv', y='auc', hue=None, notch=False, essential_line=None, ax=None):
     ax = plt.gca() if ax is None else ax
 
     order = natsorted(set(plot_df[x]))
@@ -116,6 +117,9 @@ def aucs_boxplot(plot_df, x='cnv', y='auc', hue=None, notch=False, ax=None):
     )
 
     ax.axhline(0.5, ls='-', lw=.1, c=cy.PAL_DBGD[0], zorder=0)
+
+    if essential_line is not None:
+        add_essential_genes_line(ax, pos=essential_line)
 
     ax.set_ylim(0, 1)
 

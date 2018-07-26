@@ -1,12 +1,11 @@
 #!/usr/bin/env python
 # Copyright (C) 2018 Emanuel Goncalves
 
-import os
 import numpy as np
 import pandas as pd
 import scripts as mp
 import matplotlib.pyplot as plt
-from scripts.plotting.svplot import import_brass_bedpe, plot_rearrangements
+from scripts.plotting.wgs.svplot import import_brass_bedpe, plot_rearrangements
 
 
 if __name__ == '__main__':
