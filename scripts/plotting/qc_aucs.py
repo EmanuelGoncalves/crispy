@@ -7,6 +7,7 @@ import pandas as pd
 import scripts as mp
 import seaborn as sns
 import matplotlib.pyplot as plt
+from scripts.plotting import get_palette_continuous
 
 
 def tissue_coverage(samples):
@@ -36,7 +37,7 @@ def tissue_coverage(samples):
 
 
 def aucs_curves(df, geneset):
-    pal = sns.light_palette(cy.PAL_DBGD[0], n_colors=df.shape[1]).as_hex()
+    pal = get_palette_continuous(df.shape[1])
 
     ax, auc_stats = cy.plot_cumsum_auc(df, geneset, plot_mean=False, legend=False, palette=pal)
 
@@ -92,6 +93,7 @@ if __name__ == '__main__':
 
     # - Cancer type coverage
     tissue_coverage(samples)
+
     plt.gcf().set_size_inches(2, 3)
     plt.savefig('reports/cancer_types_histogram.png', bbox_inches='tight', dpi=600)
     plt.close('all')

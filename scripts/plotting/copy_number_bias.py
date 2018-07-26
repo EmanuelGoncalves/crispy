@@ -13,163 +13,47 @@ import matplotlib.patches as mpatches
 from natsort import natsorted
 from sklearn.metrics import auc
 from crispy.utils import bin_cnv
+from scripts.plotting import bias_boxplot, bias_arocs, aucs_boxplot
 
 
-
-def copy_number_bias_aucs(df, outfile=None, thres_label='cnv', rank_label='fc', min_events=5, legend_size=6, title=None, legend_title=None):
-    aucs = {}
-
-    ax = plt.gca() if outfile is not None else None
-
-    thresholds = natsorted(set(df[thres_label]))
-    thresholds_color = sns.light_palette(cy.PAL_DBGD[0], n_colors=len(thresholds)).as_hex()
-
-    for i, t in enumerate(thresholds):
-        index_set = set(df[df[thres_label] == t].index)
-
-        if len(index_set) >= min_events:
-            # Build data-frame
-            x = df[rank_label].sort_values().dropna()
-
-            # Observed cumsum
-            y = x.index.isin(index_set)
-            y = np.cumsum(y) / sum(y)
-
-            # Rank fold-changes
-            x = st.rankdata(x) / x.shape[0]
-
-            # Calculate AUC
-            f_auc = auc(x, y)
-            aucs[t] = f_auc
-
-            # Plot
-            if outfile is not None:
-                ax.plot(x, y, label='{}: AURC={:.2f}'.format(t, f_auc), lw=1., c=thresholds_color[i])
-
-    if outfile is not None:
-        # Random
-        ax.plot((0, 1), (0, 1), 'k--', lw=.3, alpha=.5)
-
-        # Limits
-        ax.set_xlim(0, 1)
-        ax.set_ylim(0, 1)
-
-        # Labels
-        ax.set_xlabel('Ranked')
-        ax.set_ylabel('Recall')
-
-        ax.legend(loc=4)
-
-        ax.set_title('Copy-number effect on CRISPR-Cas9\n(non-expressed genes)' if title is None else title)
-        legend = ax.legend(loc=4, title='Copy-number' if legend_title is None else legend_title, prop={'size': legend_size})
-        legend.get_title().set_fontsize('{}'.format(legend_size))
-
-        # plt.show()
-        plt.gcf().set_size_inches(3, 3)
-        plt.savefig(outfile, bbox_inches='tight', dpi=600)
-        plt.close('all')
-
-    return ax, aucs
+EXCLUDED_CNV_BINS = ['0', '1']
 
 
-def copy_number_bias_aucs_per_sample(x, y, hue, data, outfile):
-    thresholds = natsorted(set(data[x]))
-    thresholds_color = sns.light_palette(cy.PAL_DBGD[0], n_colors=len(thresholds)).as_hex()
+def bias_crispr_fc_boxplot(plot_df):
+    ax = bias_boxplot(plot_df)
 
-    # Plot per sample
-    sns.boxplot(x, y, data=data, sym='', order=thresholds, palette=thresholds_color, linewidth=.3)
-    sns.stripplot(x, y, data=data, order=thresholds, palette=thresholds_color, edgecolor='white', linewidth=.1, size=3, jitter=.4)
+    ax.axhline(0., ls='-', lw=.1, c=cy.PAL_DBGD[0], zorder=0)
 
-    plt.ylim(0, 1)
-    plt.title('Copy-number effect on CRISPR-Cas9\n(non-expressed genes)')
-    plt.xlabel('Copy-number')
-    plt.ylabel('Copy-number AURC (per cell line)')
-    plt.axhline(0.5, ls='--', lw=.3, alpha=.5, c=cy.PAL_DBGD[0])
-    plt.gcf().set_size_inches(3, 3)
-    plt.savefig(outfile, bbox_inches='tight', dpi=600)
-    plt.close('all')
-
-    # Plot per sample hue by ploidy
-    hue_thresholds = natsorted(set(data[hue]))
-    hue_thresholds_color = sns.light_palette(cy.PAL_DBGD[0], n_colors=len(hue_thresholds)).as_hex()
-
-    sns.boxplot(x, y, hue, data=data, sym='', order=thresholds, hue_order=hue_thresholds, palette=hue_thresholds_color, linewidth=.3)
-    sns.stripplot(x, y, hue, data=data, order=thresholds, hue_order=hue_thresholds, palette=hue_thresholds_color, edgecolor='white', linewidth=.1, size=1, jitter=.2, split=True)
-
-    plt.ylim(0, 1)
-    handles = [mpatches.Circle([.0, .0], .25, facecolor=c, label=l) for c, l in zip(*(hue_thresholds_color, hue_thresholds))]
-    plt.legend(handles=handles, title='Ploidy', prop={'size': 6}).get_title().set_fontsize('6')
-    plt.title('Cell ploidy effect on CRISPR-Cas9\n(non-expressed genes)')
-    plt.xlabel('Copy-number')
-    plt.ylabel('Copy-number AURC (per cell line)')
-    plt.axhline(0.5, ls='--', lw=.3, alpha=.5, c=cy.PAL_DBGD[0])
-    plt.gcf().set_size_inches(3, 3)
-
-    outfile_dir, outfile_exp = os.path.splitext(outfile)
-    plt.savefig('{}_ploidy.{}'.format(outfile_dir, outfile_exp), bbox_inches='tight', dpi=600)
-    plt.close('all')
+    ax.set_title('Copy-number effect on CRISPR-Cas9\n(non-expressed genes)')
+    ax.set_xlabel('Gene absolute copy-number')
+    ax.set_ylabel('Fold-change')
 
 
-def copy_number_bias_aucs_per_chrm(x, y, hue, data, outfile):
-    # Copy-number bias per chromosome
-    order = natsorted(set(data[x]))
+def bias_copynumber_aucs(plot_df):
+    ax, aucs = bias_arocs(plot_df)
 
-    hue_order = natsorted(set(data[hue]))
-    hue_color = sns.light_palette(cy.PAL_DBGD[0], n_colors=len(hue_order)).as_hex()
-
-    sns.boxplot(x, y, hue, data=data, hue_order=hue_order, order=order, sym='', palette=hue_color, linewidth=.3)
-    sns.stripplot(x, y, hue, data=data, hue_order=hue_order, order=order, palette=hue_color, edgecolor='white', size=.5, jitter=.2, split=True)
-
-    handles = [mpatches.Circle([.0, .0], .25, facecolor=c, label=l) for c, l in zip(*(hue_color, hue_order))]
-    plt.legend(handles=handles, title='Chr. copies', prop={'size': 5}).get_title().set_fontsize('5')
-
-    plt.ylim(0, 1)
-    plt.title('Copy-number effect on CRISPR-Cas9\n(non-expressed genes)')
-    plt.xlabel('Copy-number')
-    plt.ylabel('Copy-number AURC (per chromossome)')
-    plt.axhline(0.5, ls='--', lw=.3, alpha=.5, c=PAL_DBGD[0])
-    plt.gcf().set_size_inches(3, 3)
-    plt.savefig(outfile, bbox_inches='tight', dpi=600)
-    plt.close('all')
+    ax.set_title('Copy-number effect on CRISPR-Cas9\n(non-expressed genes)')
+    ax.legend(loc=4, title='Copy-number', prop={'size': 6}, frameon=False).get_title().set_fontsize(6)
 
 
-def arocs_scatter(x, y, data, outfile):
-    g = sns.jointplot(data[x], data[y], color=cy.PAL_DBGD[0], space=0, kind='scatter', joint_kws={'s': 5, 'edgecolor': 'w', 'linewidth': .3}, stat_func=None)
+def calculate_bias_by(plot_df, groupby):
+    aucs = {i: bias_arocs(df, to_plot=False)[1] for i, df in plot_df.groupby(groupby)}
 
-    x_lim, y_lim = g.ax_joint.get_xlim(), g.ax_joint.get_ylim()
-    g.ax_joint.plot(x_lim, y_lim, ls='--', lw=.3, c=cy.PAL_DBGD[0])
-    g.ax_joint.axhline(0.5, ls='-', lw=.1, c=cy.PAL_DBGD[0])
-    g.ax_joint.axvline(0.5, ls='-', lw=.1, c=cy.PAL_DBGD[0])
+    aucs = pd.DataFrame(aucs).unstack().dropna().rename('auc').reset_index()
 
-    g.ax_joint.set_xlim(x_lim)
-    g.ax_joint.set_ylim(y_lim)
+    for i, n in enumerate(groupby):
+        aucs = aucs.rename(columns={'level_{}'.format(i): n})
 
-    g.set_axis_labels('{} fold-changes AURCs'.format(x), '{} fold-changes AURCs'.format(y))
+    aucs = aucs.rename(columns={'level_{}'.format(len(groupby)): 'cnv'})
 
-    plt.gcf().set_size_inches(3, 3)
-    plt.savefig(outfile, bbox_inches='tight', dpi=600)
-    plt.close('all')
-
-
-def calculate_nexp_crispr_aucs(crispr, nexp, exclude_cnv=None):
-    exclude_cnv = ['0', '1'] if exclude_cnv is None else exclude_cnv
-
-    lib = cy.get_crispr_lib()
-
-    df = pd.concat([
-        pd.DataFrame({c: crispr[c].reindex(nexp.loc[nexp[c] == 1, c].index) for c in samples}).unstack().rename('fc'),
-        cnv[samples].applymap(lambda v: bin_cnv(v, 10)).unstack().rename('cnv')
-    ], axis=1).dropna()
-
-    df = df.reset_index().rename(columns={'level_0': 'sample', 'level_1': 'gene'})
-    df = df[~df['cnv'].isin(exclude_cnv)]
-    df = df.assign(chr=lib.loc[df['gene']].values)
-
-    return df
+    return aucs
 
 
 if __name__ == '__main__':
     # - Import
+    # CRISPR library
+    lib = cy.get_crispr_lib().groupby('gene')['chr'].first()
+
     # Non-expressed genes
     nexp = mp.get_non_exp()
 
@@ -189,33 +73,67 @@ if __name__ == '__main__':
     samples = list(set(cnv).intersection(crispr).intersection(nexp))
     print('[INFO] Samples overlap: {}'.format(len(samples)))
 
-    # - Copy-number bias in CRISPR fold-changes
-    hue_thresholds = natsorted(set(plot_df['cnv']))
-    hue_thresholds_color = sns.light_palette(PAL_DBGD[0], n_colors=len(hue_thresholds)).as_hex()
+    # - Build data-frame
+    df = pd.concat([
+        pd.DataFrame({c: crispr[c].reindex(nexp.loc[nexp[c] == 1, c].index) for c in samples}).unstack().rename('fc'),
+        cnv[samples].applymap(lambda v: bin_cnv(v, 10)).unstack().rename('cnv')
+    ], axis=1).dropna()
 
-    sns.boxplot('cnv', 'fc', data=plot_df, notch=True, sym='', order=hue_thresholds, palette=hue_thresholds_color, linewidth=.3)
+    df = df.reset_index().rename(columns={'level_0': 'sample', 'level_1': 'gene'})
+    df = df[~df['cnv'].isin(EXCLUDED_CNV_BINS)]
+    df = df.assign(chr=lib.loc[df['gene']].values)
 
-    plt.title('Copy-number effect on CRISPR-Cas9\n(non-expressed genes)')
-    plt.xlabel('Copy-number')
-    plt.ylabel('CRISPR-Cas9 FC (log2)')
-    plt.axhline(0., ls='--', lw=.3, alpha=.5, c=PAL_DBGD[0])
-    plt.gcf().set_size_inches(3, 3)
+    # - Calculate AUC bias curves
+    aucs_samples = calculate_bias_by(df, groupby=['sample'])
+    aucs_samples = aucs_samples.assign(ploidy=ploidy[aucs_samples['sample']].apply(lambda v: bin_cnv(v, 5)).values)
 
-    plt.savefig('reports/crispy/copynumber_bias_boxplot.png', bbox_inches='tight', dpi=600)
+    aucs_chr = calculate_bias_by(df, groupby=['sample', 'chr'])
+    aucs_chr = aucs_chr.assign(ploidy=ploidy[aucs_chr['sample']].apply(lambda v: bin_cnv(v, 5)).values)
+    aucs_chr = aucs_chr.assign(chr_copies=[bin_cnv(chrm.loc[c, s], 6) for s, c in aucs_chr[['sample', 'chr']].values])
+
+    # - Plot
+    # Copy-number bias in CRISPR fold-changes
+    bias_crispr_fc_boxplot(df)
+
+    plt.gcf().set_size_inches(2.5, 3)
+    plt.savefig('reports/bias_boxplot_fc.png', bbox_inches='tight', dpi=600)
     plt.close('all')
 
-    # Plot overall CNV bias
-    copy_number_bias_aucs(plot_df, 'reports/crispy/copynumber_bias_aucs.png')
+    # Overall copy-number bias AUCs
+    bias_copynumber_aucs(df)
 
-    plot_df_aucs = pd.DataFrame([{
-        'sample': s, 'auc': a, 'cnv': t, 'ploidy': bin_cnv(ploidy[s], 5)
-    } for s in set(plot_df['sample']) for t, a in copy_number_bias_aucs(plot_df[plot_df['sample'] == s])[1].items()])
+    plt.gcf().set_size_inches(3, 3)
+    plt.savefig('reports/bias_copynumber_aucs.png', bbox_inches='tight', dpi=600)
+    plt.close('all')
 
-    copy_number_bias_aucs_per_sample('cnv', 'auc', 'ploidy', plot_df_aucs, 'reports/crispy/copynumber_bias_aucs_per_sample.png')
+    # Per sample copy-number bias boxplots
+    aucs_boxplot(aucs_samples, x='cnv', y='auc')
 
-    # Plot CNV bias per chromosome
-    plot_df_aucs_chr = pd.DataFrame([{
-        'sample': s, 'chr': c, 'auc': a, 'cnv': t, 'ploidy': bin_cnv(ploidy[s], 5), 'chr_cnv': bin_cnv(chrm.loc[c, s], 6)
-    } for s in set(plot_df['sample']) for c in set(plot_df['chr']) for t, a in copy_number_bias_aucs(plot_df.query("(sample == '{}') & (chr == '{}')".format(s, c)))[1].items()])
+    plt.gcf().set_size_inches(3, 3)
+    plt.savefig('reports/bias_copynumber_per_sample.png', bbox_inches='tight', dpi=600)
+    plt.close('all')
 
-    copy_number_bias_aucs_per_chrm('cnv', 'auc', 'chr_cnv', plot_df_aucs_chr.query("chr_cnv != '1'"), 'reports/crispy/copynumber_bias_aucs_per_chr.png')
+    # Per sample copy-number bias boxplots by ploidy
+    aucs_boxplot(aucs_samples, x='cnv', y='auc', hue='ploidy')
+
+    plt.gcf().set_size_inches(3, 3)
+    plt.savefig('reports/bias_copynumber_per_sample_ploidy.png', bbox_inches='tight', dpi=600)
+    plt.close('all')
+
+    # Per chromosome copy-number bias boxplots
+    ax = aucs_boxplot(aucs_chr, x='cnv', y='auc')
+
+    ax.set_ylabel('Copy-number AURC (per chromossome)')
+
+    plt.gcf().set_size_inches(3, 3)
+    plt.savefig('reports/bias_copynumber_per_chromosome.png', bbox_inches='tight', dpi=600)
+    plt.close('all')
+
+    # Per chromosome copy-number bias boxplots by ploidy
+    ax = aucs_boxplot(aucs_chr, x='cnv', y='auc', hue='ploidy')
+
+    ax.set_ylabel('Copy-number AURC (per chromossome)')
+
+    plt.gcf().set_size_inches(3, 3)
+    plt.savefig('reports/bias_copynumber_per_chromosome_ploidy.png', bbox_inches='tight', dpi=600)
+    plt.close('all')
