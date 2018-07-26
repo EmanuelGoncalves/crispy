@@ -5,46 +5,54 @@ import pandas as pd
 import pkg_resources
 import seaborn as sns
 from crispy.association import CRISPRCorrection
+from crispy.benchmark_plot import plot_cumsum_auc
 
 
 __version__ = '0.1.7'
 
-PAL_DBGD = {1: '#F2C500', 0: '#656565'}
-
 # PLOT AESTHETICS
-sns_rc = {
+PAL_DBGD = {0: '#656565', 1: '#F2C500', 2: '#E1E1E1'}
+
+SNS_RC = {
     'axes.linewidth': .3,
     'xtick.major.width': .3, 'ytick.major.width': .3,
     'xtick.major.size': 2.5, 'ytick.major.size': 2.5,
     'xtick.direction': 'in', 'ytick.direction': 'in'
 }
-sns.set(style='ticks', context='paper', rc=sns_rc)
+
+sns.set(style='ticks', context='paper', rc=SNS_RC)
 
 
-# GENE-SETS
-HART_ESSENTIAL = 'data/gene_sets/curated_BAGEL_essential.csv'
-HART_NON_ESSENTIAL = 'data/gene_sets/curated_BAGEL_nonEssential.csv'
-
-# CRISPR LIBRARIES
-CRISPR_LIBS = ['data/crispr_libs/KY_Library_v1.1_updated.csv']
+# - PACKAGE DATA METHODS
+DPATH = pkg_resources.resource_filename('crispy', 'data/')
 
 
-# - METHODS
 def get_example_data(dfile='association_example_data.csv'):
-    dpath = pkg_resources.resource_filename('crispy', 'data/')
-    return pd.read_csv('{}/{}'.format(dpath, dfile), index_col=0)
+    return pd.read_csv('{}/{}'.format(DPATH, dfile), index_col=0)
 
 
-def get_essential_genes():
-    return set(pd.read_csv(HART_ESSENTIAL, sep='\t')['gene'].rename('essential'))
+def get_essential_genes(dfile='gene_sets/curated_BAGEL_essential.csv'):
+    return set(pd.read_csv('{}/{}'.format(DPATH, dfile), sep='\t')['gene'].rename('essential'))
 
 
-def get_non_essential_genes():
-    return set(pd.read_csv(HART_NON_ESSENTIAL, sep='\t')['gene'].rename('non-essential'))
+def get_non_essential_genes(dfile='gene_sets/curated_BAGEL_nonEssential.csv'):
+    return set(pd.read_csv('{}/{}'.format(DPATH, dfile), sep='\t')['gene'].rename('non-essential'))
 
 
-def get_crispr_lib(flib):
-    return pd.read_csv(CRISPR_LIBS[0] if flib is None else flib, index_col=0)
+def get_crispr_lib(dfile='crispr_libs/KY_Library_v1.1_updated.csv'):
+    return pd.read_csv('{}/{}'.format(DPATH, dfile), index_col=0)
+
+
+# -
+def get_cytobands(dfile='cytoBand.txt', chrm=None):
+    cytobands = pd.read_csv('{}/{}'.format(DPATH, dfile), sep='\t')
+
+    if chrm is not None:
+        cytobands = cytobands[cytobands['chr'] == chrm]
+
+    assert cytobands.shape[0] > 0, '{} not found in cytobands file'
+
+    return cytobands
 
 
 # - HANDLES
@@ -54,5 +62,6 @@ __all__ = [
     'PAL_DBGD',
     'get_essential_genes',
     'get_non_essential_genes',
-    'get_crispr_lib'
+    'get_crispr_lib',
+    'plot_cumsum_auc'
 ]

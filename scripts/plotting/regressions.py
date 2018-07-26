@@ -11,7 +11,7 @@ from crispy import PAL_DBGD
 from natsort import natsorted
 from crispy.utils import bin_cnv
 from sklearn.metrics import roc_curve, auc
-from scripts.plotting.qc_bias_assessment import copy_number_bias_aucs
+from scripts.plotting.copy_number_bias import copy_number_bias_aucs
 
 
 if __name__ == '__main__':

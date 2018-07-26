@@ -7,8 +7,8 @@ import scripts as mp
 import seaborn as sns
 import matplotlib.pyplot as plt
 from crispy.utils import bin_cnv
-from scripts.plotting.qc_bias_assessment import auc_curves
-from scripts.plotting.qc_bias_assessment import copy_number_bias_aucs
+from scripts.plotting.copy_number_bias import auc_curves
+from scripts.plotting.copy_number_bias import copy_number_bias_aucs
 
 
 if __name__ == '__main__':
