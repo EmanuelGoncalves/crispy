@@ -74,10 +74,11 @@ def plot_cumsum_auc(X, index_set, ax=None, palette=None, legend=True, plot_mean=
     ax.set_ylim(0, 1)
 
     # Labels
-    ax.set_xlabel('Ranked')
+    ax.set_xlabel('Ranked genes (fold-change)')
     ax.set_ylabel('Recall %s' % index_set.name)
 
-    ax.legend(loc=4)
+    if legend is True:
+        ax.legend(loc=4)
 
     return ax, plot_stats
 

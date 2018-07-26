@@ -12,72 +12,8 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 from natsort import natsorted
 from sklearn.metrics import auc
+from crispy.utils import bin_cnv
 
-
-def tissue_coverage(samples):
-    # Samplesheet
-    ss = mp.get_samplesheet()
-
-    # Data-frame
-    plot_df = ss.loc[samples, 'Cancer Type']\
-        .value_counts(ascending=True)\
-        .reset_index()\
-        .rename(columns={'index': 'Cancer type', 'Cancer Type': 'Counts'})\
-        .sort_values('Counts', ascending=False)
-    plot_df = plot_df.assign(ypos=np.arange(plot_df.shape[0]))
-
-    # Plot
-    sns.barplot(plot_df['Counts'], plot_df['Cancer type'], color=cy.PAL_DBGD[0])
-
-    for xx, yy in plot_df[['Counts', 'ypos']].values:
-        plt.text(xx - .25, yy, str(xx), color='white', ha='right', va='center', fontsize=6)
-
-    plt.grid(color=cy.PAL_DBGD[2], ls='-', lw=.3, axis='x')
-
-    sns.despine()
-
-    plt.xlabel('Number cell lines')
-    plt.title('CRISPR-Cas9 screens\n({} cell lines)'.format(plot_df['Counts'].sum()))
-
-    plt.gcf().set_size_inches(2, 3)
-    plt.savefig('reports/cancer_types_histogram.png', bbox_inches='tight', dpi=600)
-    plt.close('all')
-
-
-def auc_curves(df, geneset, outfile):
-    # Palette
-    pal = sns.light_palette(cy.PAL_DBGD[0], n_colors=df.shape[1]).as_hex()
-
-    # AUCs fold-changes
-    ax, stats_ess = cy.plot_cumsum_auc(df, geneset, plot_mean=False, legend=False, palette=pal)
-    plt.title('Mean AURC = {:.2f}'.format(pd.Series(stats_ess['auc']).mean()))
-    plt.gcf().set_size_inches(3, 3)
-    plt.savefig(outfile, bbox_inches='tight', dpi=600)
-    plt.close('all')
-
-    return stats_ess
-
-
-def aucs_scatter(x, y, data, outfile, title):
-    ax = plt.gca()
-
-    ax.scatter(data[x], data[y], c=cy.PAL_DBGD[0], s=3, marker='x', lw=0.5)
-    sns.rugplot(data[x], height=.02, axis='x', c=cy.PAL_DBGD[0], lw=.3, ax=ax)
-    sns.rugplot(data[y], height=.02, axis='y', c=cy.PAL_DBGD[0], lw=.3, ax=ax)
-
-    x_lim, y_lim = ax.get_xlim(), ax.get_ylim()
-    ax.plot(x_lim, y_lim, 'k--', lw=.3)
-
-    ax.set_xlim(x_lim)
-    ax.set_ylim(y_lim)
-
-    ax.set_xlabel('{} fold-changes AURCs'.format(x))
-    ax.set_ylabel('{} fold-changes AURCs'.format(y))
-    ax.set_title(title)
-
-    plt.gcf().set_size_inches(2, 2)
-    plt.savefig(outfile, bbox_inches='tight', dpi=600)
-    plt.close('all')
 
 
 def copy_number_bias_aucs(df, outfile=None, thres_label='cnv', rank_label='fc', min_events=5, legend_size=6, title=None, legend_title=None):
@@ -215,6 +151,23 @@ def arocs_scatter(x, y, data, outfile):
     plt.close('all')
 
 
+def calculate_nexp_crispr_aucs(crispr, nexp, exclude_cnv=None):
+    exclude_cnv = ['0', '1'] if exclude_cnv is None else exclude_cnv
+
+    lib = cy.get_crispr_lib()
+
+    df = pd.concat([
+        pd.DataFrame({c: crispr[c].reindex(nexp.loc[nexp[c] == 1, c].index) for c in samples}).unstack().rename('fc'),
+        cnv[samples].applymap(lambda v: bin_cnv(v, 10)).unstack().rename('cnv')
+    ], axis=1).dropna()
+
+    df = df.reset_index().rename(columns={'level_0': 'sample', 'level_1': 'gene'})
+    df = df[~df['cnv'].isin(exclude_cnv)]
+    df = df.assign(chr=lib.loc[df['gene']].values)
+
+    return df
+
+
 if __name__ == '__main__':
     # - Import
     # Non-expressed genes
@@ -236,38 +189,7 @@ if __name__ == '__main__':
     samples = list(set(cnv).intersection(crispr).intersection(nexp))
     print('[INFO] Samples overlap: {}'.format(len(samples)))
 
-    # - Plot: Cancer type coverage
-    tissue_coverage(samples)
-
-    # - Plot: QC Gene-sets AUCs
-    auc_stats_fc_ess = auc_curves(crispr[samples], essential, 'reports/crispy/qc_aucs_fc_essential.png')
-    auc_stats_fc_ness = auc_curves(crispr[samples], nessential, 'reports/crispy/qc_aucs_fc_nonessential.png')
-
-    auc_stats_crispy_ess = auc_curves(crispy[samples], essential, 'reports/crispy/qc_aucs_fc_corrected_essential.png')
-    auc_stats_crispy_ness = auc_curves(crispy[samples], nessential, 'reports/crispy/qc_aucs_fc_corrected_nonessential.png')
-
-    aucs_scatter(
-        'Original', 'Corrected',
-        pd.concat([pd.Series(auc_stats_fc_ess['auc'], name='Original'), pd.Series(auc_stats_crispy_ess['auc'], name='Corrected')], axis=1),
-        'reports/crispy/qc_aucs_essential.png', 'Essential genes'
-    )
-
-    aucs_scatter(
-        'Original', 'Corrected',
-        pd.concat([pd.Series(auc_stats_fc_ness['auc'], name='Original'), pd.Series(auc_stats_crispy_ness['auc'], name='Corrected')], axis=1),
-        'reports/crispy/qc_aucs_nonessential.png', 'Non-essential genes'
-    )
-
-    # - Plot: Copy-number bias in ORIGINAL CRISPR fold-changes (AUCs)
-    plot_df = pd.concat([
-        pd.DataFrame({c: c_gdsc_fc[c].reindex(nexp.loc[nexp[c] == 1, c].index) for c in samples}).unstack().rename('fc'),
-        cnv[samples].applymap(lambda v: bin_cnv(v, 10)).unstack().rename('cnv')
-    ], axis=1).dropna()
-
-    plot_df = plot_df.reset_index().rename(columns={'level_0': 'sample', 'level_1': 'gene'})
-    plot_df = plot_df[~plot_df['cnv'].isin(['0', '1'])]
-    plot_df = plot_df.assign(chr=lib.loc[plot_df['gene']].values)
-
+    # - Copy-number bias in CRISPR fold-changes
     hue_thresholds = natsorted(set(plot_df['cnv']))
     hue_thresholds_color = sns.light_palette(PAL_DBGD[0], n_colors=len(hue_thresholds)).as_hex()
 

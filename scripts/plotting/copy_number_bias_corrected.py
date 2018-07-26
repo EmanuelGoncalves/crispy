@@ -14,39 +14,6 @@ from natsort import natsorted
 from sklearn.metrics import auc
 
 
-def tissue_coverage(x, y, data, outfile):
-    df = data.assign(ypos=np.arange(data.shape[0]))
-
-    plt.barh(df['ypos'], df[x], .8, color=cy.PAL_DBGD[0], align='center')
-
-    for xx, yy in df[['ypos', x]].values:
-        plt.text(yy - .25, xx, str(yy), color='white', ha='right', va='center', fontsize=6)
-
-    plt.yticks(df['ypos'])
-    plt.yticks(df['ypos'], df[y])
-
-    plt.xlabel('# cell lines')
-    plt.title('CRISPR-Cas9 screen\n(%d cell lines)' % df['Counts'].sum())
-
-    plt.gcf().set_size_inches(2, 3)
-    plt.savefig(outfile, bbox_inches='tight', dpi=600)
-    plt.close('all')
-
-
-def auc_curves(df, geneset, outfile):
-    # Palette
-    pal = sns.light_palette(cy.PAL_DBGD[0], n_colors=df.shape[1]).as_hex()
-
-    # AUCs fold-changes
-    ax, stats_ess = cy.plot_cumsum_auc(df, geneset, plot_mean=False, legend=False, palette=pal)
-    plt.title('Mean AURC = {:.2f}'.format(pd.Series(stats_ess['auc']).mean()))
-    plt.gcf().set_size_inches(3, 3)
-    plt.savefig(outfile, bbox_inches='tight', dpi=600)
-    plt.close('all')
-
-    return stats_ess
-
-
 def aucs_scatter(x, y, data, outfile, title):
     ax = plt.gca()
 
@@ -327,4 +294,7 @@ if __name__ == '__main__':
     } for s in set(plot_df_crispy['sample']) for c in set(plot_df_crispy['chr']) for t, a in copy_number_bias_aucs(plot_df_crispy.query("(sample == '{}') & (chr == '{}')".format(s, c)))[1].items()])
 
     copy_number_bias_aucs_per_chrm('cnv', 'auc', 'chr_cnv', plot_df_aucs_chr_crispy.query("chr_cnv != '1'"), 'reports/crispy/copynumber_bias_aucs_corrected_per_chr.png')
+
+
+
 
