@@ -56,14 +56,22 @@ BIOMART_HUMAN_ID_TABLE = 'data/resources/biomart/biomart_human_id_table.csv'
 GDSC_RNASEQ_SAMPLESHEET = 'data/gdsc/gene_expression/merged_sample_annotation.csv'
 GDSC_RNASEQ_RPKM = 'data/gdsc/gene_expression/merged_rpkm.csv'
 
-# GENE-SETS
-CANCER_GENES = 'data/gene_sets/Census_allThu Dec 21 15_43_09 2017.tsv'
-
-# GTex
-GTEX_TPM = 'data/GTEx_Analysis_2016-01-15_v7_RNASeQCv1.1.8_gene_median_tpm.gct'
+# SHRNA
+SHRNA = 'data/ccle/DRIVE_RSA_data.txt'
 
 
 # - GETTERS AND SETTERS
+def get_shrna():
+    ss = get_samplesheet(index_col=None).dropna(subset=['CCLE ID']).set_index('CCLE ID')
+
+    shrna = pd.read_csv(SHRNA, sep='\t', index_col=0)
+    shrna.columns = [c.upper() for c in shrna]
+
+    shrna = shrna.rename(columns=ss['Cell Line Name'].to_dict())
+
+    return shrna
+
+
 def get_rnaseq_rpkm():
     rpkm = pd.read_csv(GDSC_RNASEQ_RPKM, index_col=0)
     return rpkm
@@ -87,6 +95,10 @@ def get_non_exp():
 
 def get_copynumber(dtype='snp'):
     return pd.read_csv(CN_GENE.format(dtype), index_col=0)
+
+
+def get_copynumber_ratios(dtype='snp'):
+    return pd.read_csv(CN_GENE_RATIO.format(dtype), index_col=0)
 
 
 def get_ploidy(dtype='snp'):

@@ -77,7 +77,7 @@ if __name__ == '__main__':
     ], axis=1).dropna()
 
     df = df.reset_index().rename(columns={'level_0': 'sample', 'level_1': 'gene'})
-    df = df[~df['cnv'].isin(EXCLUDED_CNV_BINS)]
+    # df = df[~df['cnv'].isin(EXCLUDED_CNV_BINS)]
     df = df.assign(chr=lib.loc[df['gene']].values)
 
     # - Calculate AUC bias curves

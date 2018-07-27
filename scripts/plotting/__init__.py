@@ -113,7 +113,7 @@ def aucs_boxplot(plot_df, x='cnv', y='auc', hue=None, notch=False, essential_lin
 
     sns.stripplot(
         x, y, hue, data=plot_df, order=order, hue_order=order_hue, edgecolor='white', palette=pal,
-        size=1, jitter=.2, dodge=True, ax=ax, linewidth=.1, alpha=.5
+        size=1.5, jitter=.2, dodge=True, ax=ax, linewidth=.1, alpha=.5
     )
 
     ax.axhline(0.5, ls='-', lw=.1, c=cy.PAL_DBGD[0], zorder=0)

@@ -1,28 +1,26 @@
 #!/usr/bin/env python
 # Copyright (C) 2018 Emanuel Goncalves
 
-import pickle
+import crispy as cy
 import pandas as pd
 import scripts as mp
 import seaborn as sns
 import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
-import crispy as cy
-from crispy import PAL_DBGD
 from natsort import natsorted
 from crispy.utils import bin_cnv
-from sklearn.metrics import roc_curve, auc
-from scripts.plotting.copy_number_bias import copy_number_bias_aucs
+from scripts.plotting import bias_boxplot, bias_arocs
 
 
-def ratios_histogram(x, data, outfile):
+def ratios_histogram(plot_df):
     f, axs = plt.subplots(2, 1, sharex=True)
 
-    sns.distplot(data[x], color=PAL_DBGD[0], kde=False, axlabel='', ax=axs[0])
-    sns.distplot(data[x], color=PAL_DBGD[0], kde=False, ax=axs[1])
+    c = cy.PAL_DBGD[0]
 
-    axs[0].axvline(1, lw=.3, ls='--', c=PAL_DBGD[1])
-    axs[1].axvline(1, lw=.3, ls='--', c=PAL_DBGD[1])
+    sns.distplot(plot_df['ratio'], color=c, kde=False, axlabel='', ax=axs[0], hist_kws=dict(linewidth=0))
+    sns.distplot(plot_df['ratio'], color=c, kde=False, ax=axs[1], hist_kws=dict(linewidth=0))
+
+    axs[0].axvline(1, lw=.3, ls='--', c=c)
+    axs[1].axvline(1, lw=.3, ls='--', c=c)
 
     axs[0].set_ylim(500000, 650000)  # outliers only
     axs[1].set_ylim(0, 200000)  # most of the data
@@ -49,114 +47,70 @@ def ratios_histogram(x, data, outfile):
     plt.tick_params(labelcolor='none', top='off', bottom='off', left='off', right='off')
     plt.grid(False)
 
-    plt.title('Copy-number ratio histogram (non-expressed genes)')
-    plt.gcf().set_size_inches(4, 3)
-    plt.savefig(outfile, bbox_inches='tight', dpi=600)
-    plt.close('all')
 
+def ratios_fc_boxplot(plot_df):
+    ax = bias_boxplot(plot_df, x='ratio_bin', y='fc')
 
-def ratios_kmean(x, y, data, outfile):
-    order = natsorted(set(data[y]))
-    pal = sns.light_palette(PAL_DBGD[0], n_colors=len(order)).as_hex()
-
-    sns.boxplot(x, y, data=data, orient='h', linewidth=.3, fliersize=1, order=order, palette=pal, notch=True)
-    plt.axvline(0, lw=.1, ls='-', c=PAL_DBGD[0])
+    ax.axhline(0, ls='-', lw=.1, c=cy.PAL_DBGD[0], zorder=0)
 
     plt.title('Copy-number ratio effect on CRISPR-Cas9\n(non-expressed genes)')
-    plt.xlabel('CRISPR-Cas9 fold-change (log2)')
-    plt.ylabel('Copy-number ratio')
-    plt.gcf().set_size_inches(4, 2)
-    plt.savefig(outfile, bbox_inches='tight', dpi=None if outfile.endswith('.pdf') else 600)
-    plt.close('all')
+    plt.ylabel('Fold-change')
+    plt.xlabel('Gene copy-number ratio')
 
 
-def ratios_heatmap(x, y, z, data, outfile, z_bin=None):
+def ratios_heatmap_bias(data, min_evetns=10):
+    x, y, z = 'cnv_bin', 'chr_cnv_bin', 'fc'
+
     plot_df = data.copy()
 
-    if z_bin is not None:
-        plot_df = plot_df.query("{} == '{}'".format(z, z_bin))
+    counts = {(g, c) for g, c, v in plot_df.groupby([x, y])[z].count().reset_index().values if v <= min_evetns}
 
-    counts = {(g, c) for g, c, v in plot_df.groupby([x, y])[z].count().reset_index().values if v <= 10}
     plot_df = plot_df[[(g, c) not in counts for g, c in plot_df[[x, y]].values]]
-
-    plot_df = plot_df.groupby([x, y])[z].count().reset_index()
-    plot_df = pd.pivot_table(plot_df, index=x, columns=y, values=z)
-
-    title = 'Number of occurrences\n'
-    title += '(non-expressed genes)' if z_bin is None else '(non-expressed genes with copy-number ratio ~{})'.format(z_bin)
-
-    g = sns.heatmap(
-        plot_df.loc[natsorted(plot_df.index, reverse=False)].T, cmap=sns.light_palette(PAL_DBGD[0], as_cmap=True), annot=True, fmt='g', square=True,
-        linewidths=.3, cbar=False, annot_kws={'fontsize': 7}
-    )
-    plt.setp(g.get_yticklabels(), rotation=0)
-    plt.ylabel('# chromosome copies')
-    plt.xlabel('# gene copies')
-    plt.title(title)
-    plt.gcf().set_size_inches(5.5, 5.5)
-    plt.savefig(outfile, bbox_inches='tight', dpi=600)
-    plt.close('all')
-
-
-def ratios_heatmap_bias(x, y, z, data, outfile, z_bin=None, title=None):
-    plot_df = data.copy()
-
-    if z_bin is not None:
-        plot_df = plot_df.query("{} == '{}'".format(z, z_bin))
-
-    counts = {(g, c) for g, c, v in plot_df.groupby([x, y])[z].count().reset_index().values if v <= 3}
-    plot_df = plot_df[[(g, c) not in counts for g, c in plot_df[[x, y]].values]]
-
     plot_df = plot_df.groupby([x, y])[z].mean().reset_index()
     plot_df = pd.pivot_table(plot_df, index=x, columns=y, values=z)
 
-    if title is None:
-        title = 'Mean CRISPR-Cas9 fold-change\n'
-        title += '(non-expressed genes)' if z_bin is None else '(non-expressed genes with copy-number ratio ~{})'.format(z_bin)
-
     g = sns.heatmap(
-        plot_df.loc[natsorted(plot_df.index, reverse=False)].T, cmap=sns.light_palette(PAL_DBGD[0], as_cmap=True, reverse=True), annot=True, fmt='.2f', square=True,
+        plot_df.loc[natsorted(plot_df.index, reverse=False)].T, cmap='RdGy_r', annot=True, fmt='.2f', square=True,
         linewidths=.3, cbar=False, annot_kws={'fontsize': 7}, center=0
     )
     plt.setp(g.get_yticklabels(), rotation=0)
-    plt.ylabel('# chromosome copies')
-    plt.xlabel('# gene copies')
-    plt.title(title)
-    plt.gcf().set_size_inches(5.5, 5.5)
-    plt.savefig(outfile, bbox_inches='tight', dpi=None if outfile.endswith('.pdf') else 600)
-    plt.close('all')
+
+    plt.ylabel('Chromosome copy-number')
+    plt.xlabel('Gene absolute copy-number')
+
+    plt.title('Mean CRISPR-Cas9 fold-change (non-expressed genes)')
 
 
 if __name__ == '__main__':
     # - Import
     # CRISPR library
-    lib = pd.read_csv('crispy/data/crispr_libs/KY_Library_v1.1_updated.csv', index_col=0).groupby('gene')['chr'].first()
+    lib = cy.get_crispr_lib().groupby('gene')['chr'].first()
 
     # Non-expressed genes
-    nexp = pd.read_csv(mp.NON_EXP, index_col=0)
+    nexp = mp.get_non_exp()
 
     # Copy-number
-    cnv = pd.read_csv(mp.CN_GENE.format('snp'), index_col=0)
-
-    # Chromosome copies
-    chrm = pd.read_csv(mp.CN_CHR.format('snp'), index_col=0)
+    cnv = mp.get_copynumber()
 
     # Ploidy
     ploidy = mp.get_ploidy()
 
+    # Chromosome copies
+    chrm = mp.get_chr_copies()
+
     # Copy-number ratios
-    cnv_ratios = pd.read_csv(mp.CN_GENE_RATIO.format('snp'), index_col=0)
+    cnv_ratios = mp.get_copynumber_ratios()
 
     # CRISPR
-    c_gdsc_fc = mp.get_crispr(mp.CRISPR_GENE_FC)
+    crispr = mp.get_crispr(mp.CRISPR_GENE_FC)
 
     # - Overlap samples
-    samples = list(set(cnv).intersection(c_gdsc_fc).intersection(nexp))
+    samples = list(set(cnv).intersection(crispr).intersection(nexp))
     print('[INFO] Samples overlap: {}'.format(len(samples)))
 
     # - Assemble data-frame of non-expressed genes
     # Non-expressed genes CRISPR bias from copy-number
-    df = pd.DataFrame({c: c_gdsc_fc[c].reindex(nexp.loc[nexp[c] == 1, c].index) for c in samples})
+    df = pd.DataFrame({c: crispr[c].reindex(nexp.loc[nexp[c] == 1, c].index) for c in samples})
 
     # Concat copy-number information
     df = pd.concat([df[samples].unstack().rename('fc'), cnv[samples].unstack().rename('cnv'), cnv_ratios[samples].unstack().rename('ratio')], axis=1).dropna()
@@ -171,41 +125,38 @@ if __name__ == '__main__':
     df = df.assign(ratio_bin=df['ratio'].apply(lambda v: bin_cnv(v, thresold=4)))
     df = df.assign(cnv_bin=df['cnv'].apply(lambda v: bin_cnv(v, thresold=10)))
     df = df.assign(chr_cnv_bin=df['chr_cnv'].apply(lambda v: bin_cnv(v, thresold=6)))
-    df = df.assign(ploidy_bin=df['ploidy'].apply(lambda v: bin_cnv(v, thresold=6)))
+    df = df.assign(ploidy_bin=df['ploidy'].apply(lambda v: bin_cnv(v, thresold=5)))
 
-    # - Plot: Copy-number ratio vs CRISPR bias
-    ratios_histogram('ratio', df, 'reports/copynumber_ratio_histogram.png')
+    # - Plot
+    # Copy-number ratio histogram
+    ratios_histogram(df)
 
-    ratios_kmean('fc', 'ratio_bin', df, 'reports/copynumber_ratio_kmean_boxplot.png')
-
-    copy_number_bias_aucs(
-        df, rank_label='fc', thres_label='ratio_bin', outfile='reports/crispy/copynumber_ratio_kmean_aucs.png', legend_size=9,
-        title='Copy-number ratio effect on CRISPR-Cas9\n(non-expressed genes)', legend_title='Copy-number ratio'
-    )
-
-    # -
-    order = natsorted(set(df['ratio_bin']))
-    pal = sns.light_palette(PAL_DBGD[0], n_colors=len(order)).as_hex()
-
-    g = sns.catplot(
-        'fc', 'ratio_bin', data=df, col='ploidy_bin', kind='box', orient='h', sym='+',
-        linewidth=.3, fliersize=.5, order=order, palette=pal, notch=True, aspect=1, height=2, legend=True, legend_out=True
-    )
-
-    g.set_axis_labels('CRISPR FC', 'Copy-number ratio')
-
-    plt.savefig('reports/copynumber_ratio_all_boxplot.png', bbox_inches='tight', dpi=600)
+    plt.title('Copy-number ratio histogram (non-expressed genes)')
+    plt.gcf().set_size_inches(4, 3)
+    plt.savefig('reports/ratio_histogram.png', bbox_inches='tight', dpi=600)
     plt.close('all')
 
-    sns.set(style='white')
-    ratios_heatmap('cnv_bin', 'chr_cnv_bin', 'ratio_bin', df, 'reports/crispy/copynumber_ratio_heatmap_all.pdf')
-    ratios_heatmap_bias('cnv_bin', 'chr_cnv_bin', 'fc', df, 'reports/crispy/copynumber_ratio_heatmap_crispr_all.pdf')
+    # Copy-number ratio vs CRISPR bias boxplot
+    ratios_fc_boxplot(df)
 
-    for p in set(df['ploidy_bin']):
-        print(p)
+    plt.gcf().set_size_inches(2, 3)
+    plt.savefig('reports/ratio_fc_boxplot.png', bbox_inches='tight', dpi=600)
+    plt.close('all')
 
-        ratios_heatmap_bias(
-            'cnv_bin', 'chr_cnv_bin', 'fc', df.query("ploidy_bin == '{}'".format(p)), 'reports/copynumber_ratio_heatmap_crispr_all_{}.pdf'.format(p),
-            title='Ploidy ~ {}\nMean CRISPR-Cas9 fold-change (non-expressed genes)'.format(p)
-        )
+    # Copy-number ratio bias heatmap
+    ratios_heatmap_bias(df)
 
+    plt.title('Mean CRISPR-Cas9 fold-change\n(non-expressed genes)')
+
+    plt.gcf().set_size_inches(5.5, 5.5)
+    plt.savefig('reports/ratio_fc_heatmap.png', bbox_inches='tight', dpi=600)
+    plt.close('all')
+
+    # Overall copy-number ratio bias AUCs
+    ax, aucs = bias_arocs(df, groupby='ratio_bin')
+    ax.set_title('Copy-number ratio effect on CRISPR-Cas9\n(non-expressed genes)')
+    ax.legend(loc=4, title='Copy-number ratio', prop={'size': 6}, frameon=False).get_title().set_fontsize(6)
+
+    plt.gcf().set_size_inches(3, 3)
+    plt.savefig('reports/ratios_aucs.png', bbox_inches='tight', dpi=600)
+    plt.close('all')
