@@ -62,75 +62,84 @@ if __name__ == '__main__':
 
     # CRISPR
     crispr = mp.get_crispr(mp.CRISPR_GENE_FC)
+    crispr.columns.name = 'original'
+
+    # Corrected CRISPR
+    crispy = mp.get_crispr(mp.CRISPR_GENE_CORRECTED_FC)
+    crispy.columns.name = 'corrected'
 
     # - Overlap samples
     samples = list(set(cnv).intersection(crispr).intersection(nexp))
     print('[INFO] Samples overlap: {}'.format(len(samples)))
 
-    # - Essential genes AURCs
-    essential_aurc = pd.read_csv('data/qc_aucs.csv').query("type == 'original'").query("geneset == 'essential'")['aurc'].mean()
+    # - Analyse original and corrected fold-changes
+    for c_df in [crispr, crispy]:
+        # - Essential genes AURCs
+        essential_aurc = pd.read_csv('data/qc_aucs.csv')
+        essential_aurc = essential_aurc.query("type == '{}'".format(c_df.columns.name))
+        essential_aurc = essential_aurc.query("geneset == 'essential'")['aurc'].mean()
 
-    # - Build data-frame
-    df = pd.concat([
-        pd.DataFrame({c: crispr[c].reindex(nexp.loc[nexp[c] == 1, c].index) for c in samples}).unstack().rename('fc'),
-        cnv[samples].applymap(lambda v: bin_cnv(v, 10)).unstack().rename('cnv')
-    ], axis=1).dropna()
+        # - Build data-frame
+        df = pd.concat([
+            pd.DataFrame({c: c_df[c].reindex(nexp.loc[nexp[c] == 1, c].index) for c in samples}).unstack().rename('fc'),
+            cnv[samples].applymap(lambda v: bin_cnv(v, 10)).unstack().rename('cnv')
+        ], axis=1).dropna()
 
-    df = df.reset_index().rename(columns={'level_0': 'sample', 'level_1': 'gene'})
-    # df = df[~df['cnv'].isin(EXCLUDED_CNV_BINS)]
-    df = df.assign(chr=lib.loc[df['gene']].values)
+        df = df.reset_index().rename(columns={'level_0': 'sample', 'level_1': 'gene'})
+        # df = df[~df['cnv'].isin(EXCLUDED_CNV_BINS)]
+        df = df.assign(chr=lib.loc[df['gene']].values)
 
-    # - Calculate AUC bias curves
-    aucs_samples = calculate_bias_by(df, groupby=['sample'])
-    aucs_samples = aucs_samples.assign(ploidy=ploidy[aucs_samples['sample']].apply(lambda v: bin_cnv(v, 5)).values)
+        # - Calculate AUC bias curves
+        aucs_samples = calculate_bias_by(df, groupby=['sample'])
+        aucs_samples = aucs_samples.assign(ploidy=ploidy[aucs_samples['sample']].apply(lambda v: bin_cnv(v, 5)).values)
 
-    aucs_chr = calculate_bias_by(df, groupby=['sample', 'chr'])
-    aucs_chr = aucs_chr.assign(ploidy=ploidy[aucs_chr['sample']].apply(lambda v: bin_cnv(v, 5)).values)
-    aucs_chr = aucs_chr.assign(chr_copies=[bin_cnv(chrm.loc[c, s], 6) for s, c in aucs_chr[['sample', 'chr']].values])
+        aucs_chr = calculate_bias_by(df, groupby=['sample', 'chr'])
+        aucs_chr = aucs_chr.assign(ploidy=ploidy[aucs_chr['sample']].apply(lambda v: bin_cnv(v, 5)).values)
+        aucs_chr = aucs_chr.assign(chr_copies=[bin_cnv(chrm.loc[c, s], 6) for s, c in aucs_chr[['sample', 'chr']].values])
 
-    # - Plot
-    # Copy-number bias in CRISPR fold-changes
-    bias_crispr_fc_boxplot(df)
+        # - Plot
+        # Copy-number bias in CRISPR fold-changes
+        bias_crispr_fc_boxplot(df)
 
-    plt.gcf().set_size_inches(2.5, 3)
-    plt.savefig('reports/bias_boxplot_fc.png', bbox_inches='tight', dpi=600)
-    plt.close('all')
+        plt.gcf().set_size_inches(2.5, 3)
+        plt.savefig('reports/{}_bias_boxplot_fc.png'.format(c_df.columns.name), bbox_inches='tight', dpi=600)
+        plt.close('all')
 
-    # Overall copy-number bias AUCs
-    bias_copynumber_aucs(df)
+        # Overall copy-number bias AUCs
+        bias_copynumber_aucs(df)
 
-    plt.gcf().set_size_inches(3, 3)
-    plt.savefig('reports/bias_copynumber_aucs.png', bbox_inches='tight', dpi=600)
-    plt.close('all')
+        plt.gcf().set_size_inches(3, 3)
+        plt.savefig('reports/{}_bias_copynumber_aucs.png'.format(c_df.columns.name), bbox_inches='tight', dpi=600)
+        plt.close('all')
 
-    # Per sample copy-number bias boxplots
-    aucs_boxplot(aucs_samples, x='cnv', y='auc', essential_line=essential_aurc)
+        # Per sample copy-number bias boxplots
+        aucs_boxplot(aucs_samples, x='cnv', y='auc', essential_line=essential_aurc)
 
-    plt.gcf().set_size_inches(3, 3)
-    plt.savefig('reports/bias_copynumber_per_sample.png', bbox_inches='tight', dpi=600)
-    plt.close('all')
+        plt.gcf().set_size_inches(3, 3)
+        plt.savefig('reports/{}_bias_copynumber_per_sample.png'.format(c_df.columns.name), bbox_inches='tight', dpi=600)
+        plt.close('all')
 
-    # Per sample copy-number bias boxplots by ploidy
-    aucs_boxplot(aucs_samples, x='cnv', y='auc', hue='ploidy', essential_line=essential_aurc)
+        # Per sample copy-number bias boxplots by ploidy
+        aucs_boxplot(aucs_samples, x='cnv', y='auc', hue='ploidy', essential_line=essential_aurc)
 
-    plt.gcf().set_size_inches(3, 3)
-    plt.savefig('reports/bias_copynumber_per_sample_ploidy.png', bbox_inches='tight', dpi=600)
-    plt.close('all')
+        plt.gcf().set_size_inches(3, 3)
+        plt.savefig('reports/{}_bias_copynumber_per_sample_ploidy.png'.format(c_df.columns.name), bbox_inches='tight', dpi=600)
+        plt.close('all')
 
-    # Per chromosome copy-number bias boxplots
-    ax = aucs_boxplot(aucs_chr, x='cnv', y='auc', essential_line=essential_aurc)
+        # Per chromosome copy-number bias boxplots
+        ax = aucs_boxplot(aucs_chr, x='cnv', y='auc', essential_line=essential_aurc)
 
-    ax.set_ylabel('Copy-number AURC (per chromossome)')
+        ax.set_ylabel('Copy-number AURC (per chromossome)')
 
-    plt.gcf().set_size_inches(3, 3)
-    plt.savefig('reports/bias_copynumber_per_chromosome.png', bbox_inches='tight', dpi=600)
-    plt.close('all')
+        plt.gcf().set_size_inches(3, 3)
+        plt.savefig('reports/{}_bias_copynumber_per_chromosome.png'.format(c_df.columns.name), bbox_inches='tight', dpi=600)
+        plt.close('all')
 
-    # Per chromosome copy-number bias boxplots by ploidy
-    ax = aucs_boxplot(aucs_chr, x='cnv', y='auc', hue='ploidy', essential_line=essential_aurc)
+        # Per chromosome copy-number bias boxplots by ploidy
+        ax = aucs_boxplot(aucs_chr, x='cnv', y='auc', hue='ploidy', essential_line=essential_aurc)
 
-    ax.set_ylabel('Copy-number AURC (per chromossome)')
+        ax.set_ylabel('Copy-number AURC (per chromossome)')
 
-    plt.gcf().set_size_inches(3, 3)
-    plt.savefig('reports/bias_copynumber_per_chromosome_ploidy.png', bbox_inches='tight', dpi=600)
-    plt.close('all')
+        plt.gcf().set_size_inches(3, 3)
+        plt.savefig('reports/{}_bias_copynumber_per_chromosome_ploidy.png'.format(c_df.columns.name), bbox_inches='tight', dpi=600)
+        plt.close('all')

@@ -55,5 +55,5 @@ if __name__ == '__main__':
     ax.legend(loc=4, title='Copy-number', prop={'size': 6}, frameon=False).get_title().set_fontsize(6)
 
     plt.gcf().set_size_inches(3, 3)
-    plt.savefig('reports/bias_copynumber_aucs_shrna.png', bbox_inches='tight', dpi=600)
+    plt.savefig('reports/original_bias_copynumber_aucs_shrna.png', bbox_inches='tight', dpi=600)
     plt.close('all')
