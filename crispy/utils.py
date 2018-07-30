@@ -6,6 +6,47 @@ import scipy.stats as st
 from sklearn.metrics import roc_auc_score
 
 
+def bin_bkdist(distance):
+    if 1 < distance < 10e3:
+        bin_distance = '1-10 kb'
+
+    elif 10e3 < distance < 100e3:
+        bin_distance = '1-100 kb'
+
+    elif 100e3 < distance < 1e6:
+        bin_distance = '0.1-1 Mb'
+
+    elif 1e6 < distance < 10e6:
+        bin_distance = '1-10 Mb'
+
+    else:
+        bin_distance = '>10 Mb'
+
+    return bin_distance
+
+
+def svtype(strand1, strand2, svclass, unfold_inversions):
+    if svclass == 'translocation':
+        svtype = 'translocation'
+
+    elif strand1 == '+' and strand2 == '+':
+        svtype = 'deletion'
+
+    elif strand1 == '-' and strand2 == '-':
+        svtype = 'tandem-duplication'
+
+    elif strand1 == '+' and strand2 == '-':
+        svtype = 'inversion_h_h' if unfold_inversions else 'inversion'
+
+    elif strand1 == '-' and strand2 == '+':
+        svtype = 'inversion_t_t' if unfold_inversions else 'inversion'
+
+    else:
+        assert False, 'SV class not recognised: strand1 == {}; strand2 == {}; svclass == {}'.format(strand1, strand2, svclass)
+
+    return svtype
+
+
 def bin_cnv(value, thresold):
     if np.isfinite(value):
         value = int(round(value, 0))

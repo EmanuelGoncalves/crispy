@@ -4,6 +4,8 @@
 import os
 import numpy as np
 import pandas as pd
+from crispy.utils import bin_bkdist
+from crispy.ratio import BRASS_HEADERS
 from crispy import get_essential_genes, get_non_essential_genes
 
 
@@ -174,3 +176,61 @@ def write_non_expressed_matrix(rpkm_thres=1):
 
     # Export
     nexp.to_csv(NON_EXP)
+
+
+def import_brass_bedpe(bedpe_file, bkdist=None, splitreads=False, convert_to_bed=False):
+    # Import BRASS bedpe
+    bedpe_df = pd.read_csv(bedpe_file, sep='\t', names=BRASS_HEADERS, comment='#')
+
+    # Correct sample name
+    bedpe_df['sample'] = bedpe_df['sample'].apply(lambda v: v.split(',')[0])
+
+    # SV larger than threshold
+    if bkdist is not None:
+        bedpe_df = bedpe_df[bedpe_df['bkdist'] >= bkdist]
+
+    # BRASS2 annotated SV
+    if splitreads:
+        bedpe_df = bedpe_df.query("assembly_score != '_'")
+
+    # Parse chromosome name
+    bedpe_df = bedpe_df.assign(chr1=bedpe_df['chr1'].apply(lambda x: 'chr{}'.format(x)).values)
+    bedpe_df = bedpe_df.assign(chr2=bedpe_df['chr2'].apply(lambda x: 'chr{}'.format(x)).values)
+
+    # Conver SVs to bed
+    if convert_to_bed:
+        bedpe_df = brass_bedpe_to_bed(bedpe_df)
+        bedpe_df = bedpe_df[bedpe_df['start'] < bedpe_df['end']]
+
+    return bedpe_df
+
+
+def brass_bedpe_to_bed(bedpe_df):
+    # Unfold translocations
+    bed_translocations = []
+    for idx in [1, 2]:
+        df = bedpe_df.query("svclass == 'translocation'")
+
+        bed_translocations.append(pd.concat([
+            df['chr{}'.format(idx)].rename('#chr'),
+            df['start{}'.format(idx)].astype(int).rename('start'),
+            df['end{}'.format(idx)].astype(int).rename('end'),
+            df['svclass'].rename('svclass')
+        ], axis=1))
+
+    bed_translocations = pd.concat(bed_translocations)
+
+    # Merge other SVs
+    df = bedpe_df.query("svclass != 'translocation'")
+
+    bed_others = pd.concat([
+        df['chr1'].rename('#chr'),
+        df[['start1', 'end1']].mean(1).astype(int).rename('start'),
+        df[['start2', 'end2']].mean(1).astype(int).rename('end'),
+        df['svclass'].rename('svclass'),
+        df['bkdist'].apply(bin_bkdist).rename('bkdist')
+    ], axis=1)
+
+    bed_df = bed_translocations.append(bed_others).replace({'bkdist': {np.nan: '_'}})
+
+    return bed_df[['#chr', 'start', 'end', 'svclass', 'bkdist']]

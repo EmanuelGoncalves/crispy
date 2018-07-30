@@ -43,7 +43,10 @@ def get_crispr_lib(dfile='crispr_libs/KY_Library_v1.1_updated.csv'):
     return pd.read_csv('{}/{}'.format(DPATH, dfile), index_col=0)
 
 
-# -
+def get_adam_core_essential(dfile='gene_sets/pancan_core.csv'):
+    return set(pd.read_csv('{}/{}'.format(DPATH, dfile))['ADAM PanCancer Core-Fitness genes'].rename('adam_essential'))
+
+
 def get_cytobands(dfile='cytoBand.txt', chrm=None):
     cytobands = pd.read_csv('{}/{}'.format(DPATH, dfile), sep='\t')
 
@@ -55,6 +58,13 @@ def get_cytobands(dfile='cytoBand.txt', chrm=None):
     return cytobands
 
 
+CHR_SIZES_HG19 = {
+    'chr1': 249250621, 'chr2': 243199373, 'chr3': 198022430, 'chr4': 191154276, 'chr5': 180915260, 'chr6': 171115067, 'chr7': 159138663, 'chr8': 146364022,
+    'chr9': 141213431, 'chr10': 135534747, 'chr11': 135006516, 'chr12': 133851895, 'chr13': 115169878, 'chr14': 107349540, 'chr15': 102531392, 'chr16': 90354753,
+    'chr17': 81195210, 'chr18': 78077248, 'chr19': 59128983, 'chr20': 63025520, 'chr21': 48129895, 'chr22': 51304566, 'chrX': 155270560, 'chrY': 59373566
+}
+
+
 # - HANDLES
 __all__ = [
     'CRISPRCorrection',
@@ -63,5 +73,7 @@ __all__ = [
     'get_essential_genes',
     'get_non_essential_genes',
     'get_crispr_lib',
-    'plot_cumsum_auc'
+    'get_adam_core_essential',
+    'plot_cumsum_auc',
+    'CHR_SIZES_HG19'
 ]

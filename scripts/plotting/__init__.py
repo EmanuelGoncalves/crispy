@@ -4,16 +4,82 @@
 import numpy as np
 import pandas as pd
 import crispy as cy
+import scripts as mp
 import seaborn as sns
 import scipy.stats as st
 import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
 from natsort import natsorted
 from sklearn.metrics import auc
-import matplotlib.patches as mpatches
+from crispy.benchmark_plot import plot_chromosome, plot_rearrangements
 
 
 MEANLINEPROPS = dict(linestyle='--', linewidth=.3, color='red')
+
 FLIERPROPS = dict(marker='o', markersize=.1, linestyle='none', alpha=.5, lw=0)
+
+
+def plot_rearrangements_seg(sample, chrm, xlim=None, import_svs='all', genes_highlight=None):
+    # Import CRISRP lib
+    crispr_lib = cy.get_crispr_lib().groupby('gene').agg({'start': np.min, 'end': np.max})
+
+    # Import BRASS bedpe
+    bedpe = mp.import_brass_bedpe('{}/{}.brass.annot.bedpe'.format(mp.WGS_BRASS_BEDPE, sample), bkdist=-1, splitreads=True)
+
+    # Import WGS sequencing depth
+    ngsc = pd.read_csv(
+        'data/gdsc/wgs/brass_intermediates/{}.ngscn.abs_cn.bg'.format(sample), sep='\t', header=None,
+        names=['chr', 'start', 'end', 'absolute_cn', 'norm_logratio'], dtype={'chr': str, 'start': int, 'end': int, 'cn': float, 'score': float}
+    )
+    ngsc = ngsc.assign(chr=ngsc['chr'].apply(lambda x: 'chr{}'.format(x)).values)
+
+    # Import Crispy WGS fit
+    crispy_sv = pd.read_csv('{}/{}.{}.csv'.format(mp.CRISPY_WGS_OUTDIR, sample, import_svs), index_col=0).rename(columns={'fit_by': 'chr'})
+
+    # Concat CRISPR measurements
+    crispr = pd.concat([crispy_sv, crispr_lib], axis=1, sort=True).dropna()
+
+    # Plot
+    ax1, ax2, ax3 = plot_rearrangements(bedpe, crispr, ngsc, chrm, winsize=1e4, show_legend=True, xlim=xlim, mark_essential=True, highlight=genes_highlight)
+
+    return [ax1, ax2, ax3]
+
+
+def plot_chromosome_seg(sample, chrm, dtype='snp', genes_highlight=None):
+    # CRISPR lib
+    lib = cy.get_crispr_lib()
+    lib = lib.assign(pos=lib[['start', 'end']].mean(1).values)
+
+    # Build-frame
+    plot_df = pd.read_csv('data/crispy/gdsc/crispy_crispr_{}.csv'.format(sample), index_col=0)
+    plot_df = plot_df.query("fit_by == '{}'".format(chrm))
+    plot_df = plot_df.assign(pos=lib.groupby('gene')['pos'].mean().loc[plot_df.index])
+
+    # Copy-number segmentation
+    if dtype == 'snp':
+        seg = pd.read_csv('data/gdsc/copynumber/snp6_bed/{}.snp6.picnic.bed'.format(sample), sep='\t')
+        seg = seg[seg['#chr'] == chrm]
+
+    elif dtype == 'wgs':
+        seg = pd.read_csv('data/gdsc/wgs/ascat_bed/{}.wgs.ascat.bed.ratio.bed'.format(sample), sep='\t')
+        seg = seg[seg['#chr'] == chrm]
+
+    else:
+        seg = None
+
+    # Plot
+    genes_highlight = [] if genes_highlight is None else genes_highlight
+
+    ax = plot_chromosome(
+        plot_df['pos'], plot_df['fc'].rename('CRISPR-Cas9'), plot_df['k_mean'].rename('Fitted mean'),
+        seg=seg, highlight=genes_highlight, chrm_cytobands=chrm, legend=True, tick_base=2, mark_essential=True
+    )
+
+    ax.set_xlabel('Position on chromosome {} (Mb)'.format(chrm), fontsize=5)
+    ax.set_ylabel('')
+    ax.set_title('{}'.format(sample), fontsize=7)
+
+    return ax, plot_df
 
 
 def get_palette_continuous(n_colors, color=None):

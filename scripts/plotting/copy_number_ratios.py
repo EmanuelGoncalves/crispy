@@ -104,6 +104,9 @@ if __name__ == '__main__':
     # CRISPR
     crispr = mp.get_crispr(mp.CRISPR_GENE_FC)
 
+    # Pancancer core essential
+    pancan_core = cy.get_adam_core_essential()
+
     # - Overlap samples
     samples = list(set(cnv).intersection(crispr).intersection(nexp))
     print('[INFO] Samples overlap: {}'.format(len(samples)))
@@ -126,6 +129,9 @@ if __name__ == '__main__':
     df = df.assign(cnv_bin=df['cnv'].apply(lambda v: bin_cnv(v, thresold=10)))
     df = df.assign(chr_cnv_bin=df['chr_cnv'].apply(lambda v: bin_cnv(v, thresold=6)))
     df = df.assign(ploidy_bin=df['ploidy'].apply(lambda v: bin_cnv(v, thresold=5)))
+
+    # Filter
+    df = df[~df['gene'].isin(pancan_core)]
 
     # - Plot
     # Copy-number ratio histogram
