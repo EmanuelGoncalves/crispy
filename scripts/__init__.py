@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 from crispy.utils import bin_bkdist
 from crispy.ratio import BRASS_HEADERS
-from crispy import get_essential_genes, get_non_essential_genes
+from crispy import get_essential_genes, get_non_essential_genes, get_crispr_lib
 
 
 # META DATA PATHS
@@ -61,8 +61,15 @@ GDSC_RNASEQ_RPKM = 'data/gdsc/gene_expression/merged_rpkm.csv'
 # SHRNA
 SHRNA = 'data/ccle/DRIVE_RSA_data.txt'
 
+# SAMPLES OVERLAP FILE
+SAMPLES_OVERLAP_FILE = 'data/samples_overlap.csv'
+
 
 # - GETTERS AND SETTERS
+def get_sample_list():
+    return list(pd.read_csv(SAMPLES_OVERLAP_FILE, header=None)[0])
+
+
 def get_shrna():
     ss = get_samplesheet(index_col=None).dropna(subset=['CCLE ID']).set_index('CCLE ID')
 
@@ -86,6 +93,26 @@ def get_crispr(dfile, scale=True):
         crispr = scale_crispr(crispr)
 
     return crispr
+
+
+def get_crispr_sgrna(scale=True, metric=np.median, dropna=True):
+    lib = get_crispr_lib()
+
+    df = pd.read_csv(CRISPR_SGRNA_FC, index_col=0)
+
+    if dropna:
+        df = df.dropna()
+
+    if scale:
+        ess = get_essential_genes()
+        ess_metric = metric(df.reindex(lib[lib['GENES'].isin(ess)].index).dropna(), axis=0)
+
+        ness = get_non_essential_genes()
+        ness_metric = metric(df.reindex(lib[lib['GENES'].isin(ness)].index).dropna(), axis=0)
+
+        df = df.subtract(ness_metric).divide(ness_metric - ess_metric)
+
+    return df
 
 
 def get_non_exp():
@@ -234,3 +261,25 @@ def brass_bedpe_to_bed(bedpe_df):
     bed_df = bed_translocations.append(bed_others).replace({'bkdist': {np.nan: '_'}})
 
     return bed_df[['#chr', 'start', 'end', 'svclass', 'bkdist']]
+
+
+def samples_overlap(export=True):
+    # Import CRISPR-Cas9 sgRNAs
+    crispr = get_crispr_sgrna()
+
+    # Non-expressed genes
+    nexp = get_non_exp()
+
+    # Copy-number
+    cnv = get_copynumber()
+
+    # Overlap samples
+    samples = list(set(cnv).intersection(crispr).intersection(nexp))
+    print('[INFO] Samples overlap: {}'.format(len(samples)))
+
+    # Export
+    if export:
+        samples = pd.Series(samples).rename('overlap')
+        samples.to_csv(SAMPLES_OVERLAP_FILE, index=False)
+
+    return samples

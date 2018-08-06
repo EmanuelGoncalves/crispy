@@ -39,7 +39,7 @@ def get_non_essential_genes(dfile='gene_sets/curated_BAGEL_nonEssential.csv'):
     return set(pd.read_csv('{}/{}'.format(DPATH, dfile), sep='\t')['gene'].rename('non-essential'))
 
 
-def get_crispr_lib(dfile='crispr_libs/KY_Library_v1.1_updated.csv'):
+def get_crispr_lib(dfile='crispr_libs/KY_Library_v1.1_annotated.csv'):
     return pd.read_csv('{}/{}'.format(DPATH, dfile), index_col=0)
 
 

@@ -64,10 +64,14 @@ if __name__ == '__main__':
     df = df[~df['gene'].isin(pancan_core)]
 
     # -
-    df[df['sample'].isin(mp.BRCA_SAMPLES)].sort_values('ratio')
+    df[df['sample'].isin(mp.BRCA_SAMPLES)]\
+        .query("ratio_bin == '2'")\
+        .sort_values(['cnv', 'fc'], ascending=[False, False])\
+        .query("sample != 'HCC38'")\
+        .tail(60)
 
     # -
-    idx = 264175
+    idx = 280956
     sample, chrm, genes = df.loc[idx, 'sample'], df.loc[idx, 'chr'], [df.loc[idx, 'gene']]
     # sample, chrm, genes = 'OV-90', 'chr22', ['KRTAP4-2']
 
