@@ -6,11 +6,14 @@ import pandas as pd
 import crispy as cy
 import scripts as mp
 import seaborn as sns
+import itertools as it
 import matplotlib.pyplot as plt
 from natsort import natsorted
 from scipy.stats import pearsonr
 from crispy.utils import bin_cnv
 from scripts.plotting import bias_boxplot
+from sklearn.model_selection import ShuffleSplit
+from sklearn.linear_model import LinearRegression
 
 
 def import_seg_crispr_bed(sample):
@@ -48,41 +51,27 @@ def ratios_fc_boxplot(plot_df, x='ratio_bin', y='fc'):
     plt.xlabel('Gene copy-number ratio')
 
 
+def lm_fc(y, X, n_splits=10, test_size=.3, normalize=False):
+    ConstantKernel() * RBF(length_scale_bounds=(1e-5, 10)) + WhiteKernel()
 
-def lm_fc(Y, X, n_splits=10, test_size=.5, ploidy=None, chrm=None):
-    genes = set(Y.index).intersection(X.index)
+    # Cross-validation
+    cv = ShuffleSplit(n_splits=n_splits, test_size=test_size)
 
-    lib = cy.get_crispr_lib().groupby('gene')['chr'].first()[genes]
+    # Linear regression
+    r2s = []
+    for i, (train_idx, test_idx) in enumerate(cv.split(y)):
+        # Train model
+        lm = LinearRegression(normalize=normalize).fit(X.iloc[train_idx], y.iloc[train_idx])
 
-    gene_cvs = []
-    for gene in genes:
-        # Build data-frame
-        y = Y.loc[gene, samples].dropna()
-        x = X.loc[[gene], y.index].T
+        # Evalutate model
+        r2 = lm.score(X.iloc[test_idx], y.iloc[test_idx])
 
-        if ploidy is not None:
-            x = pd.concat([x, ploidy[samples]], axis=1)
+        # Store
+        r2s.append(dict(r2=r2, sample=y.name))
 
-        if chrm is not None:
-            x = pd.concat([x, chrm.loc[lib[gene], samples]], axis=1)
+    r2s = pd.DataFrame(r2s)
 
-        # Cross-validation
-        cv = ShuffleSplit(n_splits=n_splits, test_size=test_size)
-
-        for i, (train_idx, test_idx) in enumerate(cv.split(y)):
-            # Train model
-            lm = LinearRegression().fit(x.iloc[train_idx], y.iloc[train_idx])
-
-            # Evalutate model
-            r2 = lm.score(x.iloc[test_idx], y.iloc[test_idx])
-
-            # Store
-            gene_cvs.append(dict(r2=r2, gene=gene))
-
-    gene_cvs = pd.DataFrame(gene_cvs).groupby('gene').median()
-
-    return gene_cvs
-
+    return r2s
 
 
 if __name__ == '__main__':
@@ -100,42 +89,37 @@ if __name__ == '__main__':
         beds[s].groupby(['chr', 'start', 'end'])[list(agg_fun.keys())].agg(agg_fun).reset_index().assign(sample=s) for s in samples
     ])
 
+    df = df.assign(len_log2=np.log2(df['len']))
+
     df = df.assign(ratio_bin=df['ratio'].apply(lambda v: bin_cnv(v, thresold=4)))
     df = df.assign(cn_bin=df['cn'].apply(lambda v: bin_cnv(v, thresold=10)))
     df = df.assign(chrm_bin=df['chrm'].apply(lambda v: bin_cnv(v, thresold=6)))
     df = df.assign(ploidy_bin=df['ploidy'].apply(lambda v: bin_cnv(v, thresold=5)))
 
-    df = df.assign(len_log10=np.log10(df['len']))
+    # - Copy-number ratio bias heatmap
+    ratios_heatmap_bias(df)
+    plt.gcf().set_size_inches(5.5, 5.5)
+    plt.savefig('reports/seg_fc_heatmap.png', bbox_inches='tight', dpi=600)
+    plt.close('all')
 
     # -
-    pred_cnv = lm_fc(crispr.loc[genes, samples], cnv.loc[genes, samples])
-    pred_cnv_covars = lm_fc(crispr.loc[genes, samples], cnv.loc[genes, samples], ploidy=ploidy, chrm=chrm)
+    x_features = [('all', ['cn', 'chrm', 'ratio', 'len_log2']), ('cn', ['cn'])]
 
+    lm_r2s = pd.concat([
+        lm_fc(
+            df.query("sample == @c")['fc'].rename(c), df.query("sample == @c")[f]
+        ).assign(type=n) for n, f in x_features for c in samples
+    ]).reset_index(drop=True)
 
-    # Copy-number ratio bias heatmap
-    ratios_heatmap_bias(df)
+    # -
+    plot_df = lm_r2s.groupby(['sample', 'type']).median().reset_index()
+    plot_df = pd.pivot_table(plot_df, index='sample', columns='type', values='r2')
 
-    plt.gcf().set_size_inches(5.5, 5.5)
-    plt.savefig('reports/seg_fc_heatmap_ploidy.png', bbox_inches='tight', dpi=600)
-    plt.close('all')
+    g = sns.scatterplot('all', 'cn', data=plot_df)
 
-    # Copy-number ratio vs CRISPR bias boxplot
-    ratios_fc_boxplot(df)
+    x0, x1 = g.get_xlim()
+    y0, y1 = g.get_ylim()
+    lims = [max(x0, y0), min(x1, y1)]
+    g.plot(lims, lims, ':k')
 
-    plt.gcf().set_size_inches(2, 3)
-    plt.savefig('reports/seg_fc_boxplot.png', bbox_inches='tight', dpi=600)
-    plt.close('all')
-
-    #
-    len_corr = {}
-    for s in samples:
-        df_ = df.query("sample == '{}'".format(s))
-        r, p = pearsonr(df_['len_log10'], df_['fc'])
-        len_corr[s] = r
-
-    len_corr = pd.Series(len_corr).sort_values()
-
-    sns.jointplot(df_['len_log10'], df_['cn'])
-    # plt.gcf().set_size_inches(10, 3)
-    plt.savefig('reports/seg_len_lmplot.png', bbox_inches='tight', dpi=600)
-    plt.close('all')
+    plt.show()
