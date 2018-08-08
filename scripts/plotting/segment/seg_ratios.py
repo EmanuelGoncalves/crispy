@@ -14,6 +14,8 @@ from crispy.utils import bin_cnv
 from scripts.plotting import bias_boxplot
 from sklearn.model_selection import ShuffleSplit
 from sklearn.linear_model import LinearRegression
+from sklearn.gaussian_process import GaussianProcessRegressor
+from sklearn.gaussian_process.kernels import WhiteKernel, ConstantKernel, RBF
 
 
 def import_seg_crispr_bed(sample):
@@ -52,8 +54,6 @@ def ratios_fc_boxplot(plot_df, x='ratio_bin', y='fc'):
 
 
 def lm_fc(y, X, n_splits=10, test_size=.3, normalize=False):
-    ConstantKernel() * RBF(length_scale_bounds=(1e-5, 10)) + WhiteKernel()
-
     # Cross-validation
     cv = ShuffleSplit(n_splits=n_splits, test_size=test_size)
 
@@ -61,10 +61,15 @@ def lm_fc(y, X, n_splits=10, test_size=.3, normalize=False):
     r2s = []
     for i, (train_idx, test_idx) in enumerate(cv.split(y)):
         # Train model
-        lm = LinearRegression(normalize=normalize).fit(X.iloc[train_idx], y.iloc[train_idx])
+        # lm = LinearRegression(normalize=normalize).fit(X.iloc[train_idx], y.iloc[train_idx])
+        kernel = ConstantKernel() * RBF(length_scale_bounds=(1e-5, 10)) + WhiteKernel()
+
+        gpr = GaussianProcessRegressor(kernel, alpha=1e-10, normalize_y=True, n_restarts_optimizer=3)
+
+        gpr = gpr.fit(X.iloc[test_idx], y.iloc[test_idx])
 
         # Evalutate model
-        r2 = lm.score(X.iloc[test_idx], y.iloc[test_idx])
+        r2 = gpr.score(X.iloc[test_idx], y.iloc[test_idx])
 
         # Store
         r2s.append(dict(r2=r2, sample=y.name))
