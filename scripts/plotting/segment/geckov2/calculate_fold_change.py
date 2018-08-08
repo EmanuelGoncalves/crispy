@@ -3,6 +3,7 @@
 
 import numpy as np
 import pandas as pd
+import crispy as cy
 import scripts as mp
 import seaborn as sns
 from pybedtools import BedTool
@@ -18,7 +19,7 @@ GECKOV2_SGRNA_MAP = 'data/geckov2/Achilles_v3.3.8_sgRNA_mappings.txt'
 GECKOV2_CN = 'data/geckov2/Achilles_v3.3.8_ABSOLUTE_CN_segtab.txt'
 
 BED_NAMES = ['#chr', 'start', 'end', 'cn', 'chr', 'sgrna_start', 'sgrna_end', 'fc', 'sgrna_id']
-BED_NAMES_ORDER = ['chr', 'start', 'end', 'sgrna_id', 'sgrna_start', 'sgrna_end', 'cn', 'fc', 'chrm', 'ploidy', 'ratio', 'len']
+BED_NAMES_ORDER = ['chr', 'start', 'end', 'sgrna_id', 'sgrna_start', 'sgrna_end', 'cn', 'fc', 'fc_scaled', 'chrm', 'ploidy', 'ratio', 'len']
 
 
 def replicates_corr(ss):
@@ -117,8 +118,31 @@ def intersect_bed(sample, fc):
     round_cols = ['fc', 'chrm', 'ploidy', 'ratio']
     bed[round_cols] = bed[round_cols].round(5)
 
+    # Scale fold-changes
+    bed = scale_geckov2(bed)
+
     # Export
     bed[BED_NAMES_ORDER].to_csv(file_bed, index=False, sep='\t')
+
+    return bed
+
+
+def scale_geckov2(bed):
+    lib = pd.read_csv(GECKOV2_SGRNA_MAP, sep='\t').dropna(subset=['Chromosome', 'Pos', 'Strand'])
+    lib['sgrna'] = lib['Guide'].apply(lambda v: v.split('_')[0])
+    lib['gene'] = lib['Guide'].apply(lambda v: v.split('_')[1])
+    lib['cut'] = lib['Chromosome'] + '_' + lib['Pos'].astype(str)
+
+    sgrna_offtarget = lib.groupby('sgrna')['cut'].agg(lambda x: len(set(x)))
+    lib = lib[lib['sgrna'].isin(sgrna_offtarget[sgrna_offtarget == 1].index)]
+
+    ess = cy.get_essential_genes()
+    ness = cy.get_non_essential_genes()
+
+    ess_metric = np.median(bed.set_index('sgrna_id').reindex(lib[lib['gene'].isin(ess)]['sgrna'])['fc'].dropna(), axis=0)
+    ness_metric = np.median(bed.set_index('sgrna_id').reindex(lib[lib['gene'].isin(ness)]['sgrna'])['fc'].dropna(), axis=0)
+
+    bed = bed.assign(fc_scaled=bed['fc'].subtract(ness_metric).divide(ness_metric - ess_metric))
 
     return bed
 
@@ -156,9 +180,6 @@ if __name__ == '__main__':
 
     # Average replicates
     fc = fc.groupby(ss.loc[[i.split(' Rep')[0] for i in fc.columns], 'name'].values, axis=1).mean()
-
-    # Export
-    fc.round(5).to_csv('data/geckov2/sgrna_fc.csv')
 
     # -
     export_cn_bed_per_sample(list(fc))

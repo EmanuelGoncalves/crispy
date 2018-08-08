@@ -1,23 +1,40 @@
 #!/usr/bin/env python
 # Copyright (C) 2018 Emanuel Goncalves
 
+import os
 import numpy as np
 import pandas as pd
 import crispy as cy
 import seaborn as sns
 import matplotlib.pyplot as plt
+from crispy.utils import bin_cnv
+from plotting import get_palette_continuous, FLIERPROPS, MEANLINEPROPS
 from scripts.plotting.segment.geckov2.calculate_fold_change import GECKOV2_SGRNA_MAP
+
+
+def import_seg_crispr_beds():
+    # Samples
+    samples = list(pd.read_csv('data/geckov2/Achilles_v3.3.8.samplesheet.txt', sep='\t', index_col=1)['name'])
+    samples = [s for s in samples if os.path.exists(f'data/geckov2/crispr_bed/{s}.crispr.snp.bed')]
+
+    # SNP6 + CRISPR BED files
+    beds = {s: pd.read_csv(f'data/geckov2/crispr_bed/{s}.crispr.snp.bed', sep='\t') for s in samples}
+
+    return beds
 
 
 def bin_bkdist(distance):
     if distance == -1:
         bin_distance = 'diff. chr.'
 
+    elif distance == 0:
+        bin_distance = '0'
+
     elif 1 < distance < 10e3:
         bin_distance = '1-10 kb'
 
     elif 10e3 < distance < 100e3:
-        bin_distance = '1-100 kb'
+        bin_distance = '10-100 kb'
 
     elif 100e3 < distance < 1e6:
         bin_distance = '0.1-1 Mb'
@@ -40,20 +57,23 @@ def lib_off_targets():
     lib['gene'] = lib['Guide'].apply(lambda v: v.split('_')[1])
     lib['start'] = lib['start'].astype(int)
     lib['end'] = lib['start'] + lib['sgrna'].apply(len) + lib['PAM'].apply(len)
+    lib['cut'] = lib['#chr'] + '_' + lib['start'].astype(str)
 
-    sgrna_maps = lib['sgrna'].value_counts().rename('ncuts').to_frame()
+    sgrna_maps = lib.groupby('sgrna')['cut'].agg(lambda x: len(set(x))).sort_values().rename('ncuts').reset_index()
     sgrna_maps = sgrna_maps[sgrna_maps['ncuts'] > 1]
 
     sgrna_nchrs = lib.groupby('sgrna')['#chr'].agg(lambda x: len(set(x)))
-    sgrna_maps = sgrna_maps.assign(nchrs=sgrna_nchrs.loc[sgrna_maps.index].values)
+    sgrna_maps = sgrna_maps.assign(nchrs=sgrna_nchrs.loc[sgrna_maps['sgrna']].values)
 
     sgrna_genes = lib.groupby('sgrna')['gene'].agg(lambda x: ';'.join(set(x)))
-    sgrna_maps = sgrna_maps.assign(genes=sgrna_genes.loc[sgrna_maps.index].values)
+    sgrna_maps = sgrna_maps.assign(genes=sgrna_genes.loc[sgrna_maps['sgrna']].values)
     sgrna_maps = sgrna_maps.assign(ngenes=sgrna_maps['genes'].apply(lambda x: len(x.split(';'))))
 
     sgrna_distance = lib.groupby('sgrna')['start'].agg([np.min, np.max]).eval('amax-amin')
-    sgrna_maps = sgrna_maps.assign(distance=[sgrna_distance[g] if sgrna_nchrs[g] == 1 else -1 for g in sgrna_maps.index])
+    sgrna_maps = sgrna_maps.assign(distance=[sgrna_distance[g] if sgrna_nchrs[g] == 1 else -1 for g in sgrna_maps['sgrna']])
     sgrna_maps = sgrna_maps.assign(distance_bin=sgrna_maps['distance'].apply(bin_bkdist).values)
+
+    sgrna_maps = sgrna_maps.set_index('sgrna')
 
     return sgrna_maps
 
@@ -74,6 +94,11 @@ def scale_geckov2(fc):
 
 if __name__ == '__main__':
     # -
+    beds = import_seg_crispr_beds()
+
+    ploidy = pd.Series({s: beds[s]['ploidy'].mean() for s in beds})
+
+    # -
     fc = pd.read_csv('data/geckov2/sgrna_fc.csv', index_col=0)
     fc = scale_geckov2(fc)
 
@@ -81,30 +106,47 @@ if __name__ == '__main__':
     sgrna_maps = lib_off_targets()
 
     # -
-    plot_df = pd.concat([sgrna_maps.query('ncuts <= 6'), fc], axis=1, sort=False).dropna().reset_index()
+    hue_order = ['1-10 kb', '10-100 kb', '0.1-1 Mb', '1-10 Mb', '>10 Mb', 'diff. chr.']
+
+    plot_df = pd.concat([sgrna_maps.query('ncuts <= 10'), fc], axis=1, sort=False).dropna().reset_index()
     plot_df = pd.melt(plot_df, id_vars=['index'] + list(sgrna_maps))
-    plot_df = plot_df.query('distance > 0').query('ngenes == 1')
+    plot_df = plot_df[[ncuts == nchrs if dist == -1 else True for ncuts, nchrs, dist in plot_df[['ncuts', 'nchrs', 'distance']].values]]
+    plot_df['ncuts'] = plot_df['ncuts'].astype(int)
 
-    #
-    hue_order = ['1-10 kb', '1-100 kb', '0.1-1 Mb', '1-10 Mb', '>10 Mb']
-
-    for s in list(fc):
-        sns.boxplot('ncuts', 'value', 'distance_bin', data=plot_df.query('variable == @s'), notch=True, hue_order=hue_order, linewidth=.3, fliersize=1)
-
-        plt.legend(title='', prop={'size': 3})
-
-        plt.axhline(-1, lw=.3, ls='--')
-
-        plt.gcf().set_size_inches(2, 2)
-        plt.savefig(f'reports/geckov2_off_target_{s}.png', bbox_inches='tight', dpi=600)
-        plt.close('all')
-
-    sns.boxplot('ncuts', 'value', 'distance_bin', data=plot_df, notch=True, hue_order=hue_order, linewidth=.3, fliersize=1)
+    sns.boxplot(
+        'ncuts', 'value', 'distance_bin', data=plot_df, notch=True, hue_order=hue_order, linewidth=.3,
+        meanprops=MEANLINEPROPS, flierprops=FLIERPROPS, palette=get_palette_continuous(len(hue_order))
+    )
 
     plt.legend(title='', prop={'size': 3}, frameon=False)
 
-    plt.axhline(-1, lw=.3, ls='--')
+    plt.axhline(-1, lw=.1, ls='--', c='black', zorder=0)
+    plt.axhline(0, lw=.1, ls='--', c='black', zorder=0)
 
     plt.gcf().set_size_inches(2, 2)
     plt.savefig(f'reports/geckov2_off_target.png', bbox_inches='tight', dpi=600)
+    plt.close('all')
+
+    # -
+    plot_df = pd.concat([
+        sgrna_maps.query('ncuts <= 10 & distance == -1 & ncuts == nchrs'), fc
+    ], axis=1, sort=False).dropna().reset_index()
+    plot_df = pd.melt(plot_df, id_vars=['index'] + list(sgrna_maps))
+    plot_df = plot_df.assign(ploidy=ploidy[plot_df['variable']].apply(lambda v: bin_cnv(v, 5)).values)
+    plot_df['ncuts'] = plot_df['ncuts'].astype(int)
+
+    hue_order = ['2', '3', '4', '5+']
+
+    sns.boxplot(
+        'ncuts', 'value', 'ploidy', data=plot_df, notch=True, hue_order=hue_order, linewidth=.3,
+        meanprops=MEANLINEPROPS, flierprops=FLIERPROPS, palette=get_palette_continuous(len(hue_order))
+    )
+
+    plt.legend(title='', prop={'size': 3}, frameon=False)
+
+    plt.axhline(-1, lw=.1, ls='--', c='black', zorder=0)
+    plt.axhline(0, lw=.1, ls='--', c='black', zorder=0)
+
+    plt.gcf().set_size_inches(2, 2)
+    plt.savefig(f'reports/geckov2_off_target_ploidy.png', bbox_inches='tight', dpi=600)
     plt.close('all')

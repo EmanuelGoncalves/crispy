@@ -16,7 +16,7 @@ from crispy.benchmark_plot import plot_chromosome, plot_rearrangements
 
 MEANLINEPROPS = dict(linestyle='--', linewidth=.3, color='red')
 
-FLIERPROPS = dict(marker='o', markersize=.1, linestyle='none', alpha=.5, lw=0)
+FLIERPROPS = dict(marker='.', markersize=.1, linestyle='none', alpha=.5, lw=0)
 
 
 def plot_rearrangements_seg(sample, chrm, xlim=None, import_svs='all', genes_highlight=None):
