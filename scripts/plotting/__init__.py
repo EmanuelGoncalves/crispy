@@ -45,15 +45,35 @@ def plot_rearrangements_seg(sample, chrm, xlim=None, import_svs='all', genes_hig
     return [ax1, ax2, ax3]
 
 
+def plot_chromosome_from_bed(sample, chrm, genes_highlight=None):
+    bed_df = pd.read_csv(f'data/crispr_bed/{sample}.crispy.bed', sep='\t').query('chr == @chrm').set_index('sgrna_id')
+    bed_df = bed_df.assign(pos=bed_df[['sgrna_start', 'sgrna_end']].mean(1))
+
+    seg = bed_df.groupby(['chr', 'start', 'end'])['cn'].first().rename('total_cn').reset_index()
+
+    genes_highlight = [] if genes_highlight is None else bed_df[bed_df['gene'].isin(genes_highlight)].index
+
+    ax = plot_chromosome(
+        bed_df['pos'], bed_df['fc'].rename('CRISPR-Cas9'), bed_df['gp_mean'].rename('Fitted mean'),
+        seg=seg, highlight=genes_highlight, chrm_cytobands=chrm, legend=True, tick_base=2, mark_essential=True
+    )
+
+    ax.set_xlabel('Position on chromosome {} (Mb)'.format(chrm), fontsize=5)
+    ax.set_ylabel('')
+    ax.set_title('{}'.format(sample), fontsize=7)
+
+    return ax
+
+
 def plot_chromosome_seg(sample, chrm, dtype='snp', genes_highlight=None):
     # CRISPR lib
     lib = cy.get_crispr_lib()
-    lib = lib.assign(pos=lib[['start', 'end']].mean(1).values)
+    lib = lib.assign(pos=lib[['STARTpos', 'ENDpos']].mean(1).values)
 
     # Build-frame
     plot_df = pd.read_csv('data/crispy/gdsc/crispy_crispr_{}.csv'.format(sample), index_col=0)
     plot_df = plot_df.query("fit_by == '{}'".format(chrm))
-    plot_df = plot_df.assign(pos=lib.groupby('gene')['pos'].mean().loc[plot_df.index])
+    plot_df = plot_df.assign(pos=lib.groupby('GENES')['pos'].mean().loc[plot_df.index])
 
     # Copy-number segmentation
     if dtype == 'snp':

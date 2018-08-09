@@ -9,7 +9,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 from crispy.utils import bin_cnv
 from plotting import get_palette_continuous, FLIERPROPS, MEANLINEPROPS
-from scripts.plotting.segment.geckov2.calculate_fold_change import GECKOV2_SGRNA_MAP
+from plotting.geckov2 import GECKOV2_SGRNA_MAP
 
 
 def import_seg_crispr_beds():

@@ -41,20 +41,14 @@ def replicates_corr(ss):
 
 def import_lib():
     lib = pd.read_csv(GECKOV2_SGRNA_MAP, sep='\t').dropna(subset=['Chromosome', 'Pos', 'Strand'])
-
     lib['sgrna'] = lib['Guide'].apply(lambda v: v.split('_')[0])
-
-    sgrna_maps = lib['sgrna'].value_counts()
-    lib = lib[lib['sgrna'].isin(sgrna_maps[sgrna_maps == 1].index)]
 
     lib = lib.rename(columns={'Chromosome': '#chr', 'Pos': 'start'})
 
     lib['start'] = lib['start'].astype(int)
     lib['end'] = lib['start'] + lib['sgrna'].apply(len) + lib['PAM'].apply(len)
 
-    lib = lib.set_index('sgrna')
-
-    lib['id'] = lib.index
+    lib = lib.groupby(['#chr', 'start', 'end', 'sgrna'])['PAM'].count().rename('ngenes').reset_index()
 
     return lib
 
@@ -91,8 +85,8 @@ def intersect_bed(sample, fc):
     file_bed = f'data/geckov2/crispr_bed/{sample}.crispr.snp.bed'
 
     # Build CRISPR BED
-    crispr_bed = pd.concat([fc.loc[lib.index, sample], lib], axis=1, sort=True).dropna()
-    crispr_bed = crispr_bed[['#chr', 'start', 'end', sample, 'id']]
+    crispr_bed = lib.assign(fc=fc.loc[lib['sgrna'], sample].values)
+    crispr_bed = crispr_bed[['#chr', 'start', 'end', 'fc', 'sgrna']]
     crispr_bed.to_csv(file_crispr_bed, index=False, sep='\t')
 
     # Import BED files
@@ -139,8 +133,8 @@ def scale_geckov2(bed):
     ess = cy.get_essential_genes()
     ness = cy.get_non_essential_genes()
 
-    ess_metric = np.median(bed.set_index('sgrna_id').reindex(lib[lib['gene'].isin(ess)]['sgrna'])['fc'].dropna(), axis=0)
-    ness_metric = np.median(bed.set_index('sgrna_id').reindex(lib[lib['gene'].isin(ness)]['sgrna'])['fc'].dropna(), axis=0)
+    ess_metric = np.median(bed[bed['sgrna_id'].isin(lib[lib['gene'].isin(ess)]['sgrna'])]['fc'], axis=0)
+    ness_metric = np.median(bed[bed['sgrna_id'].isin(lib[lib['gene'].isin(ness)]['sgrna'])]['fc'], axis=0)
 
     bed = bed.assign(fc_scaled=bed['fc'].subtract(ness_metric).divide(ness_metric - ess_metric))
 

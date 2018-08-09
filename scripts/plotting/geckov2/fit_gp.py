@@ -185,7 +185,7 @@ if __name__ == '__main__':
     plt.close('all')
 
     # -
-    x_features = [('all', ['cn', 'chrm', 'ratio', 'len_log2']), ('cn', ['cn'])]
+    x_features = [('all', ['cn', 'chrm', 'ratio', 'len_log2']), ('cn', ['cn']), ('ratio', ['ratio'])]
 
     lm_r2s = pd.concat([
         lm_fc(
@@ -197,7 +197,7 @@ if __name__ == '__main__':
     plot_df = lm_r2s.groupby(['sample', 'type']).mean().reset_index()
     plot_df = pd.pivot_table(plot_df, index='sample', columns='type', values='r2')
 
-    g = sns.scatterplot('all', 'cn', data=plot_df)
+    g = sns.scatterplot('ratio', 'cn', data=plot_df)
 
     x0, x1 = g.get_xlim()
     y0, y1 = g.get_ylim()
