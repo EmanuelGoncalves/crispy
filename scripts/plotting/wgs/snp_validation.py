@@ -67,7 +67,6 @@ if __name__ == '__main__':
     df[df['sample'].isin(mp.BRCA_SAMPLES)]\
         .query("ratio_bin == '2'")\
         .sort_values(['cnv', 'fc'], ascending=[False, False])\
-        .query("sample != 'HCC38'")\
         .tail(60)
 
     # -

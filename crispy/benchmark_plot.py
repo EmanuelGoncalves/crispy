@@ -211,7 +211,7 @@ def plot_rearrangements(
 
     # CRISPR
     crispr_ = crispr[crispr['chr'] == chrm]
-    crispr_ = crispr_.assign(location=crispr_[['start', 'end']].mean(1))
+    crispr_ = crispr_.assign(location=crispr_[['STARTpos', 'ENDpos']].mean(1))
 
     #
     if brass_.shape[0] == 0:

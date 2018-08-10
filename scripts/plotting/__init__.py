@@ -21,7 +21,7 @@ FLIERPROPS = dict(marker='.', markersize=.1, linestyle='none', alpha=.5, lw=0)
 
 def plot_rearrangements_seg(sample, chrm, xlim=None, import_svs='all', genes_highlight=None):
     # Import CRISRP lib
-    crispr_lib = cy.get_crispr_lib().groupby('gene').agg({'start': np.min, 'end': np.max})
+    crispr_lib = cy.get_crispr_lib().groupby('GENES').agg({'STARTpos': np.min, 'ENDpos': np.max})
 
     # Import BRASS bedpe
     bedpe = mp.import_brass_bedpe('{}/{}.brass.annot.bedpe'.format(mp.WGS_BRASS_BEDPE, sample), bkdist=-1, splitreads=True)
