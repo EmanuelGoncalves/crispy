@@ -53,11 +53,9 @@ def aucs_scatter(x, y, data):
     sns.rugplot(data[x], height=.02, axis='x', c=cy.PAL_DBGD[0], lw=.3, ax=ax)
     sns.rugplot(data[y], height=.02, axis='y', c=cy.PAL_DBGD[0], lw=.3, ax=ax)
 
-    x_lim, y_lim = ax.get_xlim(), ax.get_ylim()
-    ax.plot(x_lim, y_lim, 'k--', lw=.3)
-
-    ax.set_xlim(x_lim)
-    ax.set_ylim(y_lim)
+    (x0, x1), (y0, y1) = ax.get_xlim(), ax.get_ylim()
+    lims = [max(x0, y0), min(x1, y1)]
+    ax.plot(lims, lims, 'k--', lw=.3, zorder=0)
 
     ax.set_xlabel('{} fold-changes AURCs'.format(x.capitalize()))
     ax.set_ylabel('{} fold-changes AURCs'.format(y.capitalize()))
