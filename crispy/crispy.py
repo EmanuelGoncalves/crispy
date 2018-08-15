@@ -21,10 +21,11 @@ CRISPR_LIB_COLUMNS = ['chr', 'start', 'end', 'sgrna']
 BED_COLUMNS = ['chr', 'start', 'end', 'copy_number', 'sgrna_chr', 'sgrna_start', 'sgrna_end', 'sgrna', 'fold_change']
 
 
+# TODO: add check for minimum number of reads 15M
 class Crispy(object):
 
     def __init__(
-            self, raw_counts, copy_number, library, plasmid='control', qc_replicates=True, qc_replicates_thres=.7, kernel=None
+            self, raw_counts, copy_number, library, plasmid='control', kernel=None
     ):
         f"""
         Initialise a Crispy processing pipeline object
@@ -41,11 +42,6 @@ class Crispy(object):
         :param plasmid: str, optinal
             Column in raw_counts to compare to other samples
 
-        :param qc_replicates: bool, optional
-            Perform QC replicates analysis
-
-        :param qc_replicates_thres: float, optional
-            QC replicates analysis Pearson correlation coeficient threshold
 
         """
 
@@ -59,21 +55,24 @@ class Crispy(object):
 
         self.kernel = self.get_default_kernel() if kernel is None else kernel
 
-        self.qc_replicates = qc_replicates
-        self.qc_replicates_thres = qc_replicates_thres
-
-    def correct(self, x_features=None):
+    def correct(self, x_features=None, qc_replicates_thres=.7, round_dec=5):
         """
 
         :param x_features: list
             Columns to be used as features to predict segments fold-changes
+
+        :param qc_replicates_thres: float
+            Replicate fold-change Pearson correlation threshold
+
+        :param round_dec: int
+            Number of decimal places for floating numbers. If equals to None no rounding is performed
 
         :return: pandas.DataFrame
         """
         x_features = ['copy_number', 'chr_copy', 'ratio', 'len_log2'] if x_features is None else x_features
 
         # - Estimate fold-changes from raw counts
-        fc = self.fold_changes()
+        fc = self.fold_changes(qc_replicates_thres=qc_replicates_thres)
 
         if fc is None:
             return fc
@@ -96,6 +95,11 @@ class Crispy(object):
 
         # Append estimated averages back into the bed file
         bed_df['gp_mean'] = gp_mean[bed_df.set_index(seg_cols).index].values
+
+        # Round floating
+        if round_dec is not None:
+            round_cols = ['fold_change', 'chr_copy', 'ploidy', 'ratio', 'len_log2', 'gp_mean']
+            bed_df[round_cols] = bed_df[round_cols].round(round_dec)
 
         return bed_df
 
@@ -218,20 +222,26 @@ class Crispy(object):
 
         return bed_df
 
-    def estimate_size_factors(self):
+    @staticmethod
+    def estimate_size_factors(raw_counts):
         """
         Normalisation coefficients are estimated similarly to DESeq2 (DOI: 10.1186/s13059-014-0550-8).
 
         :returns pandas.Series: Normalisation factors
 
         """
-        geom_mean = st.gmean(self.raw_counts, axis=1)
+        geom_mean = st.gmean(raw_counts, axis=1)
 
-        factors = self.raw_counts.divide(geom_mean, axis=0)\
+        factors = raw_counts.divide(geom_mean, axis=0)\
             .median()\
             .rename('size_factors')
 
         return factors
+
+    @staticmethod
+    def library_size_factor(raw_counts, scale=1e7):
+        factors = raw_counts.sum() * scale
+        return factors.rename('size_factors')
 
     @staticmethod
     def replicates_correlation(fold_changes):
@@ -249,20 +259,26 @@ class Crispy(object):
 
         return corr
 
+    def scale_raw_counts(self, counts, scale_fun=None):
+        scale_fun = self.library_size_factor if scale_fun is None else scale_fun
+
+        factors = scale_fun(self.raw_counts)
+
+        return counts.divide(factors)
+
     def replicates_foldchanges(self):
         """
         Estimate replicates fold-changes
         :return: pandas.DataFrame
         """
+        # Remove plasmid low count sgRNAs
+        df = self.raw_counts.loc[self.raw_counts[self.plasmid] >= LOW_COUNT_THRES]
+
         # Add pseudocount
-        df = self.raw_counts + PSEUDO_COUNT
+        df = df + PSEUDO_COUNT
 
         # Calculate normalisation factors
-        factors = self.estimate_size_factors()
-        df = df.divide(factors)
-
-        # Remove plasmid low count sgRNAs
-        df = df.loc[self.raw_counts[self.plasmid] > LOW_COUNT_THRES]
+        df = self.scale_raw_counts(df)
 
         # Calculate log fold-changes
         df = df.divide(df[self.plasmid], axis=0)\
@@ -271,9 +287,12 @@ class Crispy(object):
 
         return df
 
-    def fold_changes(self, round_dec=5):
+    def fold_changes(self, qc_replicates_thres=.7):
         """
         Fold-changes estimation
+
+        :param qc_replicates_thres: float
+            Replicate fold-change Pearson correlation threshold
 
         :returns pandas.Series: fold-changes compared to plasmid
 
@@ -281,25 +300,24 @@ class Crispy(object):
         fold_changes = self.replicates_foldchanges()
 
         # Remove replicates with low correlation
-        if self.qc_replicates:
+        if qc_replicates_thres is not None:
             corr = self.replicates_correlation(fold_changes)
 
-            discarded_samples = corr.query(f'corr < {self.qc_replicates_thres}')
-            discarded_samples = pd.unique(discarded_samples[['sample_1', 'sample_2']].unstack())
+            samples = corr.query(f'corr > {qc_replicates_thres}')
+            samples = pd.unique(samples[['sample_1', 'sample_2']].unstack())
+
+            discarded_samples = [s for s in fold_changes if s not in samples]
 
             if len(discarded_samples) > 0:
-                warnings.warn(f'Replicates discarded (threshold {self.qc_replicates_thres:.2f}): {discarded_samples}')
+                warnings.warn(f'QC correlation, replicates discarded: {discarded_samples}')
 
-                fold_changes = fold_changes.drop(discarded_samples, axis=1)
-
-            if fold_changes.shape[1] == 0:
-                warnings.warn(f'All replicates failed QC correlation threshold {self.qc_replicates_thres:.2f}')
+            if len(samples) == 0:
+                warnings.warn(f'All replicates failed QC correlation threshold {qc_replicates_thres:.2f}')
                 return None
+
+            fold_changes = fold_changes[samples]
 
         # Average replicates
         fold_changes = fold_changes.mean(1)
-
-        # Round
-        fold_changes = fold_changes.round(round_dec)
 
         return fold_changes
