@@ -1,13 +1,17 @@
 #!/usr/bin/env python
 # Copyright (C) 2018 Emanuel Goncalves
 
+import warnings
 import numpy as np
 import pandas as pd
 import scipy.stats as st
 from pybedtools import BedTool
+from sklearn.gaussian_process import GaussianProcessRegressor
+from sklearn.gaussian_process.kernels import WhiteKernel, ConstantKernel, RBF
 
 
 PSEUDO_COUNT = 1
+
 LOW_COUNT_THRES = 30
 
 COPY_NUMBER_COLUMNS = ['chr', 'start', 'end', 'copy_number']
@@ -20,7 +24,7 @@ BED_COLUMNS = ['chr', 'start', 'end', 'copy_number', 'sgrna_chr', 'sgrna_start',
 class Crispy(object):
 
     def __init__(
-            self, raw_counts, copy_number, library, plasmid='control', qc_replicates=True, qc_replicates_thres=.7
+            self, raw_counts, copy_number, library, plasmid='control', qc_replicates=True, qc_replicates_thres=.7, kernel=None
     ):
         f"""
         Initialise a Crispy processing pipeline object
@@ -53,15 +57,83 @@ class Crispy(object):
 
         self.plasmid = plasmid
 
+        self.kernel = self.get_default_kernel() if kernel is None else kernel
+
         self.qc_replicates = qc_replicates
         self.qc_replicates_thres = qc_replicates_thres
 
-    def correct(self):
+    def correct(self, x_features=None):
+        """
+
+        :param x_features: list
+            Columns to be used as features to predict segments fold-changes
+
+        :return: pandas.DataFrame
+        """
+        x_features = ['copy_number', 'chr_copy', 'ratio', 'len_log2'] if x_features is None else x_features
+
+        # - Estimate fold-changes from raw counts
         fc = self.fold_changes()
 
+        if fc is None:
+            return fc
+
+        # - Intersect sgRNAs genomic localisation with copy-number segments
         bed_df = self.intersect_sgrna_copynumber(fc)
 
+        # - Fit Gaussian Process on segment fold-changes
+        seg_cols = ['chr', 'start', 'end']
+
+        agg_fun = dict(
+            fold_change=np.mean, copy_number=np.mean, chr_copy=np.mean, ploidy=np.mean, ratio=np.mean, len_log2=np.mean
+        )
+
+        # Aggregate features by segment
+        bed_df_seg = bed_df.groupby(seg_cols).agg(agg_fun)
+
+        # Fit averaged fold-changes across segments
+        gp_mean = self.gp_fit(bed_df_seg[x_features], bed_df_seg['fold_change'])
+
+        # Append estimated averages back into the bed file
+        bed_df['gp_mean'] = gp_mean[bed_df.set_index(seg_cols).index].values
+
         return bed_df
+
+    @staticmethod
+    def get_default_kernel():
+        """
+        Deafult Gaussian Process kernel
+
+        :return: sklearn.gaussian_process.kernels.Sum
+        """
+        return ConstantKernel() * RBF(length_scale_bounds=(1e-5, 10)) + WhiteKernel()
+
+    def gp_fit(self, x, y, alpha=1e-10, n_restarts_optimizer=3):
+        """
+        Fit Gaussian Process Regressor.
+
+        :param x: pandas.DataFrame
+            Features, e.g. copy-number, segment lenght, copy-number ratio
+
+        :param y: pandas.Series
+            Dependent variable, e.g. copy-number segments average fold-changes
+
+        :param alpha:
+
+        :param n_restarts_optimizer:
+
+        :return: pandas.Series
+            Estimated fold-changes
+        """
+        gpr = GaussianProcessRegressor(
+            self.kernel, alpha=alpha, n_restarts_optimizer=n_restarts_optimizer
+        )
+
+        gpr = gpr.fit(x, y)
+
+        gp_mean = pd.Series(gpr.predict(x), index=x.index).rename('gp_mean')
+
+        return gp_mean
 
     def get_bed_copy_number(self):
         """
@@ -134,14 +206,15 @@ class Crispy(object):
         # Calculate chromosome copies and cell ploidy
         chrm, ploidy = self.calculate_ploidy(copy_number_bed)
 
-        bed_df = bed_df.assign(chrm_copy=chrm[bed_df['chr']].values)
+        bed_df = bed_df.assign(chr_copy=chrm[bed_df['chr']].values)
         bed_df = bed_df.assign(ploidy=ploidy)
 
         # Calculate copy-number ratio
-        bed_df = bed_df.assign(ratio=bed_df.eval('copy_number / chrm_copy'))
+        bed_df = bed_df.assign(ratio=bed_df.eval('copy_number / chr_copy'))
 
         # Calculate segment length
         bed_df = bed_df.assign(len=bed_df.eval('end - start'))
+        bed_df = bed_df.assign(len_log2=bed_df['len'].apply(np.log2))
 
         return bed_df
 
@@ -160,14 +233,15 @@ class Crispy(object):
 
         return factors
 
-    def replicates_correlation(self):
+    @staticmethod
+    def replicates_correlation(fold_changes):
         """
         Raw counts pearson correlations
 
         :returns pandas.Series: Pearson correlation coefficients
 
         """
-        corr = self.raw_counts.drop(self.plasmid, axis=1).corr()
+        corr = fold_changes.corr()
 
         corr = corr.where(np.triu(np.ones(corr.shape), 1).astype(np.bool))
         corr = corr.unstack().dropna().reset_index()
@@ -175,13 +249,10 @@ class Crispy(object):
 
         return corr
 
-    # TODO: Add print output to replicates excluded by QC
-    def fold_changes(self, round_dec=5):
+    def replicates_foldchanges(self):
         """
-        Fold-changes estimation
-
-        :returns pandas.Series: fold-changes compared to plasmid
-
+        Estimate replicates fold-changes
+        :return: pandas.DataFrame
         """
         # Add pseudocount
         df = self.raw_counts + PSEUDO_COUNT
@@ -198,20 +269,37 @@ class Crispy(object):
             .drop(self.plasmid, axis=1) \
             .apply(np.log2)
 
-        # Remove replicates with low correlation
-        if self.qc_replicates:
-            corr = self.replicates_correlation()
-
-            corr = corr.query(f'corr >= {self.qc_replicates_thres}')
-            assert corr.shape[0] > 0, f'All replicates failed QC correlation threshold {self.qc_replicates_thres}'
-
-            df = df[pd.unique(corr[['sample_1', 'sample_2']].unstack())]
-
-        # Average replicates
-        df = df.mean(1)
-
-        # Round
-        df = df.round(round_dec)
-
         return df
 
+    def fold_changes(self, round_dec=5):
+        """
+        Fold-changes estimation
+
+        :returns pandas.Series: fold-changes compared to plasmid
+
+        """
+        fold_changes = self.replicates_foldchanges()
+
+        # Remove replicates with low correlation
+        if self.qc_replicates:
+            corr = self.replicates_correlation(fold_changes)
+
+            discarded_samples = corr.query(f'corr < {self.qc_replicates_thres}')
+            discarded_samples = pd.unique(discarded_samples[['sample_1', 'sample_2']].unstack())
+
+            if len(discarded_samples) > 0:
+                warnings.warn(f'Replicates discarded (threshold {self.qc_replicates_thres:.2f}): {discarded_samples}')
+
+                fold_changes = fold_changes.drop(discarded_samples, axis=1)
+
+            if fold_changes.shape[1] == 0:
+                warnings.warn(f'All replicates failed QC correlation threshold {self.qc_replicates_thres:.2f}')
+                return None
+
+        # Average replicates
+        fold_changes = fold_changes.mean(1)
+
+        # Round
+        fold_changes = fold_changes.round(round_dec)
+
+        return fold_changes

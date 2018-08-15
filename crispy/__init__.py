@@ -4,7 +4,7 @@
 import pandas as pd
 import pkg_resources
 import seaborn as sns
-from crispy.association import CRISPRCorrection
+from crispy.crispy import Crispy
 from crispy.benchmark_plot import plot_cumsum_auc
 
 
@@ -67,7 +67,7 @@ CHR_SIZES_HG19 = {
 
 # - HANDLES
 __all__ = [
-    'CRISPRCorrection',
+    'Crispy',
     'get_example_data',
     'PAL_DBGD',
     'get_essential_genes',
