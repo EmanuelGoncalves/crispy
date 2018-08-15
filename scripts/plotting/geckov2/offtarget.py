@@ -6,10 +6,11 @@ import numpy as np
 import pandas as pd
 import crispy as cy
 import seaborn as sns
+from natsort import natsorted
 import matplotlib.pyplot as plt
 from crispy.utils import bin_cnv
 from plotting import get_palette_continuous, FLIERPROPS, MEANLINEPROPS
-from plotting.geckov2 import GECKOV2_SGRNA_MAP
+from plotting.geckov2.fit_gp import GECKOV2_SGRNA_MAP
 
 
 def import_seg_crispr_beds():
@@ -96,6 +97,7 @@ if __name__ == '__main__':
     # -
     beds = import_seg_crispr_beds()
 
+    # -
     ploidy = pd.Series({s: beds[s]['ploidy'].mean() for s in beds})
 
     # -
@@ -104,6 +106,29 @@ if __name__ == '__main__':
 
     # -
     sgrna_maps = lib_off_targets()
+    sgrna_maps['distance_kb'] = sgrna_maps['distance'] / 1e4
+    sgrna_maps['ncuts_bin'] = sgrna_maps['ncuts'].apply(lambda v: bin_cnv(v, thresold=10))
+    sgrna_maps['fc_mean'] = fc.loc[sgrna_maps.index].mean(1)
+
+    # -
+    plot_df = sgrna_maps.dropna().query('ngenes == 1')
+    col_order = natsorted(set(plot_df['ncuts_bin']))
+
+    g = sns.FacetGrid(plot_df, col='ncuts_bin', col_wrap=3, col_order=col_order, sharey=False, sharex=False)
+    g.map(sns.regplot, 'distance_kb', 'fc_mean')
+    # g.map(sns.kdeplot, 'distance_log', 'fc_mean', shade=True, n_levels=30, cmap='RdGy', shade_lowest=False)
+    plt.savefig(f'reports/offtarget_distance.png', bbox_inches='tight', dpi=600)
+    plt.close('all')
+
+    # -
+    plot_df = sgrna_maps.query('ngenes == 1')
+    plot_df = plot_df[(plot_df['nchrs'] == 1) | (plot_df['ncuts'] == plot_df['nchrs'])]
+
+    order = natsorted(set(plot_df['ncuts_bin']))
+    hue_order = ['1-10 kb', '10-100 kb', '0.1-1 Mb', '1-10 Mb', '>10 Mb', 'diff. chr.']
+    sns.boxplot('ncuts_bin', 'fc_mean', 'distance_bin', data=plot_df, order=order, hue_order=hue_order, notch=True)
+    plt.savefig(f'reports/offtarget_distance_boxplots.png', bbox_inches='tight', dpi=600)
+    plt.close('all')
 
     # -
     hue_order = ['1-10 kb', '10-100 kb', '0.1-1 Mb', '1-10 Mb', '>10 Mb', 'diff. chr.']

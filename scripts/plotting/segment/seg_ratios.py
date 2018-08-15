@@ -79,6 +79,23 @@ def calculate_bias_by(bed_gp, x_rank, groupby):
     return aucs
 
 
+def get_mobem(drop_factors=True):
+    index = 'COSMIC ID'
+
+    ss = pd.read_csv('/Users/eg14/Projects/dtrace/data/meta/samplesheet.csv').dropna(subset=[index]).set_index(index)
+
+    mobem = pd.read_csv('/Users/eg14/Projects/dtrace/data/PANCAN_mobem.csv', index_col=0)
+    mobem = mobem.set_index(ss.loc[mobem.index, 'Cell Line Name'], drop=True)
+    mobem = mobem.T
+
+    if drop_factors:
+        mobem = mobem.drop(['TISSUE_FACTOR', 'MSI_FACTOR', 'MEDIA_FACTOR'])
+
+    mobem = mobem.astype(int)
+
+    return mobem
+
+
 if __name__ == '__main__':
     # - Imports
     # CRISPR library
@@ -90,6 +107,11 @@ if __name__ == '__main__':
     # SNP6 + CRISPR BED files
     beds = {s: import_seg_crispr_bed(s) for s in samples}
 
+    #
+    mobem = get_mobem()
+    wes = pd.read_csv('/Users/eg14/Projects/prioritize_crispr/data/WES_variants.csv')
+    ss = pd.read_csv('/Users/eg14/Projects/dtrace/data/meta/samplesheet.csv', index_col=0)
+
     # Ploidy
     ploidy = pd.Series({s: beds[s]['ploidy'].mean() for s in beds})
 
@@ -97,7 +119,7 @@ if __name__ == '__main__':
     ccleanr_gene = pd.read_csv('/Users/eg14/Projects/prioritize_crispr/data/quantile_norm_CRISPRcleaned_logFCs.tsv', sep='\t', index_col=0)
 
     # - Aggregate per segment
-    agg_fun = dict(fc=np.mean, cn=np.mean, chrm=np.mean, ploidy=np.mean, ratio=np.mean, len=np.mean)
+    agg_fun = dict(fc=np.mean, cn=np.mean, chrm=np.mean, ploidy=np.mean, ratio=np.mean, len=np.mean, sgrna_id='count')
 
     df = pd.concat([
         beds[s].groupby(['chr', 'start', 'end'])[list(agg_fun.keys())].agg(agg_fun).reset_index().assign(sample=s) for s in samples
@@ -106,6 +128,14 @@ if __name__ == '__main__':
     df = df.assign(len_log2=np.log2(df['len']))
 
     df = df.set_index(['sample', 'chr', 'start', 'end'])
+
+    #
+    klm = df[~df['chr'].isin(['chrY', 'chrX'])].groupby('sample')['ratio'].mean()
+    klm = pd.concat([klm, ss['Cancer Type']], axis=1).dropna()
+    klm = klm.assign(type=klm['Cancer Type'].isin(['Breast Carcinoma']).astype(int))
+
+    sns.boxplot('type', 'ratio', data=klm)
+    plt.show()
 
     # - Sample segment fit
     x_features = dict(

@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from natsort import natsorted
 from crispy.utils import bin_cnv
 from plotting import get_palette_continuous, FLIERPROPS, MEANLINEPROPS
-from plotting.geckov2 import lib_off_targets, import_seg_crispr_beds
+from plotting.geckov2.offtarget import import_seg_crispr_beds, lib_off_targets
 
 
 def ratios_heatmap_bias(df, x='ncuts_bin', y='cn_bin', z='fc_scaled', min_evetns=10):
@@ -49,6 +49,7 @@ if __name__ == '__main__':
 
         df_ = df_.assign(cn_bin=df_['cn'].apply(lambda v: bin_cnv(v, 8)).values)
         df_ = df_.assign(ratio_bin=df_['ratio'].apply(lambda v: bin_cnv(v, 4)).values)
+        df_ = df_.assign(ploidy_bin=df_['ploidy'].apply(lambda v: bin_cnv(v, 4)).values)
 
         df_ = df_.assign(distance=sgrnas.loc[df_['sgrna_id']]['distance'].values)
         df_ = df_.assign(distance_bin=sgrnas.loc[df_['sgrna_id']]['distance_bin'].values)
@@ -61,6 +62,8 @@ if __name__ == '__main__':
         df.append(df_)
 
     df = pd.concat(df).reset_index(drop=True)
+
+    df['same_chr'] = (df['distance'] != -1).astype(int)
 
     # - Copy-number ratio bias heatmap
     ratios_heatmap_bias(df.query('distance != -1').query('ncuts <= 6'), y='cn_bin')
@@ -77,16 +80,17 @@ if __name__ == '__main__':
     hue_order = natsorted(set(df['ratio_bin']))
     order = natsorted(set(df['ncuts_bin']))
 
-    sns.boxplot(
-        'ncuts_bin', 'fc_scaled', 'ratio_bin', data=df.query('distance != -1'), notch=True, order=order, hue_order=hue_order, linewidth=.3,
-        meanprops=MEANLINEPROPS, flierprops=FLIERPROPS, palette=get_palette_continuous(len(hue_order))
+    g = sns.catplot(
+        'ncuts_bin', 'fc', 'ratio_bin', row='same_chr', data=df, notch=True, order=order, hue_order=hue_order, linewidth=.3,
+        meanprops=MEANLINEPROPS, flierprops=FLIERPROPS, palette=get_palette_continuous(len(hue_order)), kind='box',
+        height=2, aspect=2, sharey=False, legend_out=True
     )
 
     plt.legend(title='', prop={'size': 3}, frameon=False)
 
-    plt.axhline(-1, lw=.1, ls='--', c='black', zorder=0)
-    plt.axhline(0, lw=.1, ls='--', c='black', zorder=0)
+    g.map(plt.axhline, y=-1, lw=.1, ls='--', c='black', zorder=0)
+    g.map(plt.axhline, y=0, lw=.1, ls='--', c='black', zorder=0)
 
-    plt.gcf().set_size_inches(3, 2)
-    plt.savefig(f'reports/geckov2_off_target_ratio.png', bbox_inches='tight', dpi=600)
+    # plt.gcf().set_size_inches(3, 2)
+    plt.savefig(f'reports/geckov2_off_target_{x}.png', bbox_inches='tight', dpi=600)
     plt.close('all')
