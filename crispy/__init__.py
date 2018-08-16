@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # Copyright (C) 2017 Emanuel Goncalves
 
+import numpy as np
 import pandas as pd
 import pkg_resources
 import seaborn as sns
@@ -40,7 +41,13 @@ def get_non_essential_genes(dfile='gene_sets/curated_BAGEL_nonEssential.csv'):
 
 
 def get_crispr_lib(dfile='crispr_libs/KY_Library_v1.1_annotated.csv'):
-    return pd.read_csv('{}/{}'.format(DPATH, dfile), index_col=0)
+    r_cols = dict(index='sgrna', CHRM='chr', STARTpos='start', ENDpos='end', GENES='gene')
+
+    lib = pd.read_csv('{}/{}'.format(DPATH, dfile), index_col=0).reset_index()
+    lib = lib.rename(columns=r_cols)
+    lib['chr'] = lib['chr'].apply(lambda v: f'chr{v}' if str(v) != 'nan' else np.nan)
+
+    return lib
 
 
 def get_adam_core_essential(dfile='gene_sets/pancan_core.csv'):

@@ -4,13 +4,14 @@
 import warnings
 import numpy as np
 import pandas as pd
+import crispy as cy
 import scipy.stats as st
 from pybedtools import BedTool
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import WhiteKernel, ConstantKernel, RBF
 
 
-PSEUDO_COUNT = 1
+PSEUDO_COUNT = .5
 
 LOW_COUNT_THRES = 30
 
@@ -25,7 +26,7 @@ BED_COLUMNS = ['chr', 'start', 'end', 'copy_number', 'sgrna_chr', 'sgrna_start',
 class Crispy(object):
 
     def __init__(
-            self, raw_counts, copy_number, library, plasmid='control', kernel=None
+            self, raw_counts, library, copy_number=None, plasmid='Plasmid_v1.1', kernel=None
     ):
         f"""
         Initialise a Crispy processing pipeline object
@@ -44,12 +45,11 @@ class Crispy(object):
 
 
         """
-
         self.raw_counts = raw_counts
 
         self.copy_number = copy_number
 
-        self.library = library
+        self.library = cy.get_crispr_lib() if library is None else library
 
         self.plasmid = plasmid
 
@@ -57,6 +57,7 @@ class Crispy(object):
 
     def correct(self, x_features=None, qc_replicates_thres=.7, round_dec=5):
         """
+        Main pipeline function to process data from raw counts to corrected fold-changes.
 
         :param x_features: list
             Columns to be used as features to predict segments fold-changes
@@ -69,6 +70,8 @@ class Crispy(object):
 
         :return: pandas.DataFrame
         """
+        assert self.copy_number is not None, 'Copy-number information not provided'
+
         x_features = ['copy_number', 'chr_copy', 'ratio', 'len_log2'] if x_features is None else x_features
 
         # - Estimate fold-changes from raw counts
@@ -96,9 +99,12 @@ class Crispy(object):
         # Append estimated averages back into the bed file
         bed_df['gp_mean'] = gp_mean[bed_df.set_index(seg_cols).index].values
 
+        # Correct fold-change by subtracting the estimated mean
+        bed_df['corrected'] = bed_df.eval('fold_change - gp_mean')
+
         # Round floating
         if round_dec is not None:
-            round_cols = ['fold_change', 'chr_copy', 'ploidy', 'ratio', 'len_log2', 'gp_mean']
+            round_cols = ['fold_change', 'chr_copy', 'ploidy', 'ratio', 'len_log2', 'gp_mean', 'corrected']
             bed_df[round_cols] = bed_df[round_cols].round(round_dec)
 
         return bed_df
@@ -239,9 +245,8 @@ class Crispy(object):
         return factors
 
     @staticmethod
-    def library_size_factor(raw_counts, scale=1e7):
-        factors = raw_counts.sum() * scale
-        return factors.rename('size_factors')
+    def library_size_factor(raw_counts):
+        return raw_counts.sum().rename('size_factors')
 
     @staticmethod
     def replicates_correlation(fold_changes):
@@ -259,12 +264,10 @@ class Crispy(object):
 
         return corr
 
-    def scale_raw_counts(self, counts, scale_fun=None):
-        scale_fun = self.library_size_factor if scale_fun is None else scale_fun
+    def scale_raw_counts(self, counts, scale=1e7):
+        factors = self.library_size_factor(counts)
 
-        factors = scale_fun(self.raw_counts)
-
-        return counts.divide(factors)
+        return counts.divide(factors) * scale
 
     def replicates_foldchanges(self):
         """
@@ -274,14 +277,12 @@ class Crispy(object):
         # Remove plasmid low count sgRNAs
         df = self.raw_counts.loc[self.raw_counts[self.plasmid] >= LOW_COUNT_THRES]
 
-        # Add pseudocount
-        df = df + PSEUDO_COUNT
-
         # Calculate normalisation factors
         df = self.scale_raw_counts(df)
 
         # Calculate log fold-changes
-        df = df.divide(df[self.plasmid], axis=0)\
+        df = df.add(PSEUDO_COUNT) \
+            .divide(df[self.plasmid], axis=0)\
             .drop(self.plasmid, axis=1) \
             .apply(np.log2)
 
@@ -291,7 +292,7 @@ class Crispy(object):
         """
         Fold-changes estimation
 
-        :param qc_replicates_thres: float
+        :param qc_replicates_thres: float, optional default = 0.7
             Replicate fold-change Pearson correlation threshold
 
         :returns pandas.Series: fold-changes compared to plasmid
@@ -321,3 +322,20 @@ class Crispy(object):
         fold_changes = fold_changes.mean(1)
 
         return fold_changes
+
+    def gene_fold_changes(self, qc_replicates_thres=.7):
+        """
+        Gene level fold-changes
+
+        :param qc_replicates_thres: float, optional default = 0.7
+            Replicate fold-change Pearson correlation threshold
+
+        :return: pandas.Series
+        """
+        fc = self.fold_changes(qc_replicates_thres=qc_replicates_thres)
+
+        genes = self.library.dropna(subset=['gene']).set_index('sgrna')['gene']
+
+        fc = fc.groupby(genes).mean()
+
+        return fc

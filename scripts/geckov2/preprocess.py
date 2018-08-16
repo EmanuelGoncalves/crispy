@@ -48,12 +48,13 @@ if __name__ == '__main__':
         v: [c for c in raw_counts if c.split(' Rep')[0] == i] for i, v in samplesheet['name'].iteritems()
     }
 
-    # - Correction
-    corr = replicates_correlation()
-    corr_thres = corr.query('replicate == 0')['corr'].mean()
-    corr.sort_values('corr').to_csv(f'{gecko.DIR}/replicates_foldchange_correlation.csv', index=False)
+    # - Replicates correlation threshold
+    corr_df = replicates_correlation()
+    corr_thres = corr_df.query('replicate == 0')['corr'].mean()
+    corr_df.sort_values('corr').to_csv(f'{gecko.DIR}/replicates_foldchange_correlation.csv', index=False)
     print(f'[INFO] Correlation fold-change thredhold = {corr_thres:.2f}')
 
+    # - Correction
     for s in manifest:
         print(f'[INFO] Sample: {s}')
 
