@@ -3,28 +3,29 @@
 
 import numpy as np
 import crispy as cy
+import gdsc as gdsc
 import pandas as pd
 import seaborn as sns
-import geckov2 as gecko
 import matplotlib.pyplot as plt
 
 
 def replicates_correlation():
     rep_fold_changes = pd.concat([
         cy.Crispy(
-            raw_counts=raw_counts[manifest[sample] + [gecko.PLASMID]],
-            copy_number=copy_number.query(f"Sample == '{sample}'"),
-            library=lib_guides,
-            plasmid=gecko.PLASMID
+            raw_counts=raw_counts[manifest[sample] + [plasmid[sample]]],
+            copy_number=copy_number.query(f"sample == '{sample}'"),
+            library=lib,
+            plasmid=plasmid[sample]
         ).replicates_foldchanges() for sample in manifest
-    ], axis=1, sort=False)
+    ], axis=1, sort=False).dropna()
 
     corr = rep_fold_changes.corr()
 
     corr = corr.where(np.triu(np.ones(corr.shape), 1).astype(np.bool))
     corr = corr.unstack().dropna().reset_index()
     corr = corr.set_axis(['sample_1', 'sample_2', 'corr'], axis=1, inplace=False)
-    corr['replicate'] = [int(s1.split(' Rep')[0] == s2.split(' Rep')[0]) for s1, s2 in corr[['sample_1', 'sample_2']].values]
+
+    corr['replicate'] = [int(samplesheet.loc[s1, 'name'] == samplesheet.loc[s2, 'name']) for s1, s2 in corr[['sample_1', 'sample_2']].values]
 
     replicates_corr = corr.query('replicate == 1')['corr'].mean()
     print(f'[INFO] Replicates correlation: {replicates_corr:.2f}')
@@ -35,30 +36,32 @@ def replicates_correlation():
 if __name__ == '__main__':
     # - Imports
     # Samplesheet
-    samplesheet = gecko.get_samplesheet()
+    samplesheet = gdsc.get_samplesheet()
 
-    # Data-sets
-    raw_counts = gecko.get_raw_counts()
-    copy_number = gecko.get_copy_number_segments()
+    # CRISPR-Cas9 raw counts
+    raw_counts = gdsc.get_raw_counts()
+    raw_counts = raw_counts.dropna().astype(int)
+    raw_counts = raw_counts.drop(gdsc.QC_FAILED_SGRNAS, errors='ignore')
 
-    # GeCKOv2 library
-    lib = gecko.get_crispr_library()
+    # Copy-number
+    copy_number = gdsc.get_copy_number_segments()
+    copy_number = copy_number[~copy_number['chr'].isin(['chrX', 'chrY'])]
 
-    lib_guides = lib.groupby(['chr', 'start', 'end', 'sgrna'])['gene'].agg(lambda v: ';'.join(set(v))).rename('gene').reset_index()
-    lib_guides = lib_guides[[';' not in i for i in lib_guides['gene']]]
+    # Yusa library v1.1
+    lib = cy.get_crispr_lib()
+    lib = lib[lib['sgrna'].isin(raw_counts.index)]
 
     # Gene-sets
     essential, nessential = cy.get_essential_genes(), cy.get_non_essential_genes()
 
-    # - Sample manifest
-    manifest = {
-        v: [c for c in raw_counts if c.split(' Rep')[0] == i] for i, v in samplesheet['name'].iteritems()
-    }
+    # - Cell line replicates and plasmid map
+    manifest = samplesheet.reset_index().groupby('name')['sample_id'].agg(list).to_dict()
+    plasmid = samplesheet.groupby('name')['plasmid'].agg(lambda v: list(set(v))[0]).to_dict()
 
     # - Replicates correlation threshold
     corr_df = replicates_correlation()
     corr_thres = corr_df.query('replicate == 0')['corr'].mean()
-    corr_df.sort_values('corr').to_csv(f'{gecko.DIR}/replicates_foldchange_correlation.csv', index=False)
+    corr_df.sort_values('corr').to_csv(f'{gdsc.DIR}/replicates_foldchange_correlation.csv', index=False)
 
     sns.boxplot(
         'replicate', 'corr', data=corr_df, notch=True, saturation=1, showcaps=False, color=cy.PAL_DBGD[2],
@@ -67,12 +70,12 @@ if __name__ == '__main__':
 
     plt.xticks([0, 1], ['No', 'Yes'])
 
-    plt.title('GeCKOv2')
+    plt.title('Project SCORE')
     plt.xlabel('Replicate')
     plt.ylabel('Pearson correlation')
 
     plt.gcf().set_size_inches(1, 2)
-    plt.savefig('reports/geckov2/replicates_correlation.png', bbox_inches='tight', dpi=600)
+    plt.savefig('reports/gdsc/replicates_correlation.png', bbox_inches='tight', dpi=600)
     plt.close('all')
     print(f'[INFO] Correlation fold-change thredhold = {corr_thres:.2f}')
 
@@ -82,16 +85,16 @@ if __name__ == '__main__':
         print(f'[INFO] Sample: {s}')
 
         s_crispy = cy.Crispy(
-            raw_counts=raw_counts[manifest[s] + [gecko.PLASMID]],
-            copy_number=copy_number.query(f"Sample == '{s}'"),
-            library=lib_guides,
-            plasmid=gecko.PLASMID,
+            raw_counts=raw_counts[manifest[s] + [plasmid[s]]],
+            copy_number=copy_number.query(f"sample == '{s}'"),
+            library=lib,
+            plasmid=plasmid[s]
         )
 
-        bed_df = s_crispy.correct(qc_replicates_thres=corr_thres)
+        bed_df = s_crispy.correct(qc_replicates_thres=None)
 
         if bed_df is not None:
-            bed_df.to_csv(f'{gecko.DIR}/bed/{s}.crispy.bed', index=False, sep='\t')
+            bed_df.to_csv(f'{gdsc.DIR}/bed/{s}.crispy.bed', index=False, sep='\t')
 
             gene_original[s] = s_crispy.gene_fold_changes(bed_df)
             gene_corrected[s] = s_crispy.gene_corrected_fold_changes(bed_df)
@@ -99,11 +102,11 @@ if __name__ == '__main__':
     # - Build gene fold-changes matrices
     gene_original = pd.DataFrame(gene_original).dropna()
     gene_original.columns.name = 'original'
-    gene_original.round(5).to_csv(f'{gecko.DIR}/gene_fold_changes.csv')
+    gene_original.round(5).to_csv(f'{gdsc.DIR}/gene_fold_changes.csv')
 
     gene_corrected = pd.DataFrame(gene_corrected).dropna()
     gene_corrected.columns.name = 'corrected'
-    gene_corrected.round(5).to_csv(f'{gecko.DIR}/gene_fold_changes_corrected.csv')
+    gene_corrected.round(5).to_csv(f'{gdsc.DIR}/gene_fold_changes_corrected.csv')
 
     # - Essential and non-essential AUPRs
     aucs = []
@@ -117,13 +120,13 @@ if __name__ == '__main__':
             plt.title(f'CRISPR-Cas9 {df.columns.name} fold-changes\nmean AURC={mean_auc:.2f}')
 
             plt.gcf().set_size_inches(3, 3)
-            plt.savefig(f'reports/geckov2/qc_aucs_{df.columns.name}_{gset.name}.png', bbox_inches='tight', dpi=600)
+            plt.savefig(f'reports/gdsc/qc_aucs_{df.columns.name}_{gset.name}.png', bbox_inches='tight', dpi=600)
             plt.close('all')
 
             aucs.append(pd.DataFrame(dict(aurc=auc_stats['auc'], type=df.columns.name, geneset=gset.name)))
 
     aucs = pd.concat(aucs).reset_index().rename(columns={'index': 'sample'})
-    aucs.sort_values('aurc', ascending=False).to_csv(f'{gecko.DIR}/qc_aucs.csv', index=False)
+    aucs.sort_values('aurc', ascending=False).to_csv(f'{gdsc.DIR}/qc_aucs.csv', index=False)
 
     # - Scatter comparison
     for gset in [essential, nessential]:
@@ -137,5 +140,5 @@ if __name__ == '__main__':
         ax.set_title('AURCs {} genes'.format(gset.name))
 
         plt.gcf().set_size_inches(3, 3)
-        plt.savefig(f'reports/geckov2/qc_aucs_{gset.name}.png', bbox_inches='tight', dpi=600)
+        plt.savefig(f'reports/gdsc/qc_aucs_{gset.name}.png', bbox_inches='tight', dpi=600)
         plt.close('all')

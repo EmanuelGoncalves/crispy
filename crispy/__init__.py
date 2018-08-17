@@ -25,19 +25,33 @@ def get_example_data(dfile='association_example_data.csv'):
     return pd.read_csv('{}/{}'.format(DPATH, dfile), index_col=0)
 
 
-def get_essential_genes(dfile='gene_sets/curated_BAGEL_essential.csv'):
-    return set(pd.read_csv('{}/{}'.format(DPATH, dfile), sep='\t')['gene'].rename('essential'))
+def get_essential_genes(dfile='gene_sets/curated_BAGEL_essential.csv', return_series=True):
+    geneset = set(pd.read_csv('{}/{}'.format(DPATH, dfile), sep='\t')['gene'])
+
+    if return_series:
+        geneset = pd.Series(list(geneset)).rename('essential')
+
+    return geneset
 
 
-def get_non_essential_genes(dfile='gene_sets/curated_BAGEL_nonEssential.csv'):
-    return set(pd.read_csv('{}/{}'.format(DPATH, dfile), sep='\t')['gene'].rename('non-essential'))
+def get_non_essential_genes(dfile='gene_sets/curated_BAGEL_nonEssential.csv', return_series=True):
+    geneset = set(pd.read_csv('{}/{}'.format(DPATH, dfile), sep='\t')['gene'])
+
+    if return_series:
+        geneset = pd.Series(list(geneset)).rename('non-essential')
+
+    return geneset
 
 
 def get_crispr_lib(dfile='crispr_libs/KY_Library_v1.1_annotated.csv'):
-    r_cols = dict(index='sgrna', CHRM='chr', STARTpos='start', ENDpos='end', GENES='gene')
+    r_cols = dict(
+        index='sgrna', CHRM='chr', STARTpos='start', ENDpos='end', GENES='gene', EXONE='exon', CODE='code', STRAND='strand'
+    )
 
     lib = pd.read_csv('{}/{}'.format(DPATH, dfile), index_col=0).reset_index()
+
     lib = lib.rename(columns=r_cols)
+
     lib['chr'] = lib['chr'].apply(lambda v: f'chr{v}' if str(v) != 'nan' else np.nan)
 
     return lib

@@ -166,10 +166,16 @@ class Crispy(object):
 
         :return: pybedtools.BedTool
         """
+        pd.set_option('display.max_colwidth', 10000)
+
         lib = self.library[CRISPR_LIB_COLUMNS]
 
         if fold_change is not None:
-            lib['fold_change'] = fold_change[lib['sgrna'].values].values
+            lib = lib[lib['sgrna'].isin(fold_change.index)]
+            lib = lib.assign(fold_change=fold_change[lib['sgrna']].values)
+
+        lib = lib.assign(start=lib['start'].astype(int).values)
+        lib = lib.assign(end=lib['end'].astype(int).values)
 
         lib_str = lib.to_string(index=False, header=False)
 
@@ -354,3 +360,34 @@ class Crispy(object):
         fc = bed_df.set_index('sgrna')['corrected']
 
         return fc.groupby(genes).mean()
+
+    @staticmethod
+    def scale_crispr(df, ess=None, ness=None, metric=np.median):
+        """
+        Min/Max scaling of CRISPR-Cas9 log-FC by median (default) Essential and Non-Essential.
+
+        :param df: pandas.DataFrame
+            Gene fold-changes
+        :param ess: set(String)
+        :param ness: set(String)
+        :param metric: np.Median (default)
+
+        :return: Float pandas.DataFrame
+
+        """
+
+        if ess is None:
+            ess = cy.get_essential_genes()
+
+        if ness is None:
+            ness = cy.get_non_essential_genes()
+
+        assert len(ess.intersection(df.index)) != 0, 'DataFrame has no index overlapping with essential list'
+        assert len(ness.intersection(df.index)) != 0, 'DataFrame has no index overlapping with non-essential list'
+
+        ess_metric = metric(df.reindex(ess).dropna(), axis=0)
+        ness_metric = metric(df.reindex(ness).dropna(), axis=0)
+
+        df = df.subtract(ness_metric).divide(ness_metric - ess_metric)
+
+        return df
