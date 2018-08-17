@@ -102,6 +102,9 @@ class Crispy(object):
         # Correct fold-change by subtracting the estimated mean
         bed_df['corrected'] = bed_df.eval('fold_change - gp_mean')
 
+        # Add gene
+        bed_df['gene'] = self.library.set_index('sgrna').reindex(bed_df['sgrna'])['gene'].values
+
         # Round floating
         if round_dec is not None:
             round_cols = ['fold_change', 'chr_copy', 'ploidy', 'ratio', 'len_log2', 'gp_mean', 'corrected']

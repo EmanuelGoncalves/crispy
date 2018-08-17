@@ -62,10 +62,9 @@ if __name__ == '__main__':
     corr_df.sort_values('corr').to_csv(f'{gecko.DIR}/replicates_foldchange_correlation.csv', index=False)
 
     sns.boxplot(
-        'replicate', 'corr', data=corr_df, notch=True, saturation=1, showcaps=False,
+        'replicate', 'corr', data=corr_df, notch=True, saturation=1, showcaps=False, color=cy.PAL_DBGD[2],
         whiskerprops=cy.WHISKERPROPS, boxprops=cy.BOXPROPS, medianprops=cy.MEDIANPROPS, flierprops=cy.FLIERPROPS
     )
-    sns.despine()
 
     plt.xticks([0, 1], ['No', 'Yes'])
 
@@ -111,6 +110,7 @@ if __name__ == '__main__':
     aucs = []
     for df in [gene_original, gene_corrected]:
         for gset in [essential, nessential]:
+
             ax, auc_stats = cy.QCplot.plot_cumsum_auc(df, gset, legend=False)
 
             mean_auc = pd.Series(auc_stats['auc']).mean()

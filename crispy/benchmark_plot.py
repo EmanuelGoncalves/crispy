@@ -8,7 +8,6 @@ import seaborn as sns
 import scipy.stats as st
 import matplotlib.pyplot as plt
 import matplotlib.ticker as plticker
-from crispy.utils import svtype
 from matplotlib.patches import Arc
 from sklearn.metrics.ranking import auc
 
@@ -254,7 +253,7 @@ def plot_rearrangements(
 
     #
     for c1, s1, e1, c2, s2, e2, st1, st2, sv in brass_[['chr1', 'start1', 'end1', 'chr2', 'start2', 'end2', 'strand1', 'strand2', 'svclass']].values:
-        stype = svtype(st1, st2, sv, unfold_inversions)
+        stype = cy.Utils.svtype(st1, st2, sv, unfold_inversions)
         stype_col = SV_PALETTE[stype]
 
         zorder = 3 if stype == 'tandem-duplication' else 1

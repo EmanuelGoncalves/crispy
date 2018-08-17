@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import pkg_resources
 import seaborn as sns
+from crispy.utils import Utils
 from crispy.crispy import Crispy
 from crispy.benchmark_plot import plot_cumsum_auc
 from crispy.qc_plot import QCplot, SNS_RC, FLIERPROPS, PAL_DBGD, MEDIANPROPS, BOXPROPS, WHISKERPROPS
@@ -67,6 +68,8 @@ CHR_SIZES_HG19 = {
 # - HANDLES
 __all__ = [
     'Crispy',
+
+    'Utils',
 
     'QCplot',
     'PAL_DBGD',

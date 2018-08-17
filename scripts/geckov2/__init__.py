@@ -1,8 +1,10 @@
 #!/usr/bin/env python
 # Copyright (C) 2018 Emanuel Goncalves
 
+import os
 import numpy as np
 import pandas as pd
+import crispy as cy
 
 DIR = 'data/geckov2/'
 
@@ -13,6 +15,14 @@ COPYNUMBER = 'Achilles_v3.3.8_ABSOLUTE_CN_segtab.txt'
 SGRNA_MAP = 'Achilles_v3.3.8_sgRNA_mappings.txt'
 
 PLASMID = 'pDNA_pXPR003_120K_20140624'
+
+
+def import_crispy_beds():
+    beds = {
+        f.split('.')[0]:
+            pd.read_csv(f'{DIR}/bed/{f}', sep='\t') for f in os.listdir(f'{DIR}/bed/') if f.endswith('crispy.bed')
+    }
+    return beds
 
 
 def get_samplesheet():
@@ -30,31 +40,6 @@ def get_copy_number_segments():
     df['chr'] = df['chr'].apply(lambda v: f'chr{v}')
 
     return df
-
-
-def bin_bkdist(distance):
-    if distance == -1:
-        bin_distance = 'diff. chr.'
-
-    elif distance == 0:
-        bin_distance = '0'
-
-    elif 1 < distance < 10e3:
-        bin_distance = '1-10 kb'
-
-    elif 10e3 < distance < 100e3:
-        bin_distance = '10-100 kb'
-
-    elif 100e3 < distance < 1e6:
-        bin_distance = '0.1-1 Mb'
-
-    elif 1e6 < distance < 10e6:
-        bin_distance = '1-10 Mb'
-
-    else:
-        bin_distance = '>10 Mb'
-
-    return bin_distance
 
 
 def lib_off_targets():
@@ -80,7 +65,7 @@ def lib_off_targets():
 
     sgrna_distance = lib.groupby('sgrna')['start'].agg([np.min, np.max]).eval('amax-amin')
     sgrna_maps = sgrna_maps.assign(distance=[sgrna_distance[g] if sgrna_nchrs[g] == 1 else -1 for g in sgrna_maps['sgrna']])
-    sgrna_maps = sgrna_maps.assign(distance_bin=sgrna_maps['distance'].apply(bin_bkdist).values)
+    sgrna_maps = sgrna_maps.assign(distance_bin=sgrna_maps['distance'].apply(cy.Utils.bin_bkdist).values)
 
     sgrna_maps = sgrna_maps.set_index('sgrna')
 
