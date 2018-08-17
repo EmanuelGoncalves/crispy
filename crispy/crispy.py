@@ -323,19 +323,31 @@ class Crispy(object):
 
         return fold_changes
 
-    def gene_fold_changes(self, qc_replicates_thres=.7):
+    # TODO: Note to potential duplciate sgrnas in library
+    def gene_fold_changes(self, bed_df=None, qc_replicates_thres=.7):
         """
         Gene level fold-changes
+
+        :param bed_df:
 
         :param qc_replicates_thres: float, optional default = 0.7
             Replicate fold-change Pearson correlation threshold
 
         :return: pandas.Series
         """
-        fc = self.fold_changes(qc_replicates_thres=qc_replicates_thres)
+
+        if bed_df is None:
+            fc = self.fold_changes(qc_replicates_thres=qc_replicates_thres)
+        else:
+            fc = bed_df.set_index('sgrna')['fold_change']
 
         genes = self.library.dropna(subset=['gene']).set_index('sgrna')['gene']
 
-        fc = fc.groupby(genes).mean()
+        return fc.groupby(genes).mean()
 
-        return fc
+    def gene_corrected_fold_changes(self, bed_df):
+        genes = self.library.dropna(subset=['gene']).set_index('sgrna')['gene']
+
+        fc = bed_df.set_index('sgrna')['corrected']
+
+        return fc.groupby(genes).mean()

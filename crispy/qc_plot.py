@@ -8,18 +8,35 @@ import scipy.stats as st
 import matplotlib.pyplot as plt
 from sklearn.metrics.ranking import auc
 
+PAL_DBGD = {0: '#656565', 1: '#F2C500', 2: '#E1E1E1'}
+
+# - BOXPLOT PROPOS
+FLIERPROPS = dict(marker='o', markerfacecolor='black', markersize=2., linestyle='none', markeredgecolor='none', alpha=1.)
+MEDIANPROPS = dict(linestyle='-', linewidth=.3, color='red')
+BOXPROPS = dict(linestyle='-', linewidth=.3, color='black', facecolor='white')
+WHISKERPROPS = dict(linestyle='-', linewidth=.3, color='black')
+
+# - PLOTING PROPS
+SNS_RC = {
+    'axes.linewidth': .3,
+    'xtick.major.width': .3, 'ytick.major.width': .3,
+    'xtick.major.size': 2.5, 'ytick.major.size': 2.5,
+    'xtick.direction': 'in', 'ytick.direction': 'in'
+}
+
 
 class QCplot(object):
     @staticmethod
-    def plot_cumsum_auc(X, index_set, ax=None, palette=None, legend=True, plot_mean=False):
+    def plot_cumsum_auc(df, index_set, ax=None, palette=None, legend=True, plot_mean=False):
         """
         Plot cumulative sum of values X considering index_set list.
 
-        :param DataFrame X: measurements values
+        :param DataFrame df: measurements values
         :param Series index_set: list of indexes in X
         :param String ax: matplotlib Axes
-        :param String cmap: Matplotlib color map
+        :param dict palette: palette
         :param Bool legend: Plot legend
+        :param Bool plot_mean: Plot curve with the mean across all columns in X
 
         :return matplotlib Axes, plot_stats dict:
         """
@@ -34,15 +51,10 @@ class QCplot(object):
             'auc': {}
         }
 
-        # Create palette
-        if palette is None:
-            palette = sns.color_palette('viridis', X.shape[1]).as_hex()
-            palette = dict(zip(*(X.columns, palette)))
-
         # Build curve
-        for f in list(X):
+        for f in list(df):
             # Build data-frame
-            x = X[f].sort_values().dropna()
+            x = df[f].sort_values().dropna()
 
             # Observed cumsum
             y = x.index.isin(index_set)
@@ -56,11 +68,12 @@ class QCplot(object):
             plot_stats['auc'][f] = f_auc
 
             # Plot
-            ax.plot(x, y, label='%s: %.2f' % (f, f_auc) if (legend is True) else None, lw=1., c=palette[f])
+            c = 'black' if palette is None else palette[f]
+            ax.plot(x, y, label='%s: %.2f' % (f, f_auc) if (legend is True) else None, lw=1., c=c, alpha=.8)
 
         # Mean
         if plot_mean is True:
-            x = X.mean(1).sort_values().dropna()
+            x = df.mean(1).sort_values().dropna()
 
             y = x.index.isin(index_set)
             y = np.cumsum(y) / sum(y)
@@ -87,3 +100,22 @@ class QCplot(object):
             ax.legend(loc=4, frameon=False)
 
         return ax, plot_stats
+
+    @staticmethod
+    def aucs_scatter(x, y, data, rugplot=False):
+        ax = plt.gca()
+
+        ax.scatter(data[x], data[y], c='black', s=4, marker='x', lw=0.5)
+
+        if rugplot:
+            sns.rugplot(data[x], height=.02, axis='x', c='black', lw=.3, ax=ax)
+            sns.rugplot(data[y], height=.02, axis='y', c='black', lw=.3, ax=ax)
+
+        (x0, x1), (y0, y1) = ax.get_xlim(), ax.get_ylim()
+        lims = [max(x0, y0), min(x1, y1)]
+        ax.plot(lims, lims, 'k-', lw=.3, zorder=0)
+
+        ax.set_xlabel('{} fold-changes AURCs'.format(x.capitalize()))
+        ax.set_ylabel('{} fold-changes AURCs'.format(y.capitalize()))
+
+        return ax

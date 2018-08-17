@@ -7,20 +7,12 @@ import pkg_resources
 import seaborn as sns
 from crispy.crispy import Crispy
 from crispy.benchmark_plot import plot_cumsum_auc
+from crispy.qc_plot import QCplot, SNS_RC, FLIERPROPS, PAL_DBGD, MEDIANPROPS, BOXPROPS, WHISKERPROPS
 
 
-__version__ = '0.1.7'
+__version__ = '0.2.0'
 
-# PLOT AESTHETICS
-PAL_DBGD = {0: '#656565', 1: '#F2C500', 2: '#E1E1E1'}
-
-SNS_RC = {
-    'axes.linewidth': .3,
-    'xtick.major.width': .3, 'ytick.major.width': .3,
-    'xtick.major.size': 2.5, 'ytick.major.size': 2.5,
-    'xtick.direction': 'in', 'ytick.direction': 'in'
-}
-
+# - SET STYLE
 sns.set(style='ticks', context='paper', rc=SNS_RC)
 
 
@@ -75,12 +67,21 @@ CHR_SIZES_HG19 = {
 # - HANDLES
 __all__ = [
     'Crispy',
-    'get_example_data',
+
+    'QCplot',
     'PAL_DBGD',
+    'FLIERPROPS',
+    'SNS_RC',
+    'MEDIANPROPS',
+    'BOXPROPS',
+    'WHISKERPROPS',
+
+    'get_example_data',
     'get_essential_genes',
     'get_non_essential_genes',
     'get_crispr_lib',
     'get_adam_core_essential',
     'plot_cumsum_auc',
+
     'CHR_SIZES_HG19'
 ]
