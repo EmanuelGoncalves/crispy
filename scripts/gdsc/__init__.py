@@ -2,7 +2,6 @@
 # Copyright (C) 2018 Emanuel Goncalves
 
 import os
-import numpy as np
 import pandas as pd
 
 

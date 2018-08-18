@@ -40,8 +40,8 @@ class Crispy(object):
         :param library: pandas.DataFrame
             CRISPR library, must have these columns {CRISPR_LIB_COLUMNS}
 
-        :param plasmid: str, optinal
-            Column in raw_counts to compare to other samples
+        :param plasmid: str or list, optinal
+            Column(s) in raw_counts to compare to other samples
 
 
         """
@@ -51,7 +51,7 @@ class Crispy(object):
 
         self.library = cy.get_crispr_lib() if library is None else library
 
-        self.plasmid = plasmid
+        self.plasmid = [plasmid] if type(plasmid) == str else plasmid
 
         self.kernel = self.get_default_kernel() if kernel is None else kernel
 
@@ -284,14 +284,14 @@ class Crispy(object):
         :return: pandas.DataFrame
         """
         # Remove plasmid low count sgRNAs
-        df = self.raw_counts.loc[self.raw_counts[self.plasmid] >= LOW_COUNT_THRES]
+        df = self.raw_counts.loc[self.raw_counts[self.plasmid].mean(1) >= LOW_COUNT_THRES]
 
         # Calculate normalisation factors
         df = self.scale_raw_counts(df)
 
         # Calculate log fold-changes
         df = df.add(PSEUDO_COUNT) \
-            .divide(df[self.plasmid], axis=0)\
+            .divide(df[self.plasmid].mean(1), axis=0)\
             .drop(self.plasmid, axis=1) \
             .apply(np.log2)
 
