@@ -191,6 +191,28 @@ class QCplot(object):
         return ax
 
     @staticmethod
+    def aucs_scatter_pairgrid(data):
+        g = sns.PairGrid(data, despine=False)
+
+        g.map_offdiag(plt.scatter, color=PAL_DBGD[0], s=4, marker='o', lw=0.5, alpha=.7)
+
+        g.map_diag(plt.hist, color=PAL_DBGD[0])
+
+        g.set(ylim=(0, 1), xlim=(0, 1))
+
+        for ax_indices in [np.tril_indices_from(g.axes, -1), np.triu_indices_from(g.axes, 1)]:
+            for i, j in zip(*ax_indices):
+                (x0, x1), (y0, y1) = g.axes[i, j].get_xlim(), g.axes[i, j].get_ylim()
+                lims = [max(x0, y0), min(x1, y1)]
+
+                g.axes[i, j].plot(lims, lims, 'k-', lw=.3, zorder=0)
+
+                g.axes[i, j].axhline(.5, ls=':', lw=.3, zorder=0, color='black')
+                g.axes[i, j].axvline(.5, ls=':', lw=.3, zorder=0, color='black')
+
+        return g
+
+    @staticmethod
     def get_palette_continuous(n_colors, color=PAL_DBGD[0]):
         pal = sns.light_palette(color, n_colors=n_colors + 1).as_hex()[1:]
         return pal

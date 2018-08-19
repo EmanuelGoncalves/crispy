@@ -7,11 +7,13 @@ import pandas as pd
 DIR = 'data/depmap_18q3/'
 
 SAMPLESHEET = 'sample_info.csv'
-RAW_COUNTS = 'raw_readcounts.csv'
-
 REPLICATES = 'replicate_map.csv'
 
+RAW_COUNTS = 'raw_readcounts.csv'
+CERES = 'gene_effect.csv'
+
 COPYNUMBER = 'copy_number.csv'
+
 SGRNA_MAP = 'guide_gene_map.csv'
 
 
@@ -21,6 +23,16 @@ def import_crispy_beds():
             pd.read_csv(f'{DIR}/bed/{f}', sep='\t') for f in os.listdir(f'{DIR}/bed/') if f.endswith('crispy.bed')
     }
     return beds
+
+
+def get_ceres():
+    samplesheet = get_samplesheet()
+
+    ceres = pd.read_csv(f'{DIR}/{CERES}', index_col=0).T
+    ceres = ceres.rename(columns=samplesheet['CCLE_name'])
+    ceres.index = [i.split(' ')[0] for i in ceres.index]
+
+    return ceres
 
 
 def get_replicates_map():

@@ -11,6 +11,7 @@ DIR = 'data/geckov2/'
 SAMPLESHEET = 'Achilles_v3.3.8.samplesheet.txt'
 RAW_COUNTS = 'Achilles_v3.3.8_rawreadcounts.gct'
 
+CERES = 'Achilles_v3.3.8..ceres.gene.effects.csv'
 COPYNUMBER = 'Achilles_v3.3.8_ABSOLUTE_CN_segtab.txt'
 SGRNA_MAP = 'Achilles_v3.3.8_sgRNA_mappings.txt'
 
@@ -23,6 +24,11 @@ def import_crispy_beds():
             pd.read_csv(f'{DIR}/bed/{f}', sep='\t') for f in os.listdir(f'{DIR}/bed/') if f.endswith('crispy.bed')
     }
     return beds
+
+
+def get_ceres():
+    ceres = pd.read_csv(f'{DIR}/{CERES}', index_col=0)
+    return ceres
 
 
 def get_samplesheet():
