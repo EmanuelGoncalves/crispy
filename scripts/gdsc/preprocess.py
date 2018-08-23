@@ -48,11 +48,11 @@ if __name__ == '__main__':
     copy_number = copy_number[~copy_number['chr'].isin(['chrX', 'chrY'])]
 
     # Yusa library v1.1
-    lib = cy.get_crispr_lib()
+    lib = cy.Utils.get_crispr_lib()
     lib = lib[lib['sgrna'].isin(raw_counts.index)]
 
     # Gene-sets
-    essential, nessential = cy.get_essential_genes(), cy.get_non_essential_genes()
+    essential, nessential = cy.Utils.get_essential_genes(), cy.Utils.get_non_essential_genes()
 
     # - Cell line replicates and plasmid map
     manifest = samplesheet.reset_index().groupby('name')['sample_id'].agg(list).to_dict()
@@ -64,8 +64,8 @@ if __name__ == '__main__':
     corr_df.sort_values('corr').to_csv(f'{gdsc.DIR}/replicates_foldchange_correlation.csv', index=False)
 
     sns.boxplot(
-        'replicate', 'corr', data=corr_df, notch=True, saturation=1, showcaps=False, color=cy.PAL_DBGD[2],
-        whiskerprops=cy.WHISKERPROPS, boxprops=cy.BOXPROPS, medianprops=cy.MEDIANPROPS, flierprops=cy.FLIERPROPS
+        'replicate', 'corr', data=corr_df, notch=True, saturation=1, showcaps=False, color=cy.QCplot.PAL_DBGD[2],
+        whiskerprops=cy.QCplot.WHISKERPROPS, boxprops=cy.QCplot.BOXPROPS, medianprops=cy.QCplot.MEDIANPROPS, flierprops=cy.QCplot.FLIERPROPS
     )
 
     plt.xticks([0, 1], ['No', 'Yes'])

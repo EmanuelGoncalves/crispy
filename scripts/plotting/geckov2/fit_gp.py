@@ -71,7 +71,7 @@ def lm_fc(y, X, n_splits=10, test_size=.3):
 
         gpr = GaussianProcessRegressor(kernel, alpha=1e-10, n_restarts_optimizer=3)
 
-        gpr = gpr.fit(X.iloc[test_idx], y.iloc[test_idx])
+        gpr = gpr.fit(X.iloc[train_idx], y.iloc[train_idx])
 
         # Evalutate model
         r2 = gpr.score(X.iloc[test_idx], y.iloc[test_idx])

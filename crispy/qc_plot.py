@@ -10,28 +10,29 @@ import matplotlib.ticker as plticker
 from natsort import natsorted
 from crispy.utils import Utils
 from sklearn.metrics.ranking import auc
-
-# - MAIN PALETTE
-PAL_DBGD = {0: '#656565', 1: '#F2C500', 2: '#E1E1E1'}
-
-# - BOXPLOT PROPOS
-FLIERPROPS = dict(
-    marker='o', markerfacecolor='black', markersize=2., linestyle='none', markeredgecolor='none', alpha=.6
-)
-MEDIANPROPS = dict(linestyle='-', linewidth=1., color='red')
-BOXPROPS = dict(linewidth=1.)
-WHISKERPROPS = dict(linewidth=1.)
-
-# - PLOTING PROPS
-SNS_RC = {
-    'axes.linewidth': .3,
-    'xtick.major.width': .3, 'ytick.major.width': .3,
-    'xtick.major.size': 2., 'ytick.major.size': 2.,
-    'xtick.direction': 'out', 'ytick.direction': 'out'
-}
+from sklearn.metrics import precision_recall_curve, roc_auc_score
 
 
 class QCplot(object):
+    # PLOTING PROPS
+    SNS_RC = {
+        'axes.linewidth': .3,
+        'xtick.major.width': .3, 'ytick.major.width': .3,
+        'xtick.major.size': 2., 'ytick.major.size': 2.,
+        'xtick.direction': 'out', 'ytick.direction': 'out'
+    }
+
+    # MAIN PALETTE
+    PAL_DBGD = {0: '#656565', 1: '#F2C500', 2: '#E1E1E1'}
+
+    # BOXPLOT PROPOS
+    FLIERPROPS = dict(
+        marker='o', markerfacecolor='black', markersize=2., linestyle='none', markeredgecolor='none', alpha=.6
+    )
+    MEDIANPROPS = dict(linestyle='-', linewidth=1., color='red')
+    BOXPROPS = dict(linewidth=1.)
+    WHISKERPROPS = dict(linewidth=1.)
+
     @staticmethod
     def recall_curve(rank, index_set, min_events=None):
         """
@@ -65,6 +66,28 @@ class QCplot(object):
 
         return x, y, xy_auc
 
+    @staticmethod
+    def pr_curve(rank, true_set=None, false_set=None, min_events=10):
+        if true_set is None:
+            true_set = Utils.get_essential_genes(return_series=False)
+
+        if false_set is None:
+            false_set = Utils.get_non_essential_genes(return_series=False)
+
+        index_set = true_set.union(false_set)
+
+        rank = rank[rank.index.isin(index_set)]
+
+        if len(rank) == 0:
+            return np.nan
+
+        y_true = rank.index.isin(true_set).astype(int)
+
+        if sum(y_true) < min_events:
+            return np.nan
+
+        return roc_auc_score(y_true, -rank)
+
     @classmethod
     def recall_curve_discretise(cls, rank, discrete, thres, min_events=10):
         discrete = discrete.apply(Utils.bin_cnv, args=(thres,))
@@ -79,7 +102,7 @@ class QCplot(object):
         return aucs
 
     @classmethod
-    def bias_boxplot(cls, data, x='copy_number', y='auc', despine=False, notch=True, add_n=False, n_text_y=None, n_text_offset=.05, palette=None, ax=None, tick_base=.1):
+    def bias_boxplot(cls, data, x='copy_number', y='auc', hue=None, despine=False, notch=True, add_n=False, n_text_y=None, n_text_offset=.05, palette=None, ax=None, tick_base=.1):
         if ax is None:
             ax = plt.gca()
 
@@ -89,8 +112,8 @@ class QCplot(object):
             palette = dict(zip(*(order, cls.get_palette_continuous(len(order)))))
 
         sns.boxplot(
-            x, y, data=data, notch=notch, order=order, palette=palette, saturation=1., showcaps=False,
-            medianprops=MEDIANPROPS, flierprops=FLIERPROPS, whiskerprops=WHISKERPROPS, boxprops=BOXPROPS, ax=ax
+            x, y, data=data, hue=hue, notch=notch, order=order, palette=palette, saturation=1., showcaps=False,
+            medianprops=cls.MEDIANPROPS, flierprops=cls.FLIERPROPS, whiskerprops=cls.WHISKERPROPS, boxprops=cls.BOXPROPS, ax=ax
         )
 
         if despine:
@@ -100,7 +123,7 @@ class QCplot(object):
             text_y = min(data[y]) - n_text_offset if n_text_y is None else n_text_y
 
             for i, c in enumerate(order):
-                n = (data[x] == c).sum()
+                n = np.sum(data[x] == c)
                 ax.text(i, text_y, f'N={n}', ha='center', va='bottom', fontsize=3.5)
 
             y_lim = ax.get_ylim()
@@ -144,7 +167,7 @@ class QCplot(object):
             plot_stats['auc'][f] = xy_auc
 
             # Plot
-            c = PAL_DBGD[0] if palette is None else palette[f]
+            c = cls.PAL_DBGD[0] if palette is None else palette[f]
             ax.plot(x, y, label='%s: %.2f' % (f, xy_auc) if (legend is True) else None, lw=1., c=c, alpha=.8)
 
         # Mean
@@ -171,34 +194,44 @@ class QCplot(object):
 
         return ax, plot_stats
 
-    @staticmethod
-    def aucs_scatter(x, y, data, rugplot=False):
+    @classmethod
+    def aucs_scatter(cls, x, y, data, diagonal_line=True, rugplot=False, s=4, marker='x', lw=.5):
         ax = plt.gca()
 
-        ax.scatter(data[x], data[y], c=PAL_DBGD[0], s=4, marker='x', lw=0.5)
+        ax.scatter(data[x], data[y], c=cls.PAL_DBGD[0], s=s, marker=marker, lw=lw)
 
         if rugplot:
-            sns.rugplot(data[x], height=.02, axis='x', c=PAL_DBGD[0], lw=.3, ax=ax)
-            sns.rugplot(data[y], height=.02, axis='y', c=PAL_DBGD[0], lw=.3, ax=ax)
+            sns.rugplot(data[x], height=.02, axis='x', c=cls.PAL_DBGD[0], lw=.3, ax=ax)
+            sns.rugplot(data[y], height=.02, axis='y', c=cls.PAL_DBGD[0], lw=.3, ax=ax)
 
-        (x0, x1), (y0, y1) = ax.get_xlim(), ax.get_ylim()
-        lims = [max(x0, y0), min(x1, y1)]
-        ax.plot(lims, lims, 'k-', lw=.3, zorder=0)
+        if diagonal_line:
+            (x0, x1), (y0, y1) = ax.get_xlim(), ax.get_ylim()
+            lims = [max(x0, y0), min(x1, y1)]
+            ax.plot(lims, lims, 'k-', lw=.3, zorder=0)
 
         ax.set_xlabel('{} fold-changes AURCs'.format(x.capitalize()))
         ax.set_ylabel('{} fold-changes AURCs'.format(y.capitalize()))
 
         return ax
 
-    @staticmethod
-    def aucs_scatter_pairgrid(data):
+    @classmethod
+    def aucs_scatter_pairgrid(cls, data, set_lim=True, axhlines=True, axvlines=True):
         g = sns.PairGrid(data, despine=False)
 
-        g.map_offdiag(plt.scatter, color=PAL_DBGD[0], s=4, marker='o', lw=0.5, alpha=.7)
+        g.map_offdiag(plt.scatter, color=cls.PAL_DBGD[0], s=4, marker='o', lw=0.5, alpha=.7)
 
-        g.map_diag(plt.hist, color=PAL_DBGD[0])
+        g.map_diag(plt.hist, color=cls.PAL_DBGD[0])
 
-        g.set(ylim=(0, 1), xlim=(0, 1))
+        if set_lim:
+            g.set(ylim=(0, 1), xlim=(0, 1))
+
+        for ax_indices in [np.tril_indices_from(g.axes, -1), np.triu_indices_from(g.axes, 1)]:
+            for i, j in zip(*ax_indices):
+                if axhlines:
+                    g.axes[i, j].axhline(.5, ls=':', lw=.3, zorder=0, color='black')
+
+                if axvlines:
+                    g.axes[i, j].axvline(.5, ls=':', lw=.3, zorder=0, color='black')
 
         for ax_indices in [np.tril_indices_from(g.axes, -1), np.triu_indices_from(g.axes, 1)]:
             for i, j in zip(*ax_indices):
@@ -207,12 +240,9 @@ class QCplot(object):
 
                 g.axes[i, j].plot(lims, lims, 'k-', lw=.3, zorder=0)
 
-                g.axes[i, j].axhline(.5, ls=':', lw=.3, zorder=0, color='black')
-                g.axes[i, j].axvline(.5, ls=':', lw=.3, zorder=0, color='black')
-
         return g
 
     @staticmethod
     def get_palette_continuous(n_colors, color=PAL_DBGD[0]):
-        pal = sns.light_palette(color, n_colors=n_colors + 1).as_hex()[1:]
+        pal = sns.light_palette(color, n_colors=n_colors + 2).as_hex()[2:]
         return pal

@@ -88,7 +88,7 @@ if __name__ == '__main__':
             plasmid=gecko.PLASMID,
         )
 
-        bed_df = s_crispy.correct(qc_replicates_thres=corr_thres)
+        bed_df = s_crispy.correct(qc_replicates_thres=None)
 
         if bed_df is not None:
             bed_df.to_csv(f'{gecko.DIR}/bed/{s}.crispy.bed', index=False, sep='\t')

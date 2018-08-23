@@ -2,11 +2,13 @@
 # Copyright (C) 2018 Emanuel Goncalves
 
 import os
+import crispy as cy
 import pandas as pd
 
 
 DIR = 'data/gdsc/'
 
+SAMPLE_INFO = 'sample_info.csv'
 SAMPLESHEET = 'samplesheet.csv'
 RAW_COUNTS = 'raw_read_counts.csv'
 COPYNUMBER = 'copynumber_PICNIC_segtab.csv'
@@ -17,6 +19,13 @@ QC_FAILED_SGRNAS = [
     'DHRSX_CCDS35195.1_ex4_X:2326777-2326800:+_3-2',
     'sgPOLR2K_1'
 ]
+
+# NON-EXPRESSED GENES: RNA-SEQ
+NON_EXP = 'non_expressed_genes.csv'
+BIOMART_HUMAN_ID_TABLE = 'rnaseq/biomart_human_id_table.csv'
+
+GDSC_RNASEQ_SAMPLESHEET = 'rnaseq/merged_sample_annotation.csv'
+GDSC_RNASEQ_RPKM = 'rnaseq/merged_rpkm.csv'
 
 
 def import_crispy_beds():
@@ -37,3 +46,54 @@ def get_raw_counts():
 
 def get_copy_number_segments():
     return pd.read_csv(f'{DIR}/{COPYNUMBER}')
+
+
+def get_ensembl_gene_id_table():
+    ensg = pd.read_csv(f'{DIR}/{BIOMART_HUMAN_ID_TABLE}')
+    ensg = ensg.groupby('Gene name')['Gene stable ID'].agg(lambda x: set(x)).to_dict()
+    return ensg
+
+
+def get_rnaseq_samplesheet():
+    return pd.read_csv(f'{DIR}/{GDSC_RNASEQ_SAMPLESHEET}')
+
+
+def get_rnaseq_rpkm():
+    return pd.read_csv(f'{DIR}/{GDSC_RNASEQ_RPKM}', index_col=0)
+
+
+def get_non_exp():
+    if not os.path.exists(f'{DIR}/{NON_EXP}'):
+        write_non_expressed_matrix()
+
+    return pd.read_csv(f'{DIR}/{NON_EXP}', index_col=0)
+
+
+def get_sample_info(index_col=0):
+    return pd.read_csv(f'{DIR}/{SAMPLE_INFO}', index_col=index_col)
+
+
+def write_non_expressed_matrix(rpkm_thres=1):
+    # Gene map
+    ensg = get_ensembl_gene_id_table()
+
+    # Samplesheet
+    ss = get_rnaseq_samplesheet()
+    ss = pd.Series({k: v.split('.')[0] for k, v in ss.groupby('expression_matrix_name')['sample_name'].first().to_dict().items()})
+
+    # RNA-seq RPKMs
+    rpkm = get_rnaseq_rpkm()
+
+    # Low-expressed genes: take the highest abundance across the different transcripts
+    nexp = pd.DataFrame(
+        {g: (rpkm.reindex(ensg[g]) < rpkm_thres).astype(int).min() for g in ensg if len(ensg[g].intersection(rpkm.index)) > 0}
+    ).T
+
+    # Merged cell lines replicates: take the highest abundance across the different replicates
+    nexp = nexp.groupby(ss.loc[nexp.columns], axis=1).min()
+
+    # Remove genes defined as essential in the CRISPR screen
+    nexp = nexp[~nexp.index.isin(cy.Utils.get_adam_core_essential())]
+
+    # Export
+    nexp.to_csv(f'{DIR}/{NON_EXP}')

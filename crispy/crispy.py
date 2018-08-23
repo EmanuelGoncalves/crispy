@@ -6,7 +6,9 @@ import numpy as np
 import pandas as pd
 import crispy as cy
 import scipy.stats as st
+import matplotlib.pyplot as plt
 from pybedtools import BedTool
+from sklearn.model_selection import ShuffleSplit
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import WhiteKernel, ConstantKernel, RBF
 
@@ -26,7 +28,7 @@ BED_COLUMNS = ['chr', 'start', 'end', 'copy_number', 'sgrna_chr', 'sgrna_start',
 class Crispy(object):
 
     def __init__(
-            self, raw_counts, library, copy_number=None, plasmid='Plasmid_v1.1', kernel=None
+            self, raw_counts, library, copy_number=None, plasmid='Plasmid_v1.1'
     ):
         f"""
         Initialise a Crispy processing pipeline object
@@ -49,13 +51,11 @@ class Crispy(object):
 
         self.copy_number = copy_number
 
-        self.library = cy.get_crispr_lib() if library is None else library
+        self.library = cy.Utils.get_crispr_lib() if library is None else library
 
         self.plasmid = [plasmid] if type(plasmid) == str else plasmid
 
-        self.kernel = self.get_default_kernel() if kernel is None else kernel
-
-    def correct(self, x_features=None, qc_replicates_thres=.7, round_dec=5):
+    def correct(self, x_features=None, qc_replicates_thres=.7, n_sgrna=30, round_dec=5):
         """
         Main pipeline function to process data from raw counts to corrected fold-changes.
 
@@ -65,6 +65,9 @@ class Crispy(object):
         :param qc_replicates_thres: float
             Replicate fold-change Pearson correlation threshold
 
+        :param n_sgrna: int
+            Minimum number of guides per segment
+
         :param round_dec: int
             Number of decimal places for floating numbers. If equals to None no rounding is performed
 
@@ -72,7 +75,7 @@ class Crispy(object):
         """
         assert self.copy_number is not None, 'Copy-number information not provided'
 
-        x_features = ['copy_number', 'chr_copy', 'ratio', 'len_log2'] if x_features is None else x_features
+        x_features = ['ratio'] if x_features is None else x_features
 
         # - Estimate fold-changes from raw counts
         fc = self.fold_changes(qc_replicates_thres=qc_replicates_thres)
@@ -84,69 +87,25 @@ class Crispy(object):
         bed_df = self.intersect_sgrna_copynumber(fc)
 
         # - Fit Gaussian Process on segment fold-changes
-        seg_cols = ['chr', 'start', 'end']
+        gpr = CrispyGaussian(bed_df, n_sgrna=n_sgrna)\
+            .fit(x=x_features, y='fold_change')\
 
-        agg_fun = dict(
-            fold_change=np.mean, copy_number=np.mean, chr_copy=np.mean, ploidy=np.mean, ratio=np.mean, len_log2=np.mean
-        )
+        gp_mean = gpr.predict(x=x_features)
 
-        # Aggregate features by segment
-        bed_df_seg = bed_df.groupby(seg_cols).agg(agg_fun)
+        bed_df['gp_mean'] = gp_mean[bed_df.set_index(gpr.SEGMENT_COLUMNS).index].values
 
-        # Fit averaged fold-changes across segments
-        gp_mean = self.gp_fit(bed_df_seg[x_features], bed_df_seg['fold_change'])
-
-        # Append estimated averages back into the bed file
-        bed_df['gp_mean'] = gp_mean[bed_df.set_index(seg_cols).index].values
-
-        # Correct fold-change by subtracting the estimated mean
+        # - Correct fold-change by subtracting the estimated mean
         bed_df['corrected'] = bed_df.eval('fold_change - gp_mean')
 
-        # Add gene
+        # - Add gene
         bed_df['gene'] = self.library.set_index('sgrna').reindex(bed_df['sgrna'])['gene'].values
 
-        # Round floating
+        # - Round floating
         if round_dec is not None:
             round_cols = ['fold_change', 'chr_copy', 'ploidy', 'ratio', 'len_log2', 'gp_mean', 'corrected']
             bed_df[round_cols] = bed_df[round_cols].round(round_dec)
 
         return bed_df
-
-    @staticmethod
-    def get_default_kernel():
-        """
-        Deafult Gaussian Process kernel
-
-        :return: sklearn.gaussian_process.kernels.Sum
-        """
-        return ConstantKernel() * RBF(length_scale_bounds=(1e-5, 10)) + WhiteKernel()
-
-    def gp_fit(self, x, y, alpha=1e-10, n_restarts_optimizer=3):
-        """
-        Fit Gaussian Process Regressor.
-
-        :param x: pandas.DataFrame
-            Features, e.g. copy-number, segment lenght, copy-number ratio
-
-        :param y: pandas.Series
-            Dependent variable, e.g. copy-number segments average fold-changes
-
-        :param alpha:
-
-        :param n_restarts_optimizer:
-
-        :return: pandas.Series
-            Estimated fold-changes
-        """
-        gpr = GaussianProcessRegressor(
-            self.kernel, alpha=alpha, n_restarts_optimizer=n_restarts_optimizer
-        )
-
-        gpr = gpr.fit(x, y)
-
-        gp_mean = pd.Series(gpr.predict(x), index=x.index).rename('gp_mean')
-
-        return gp_mean
 
     def get_bed_copy_number(self):
         """
@@ -182,17 +141,21 @@ class Crispy(object):
         return BedTool(lib_str, from_string=True).sort()
 
     @staticmethod
-    def calculate_ploidy(copy_number_bed):
+    def calculate_ploidy(df):
         """
         Estimate ploidy and chromosomes number of copies from copy-number segments. Mean copy-number is
         weigthed by the length of the segment.
 
-        :param copy_number_bed: pybedtools.BedTool
+        :param df: pandas.DataFrame or pybedtools.BedTool
 
         :return: (pandas.Series, float)
             Chromosome copies, ploidy
         """
-        df = copy_number_bed.to_dataframe().rename(columns={'name': 'copy_number', 'chrom': 'chr'})
+        if type(df) == BedTool:
+            df = df.to_dataframe().rename(columns={'name': 'copy_number', 'chrom': 'chr'})
+
+        df = df[~df['chr'].isin(['chrX', 'chrY'])]
+
         df = df.assign(length=df['end'] - df['start'])
         df = df.assign(cn_by_length=df['length'] * (df['copy_number'] + 1))
 
@@ -377,10 +340,10 @@ class Crispy(object):
         """
 
         if ess is None:
-            ess = cy.get_essential_genes()
+            ess = cy.Utils.get_essential_genes(return_series=False)
 
         if ness is None:
-            ness = cy.get_non_essential_genes()
+            ness = cy.Utils.get_non_essential_genes(return_series=False)
 
         assert len(ess.intersection(df.index)) != 0, 'DataFrame has no index overlapping with essential list'
         assert len(ness.intersection(df.index)) != 0, 'DataFrame has no index overlapping with non-essential list'
@@ -391,3 +354,109 @@ class Crispy(object):
         df = df.subtract(ness_metric).divide(ness_metric - ess_metric)
 
         return df
+
+
+class CrispyGaussian(GaussianProcessRegressor):
+    SEGMENT_COLUMNS = ['chr', 'start', 'end']
+
+    SEGMENT_AGG_FUN = dict(
+        fold_change=np.mean, copy_number=np.mean, ratio=np.mean, chr_copy=np.mean, ploidy=np.mean,
+        len=np.mean, len_log2=np.mean, sgrna='count'
+    )
+
+    def __init__(
+            self, bed_df, kernel=None, n_sgrna=30, alpha=1e-10, n_restarts_optimizer=3, optimizer='fmin_l_bfgs_b',
+            normalize_y=True, copy_x_train=False, random_state=None
+    ):
+
+        self.bed_seg = bed_df.groupby(self.SEGMENT_COLUMNS).agg(self.SEGMENT_AGG_FUN).query(f'sgrna >= {n_sgrna}')
+        self.n_sgrna = n_sgrna
+
+        super().__init__(
+            alpha=alpha,
+            kernel=self.get_default_kernel() if kernel is None else kernel,
+            optimizer=optimizer,
+            normalize_y=normalize_y,
+            random_state=random_state,
+            copy_X_train=copy_x_train,
+            n_restarts_optimizer=n_restarts_optimizer,
+        )
+
+    @property
+    def _constructor(self):
+        return CrispyGaussian
+
+    @staticmethod
+    def get_default_kernel():
+        """
+        Deafult Gaussian Process kernel
+
+        :return: sklearn.gaussian_process.kernels.Sum
+        """
+        return ConstantKernel() * RBF() + WhiteKernel()
+
+    def fit(self, x, y, train_idx=None):
+        if train_idx is not None:
+            return super().fit(self.bed_seg.iloc[train_idx][x], self.bed_seg.iloc[train_idx][y])
+        else:
+            return super().fit(self.bed_seg[x], self.bed_seg[y])
+
+    def predict(self, x=None, return_std=False, return_cov=False):
+        if x is None:
+            x = self.bed_seg[['ratio']]
+        elif type(x) == list:
+            x = self.bed_seg[x]
+
+        if return_std or return_cov:
+            gp_mean, gp_std_cor = super().predict(x, return_std=return_std, return_cov=return_cov)
+            gp_mean = pd.Series(gp_mean, index=x.index).rename('gp_mean')
+            return gp_mean, gp_std_cor
+
+        else:
+            gp_mean = super().predict(x)
+            gp_mean = pd.Series(gp_mean, index=x.index).rename('gp_mean')
+            return gp_mean
+
+    def score(self, x=None, y=None, sample_weight=None):
+        if x is None:
+            x = self.bed_seg[['ratio']]
+        elif type(x) == list:
+            x = self.bed_seg[x]
+
+        if y is None:
+            y = self.bed_seg['fold_change']
+
+        return super().score(x, y, sample_weight=sample_weight)
+
+    def plot(self, x='ratio', y='fold_change', ax=None):
+        """
+        Plot original data and GPR
+
+        :param x: str, x axis variable
+        :param y: str, y axis variable
+        :param ax: matplotlib.plot
+        :return: matplotlib.plot
+        """
+
+        if ax is None:
+            ax = plt.gca()
+
+        # Plot data
+        ax.scatter(self.bed_seg[x], self.bed_seg[y], marker='o', s=5, alpha=.4, color=cy.QCplot.PAL_DBGD[0], lw=0)
+
+        # Plot GP fit
+        x_ = np.arange(0, self.bed_seg[x].max(), .1)
+        y_mean, y_std = self.predict(x_.reshape(-1, 1), return_std=True)
+
+        ax.plot(x_, y_mean, color=cy.QCplot.PAL_DBGD[1], lw=1, label='GPR', zorder=3)
+        ax.fill_between(x_, y_mean - y_std, y_mean + y_std, color=cy.QCplot.PAL_DBGD[1], alpha=0.2, zorder=3, lw=0)
+
+        # Misc
+        ax.axhline(0, lw=.3, color=cy.QCplot.PAL_DBGD[2], ls=':', zorder=0)
+
+        ax.legend(frameon=False, prop={'size': 4}, loc=3)
+
+        ax.set_xlabel('Copy-number')
+        ax.set_ylabel('Fold-change')
+
+        return ax
