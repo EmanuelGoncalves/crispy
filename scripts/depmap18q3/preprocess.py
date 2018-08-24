@@ -5,7 +5,7 @@ import numpy as np
 import crispy as cy
 import pandas as pd
 import seaborn as sns
-import depmap18q3 as depmap18q3
+import depmap18q3
 import matplotlib.pyplot as plt
 
 
@@ -54,7 +54,7 @@ if __name__ == '__main__':
     lib_guides = lib_guides[[';' not in i for i in lib_guides['gene']]]
 
     # Gene-sets
-    essential, nessential = cy.get_essential_genes(), cy.get_non_essential_genes()
+    essential, nessential = cy.Utils.get_essential_genes(), cy.Utils.get_non_essential_genes()
 
     # - Sample manifest
     manifest = rep_map.dropna().groupby('Broad_ID')['replicate_ID']\
@@ -73,8 +73,8 @@ if __name__ == '__main__':
     corr_df.sort_values('corr').to_csv(f'{depmap18q3.DIR}/replicates_foldchange_correlation.csv', index=False)
 
     sns.boxplot(
-        'replicate', 'corr', data=corr_df, notch=True, saturation=1, showcaps=False, color=cy.PAL_DBGD[2],
-        whiskerprops=cy.WHISKERPROPS, boxprops=cy.BOXPROPS, medianprops=cy.MEDIANPROPS, flierprops=cy.FLIERPROPS
+        'replicate', 'corr', data=corr_df, notch=True, saturation=1, showcaps=False, color=cy.QCplot.PAL_DBGD[2],
+        whiskerprops=cy.QCplot.WHISKERPROPS, boxprops=cy.QCplot.BOXPROPS, medianprops=cy.QCplot.MEDIANPROPS, flierprops=cy.QCplot.FLIERPROPS
     )
 
     plt.xticks([0, 1], ['No', 'Yes'])

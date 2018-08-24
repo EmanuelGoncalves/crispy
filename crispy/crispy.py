@@ -8,7 +8,6 @@ import crispy as cy
 import scipy.stats as st
 import matplotlib.pyplot as plt
 from pybedtools import BedTool
-from sklearn.model_selection import ShuffleSplit
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import WhiteKernel, ConstantKernel, RBF
 
@@ -87,8 +86,7 @@ class Crispy(object):
         bed_df = self.intersect_sgrna_copynumber(fc)
 
         # - Fit Gaussian Process on segment fold-changes
-        gpr = CrispyGaussian(bed_df, n_sgrna=n_sgrna)\
-            .fit(x=x_features, y='fold_change')\
+        gpr = CrispyGaussian(bed_df, n_sgrna=n_sgrna).fit(x=x_features, y='fold_change')
 
         gp_mean = gpr.predict(x=x_features)
 
@@ -365,11 +363,11 @@ class CrispyGaussian(GaussianProcessRegressor):
     )
 
     def __init__(
-            self, bed_df, kernel=None, n_sgrna=30, alpha=1e-10, n_restarts_optimizer=3, optimizer='fmin_l_bfgs_b',
-            normalize_y=True, copy_x_train=False, random_state=None
+            self, bed_df, kernel=None, n_sgrna=10, alpha=1e-10, n_restarts_optimizer=3, optimizer='fmin_l_bfgs_b',
+            normalize_y=False, copy_x_train=False, random_state=None
     ):
 
-        self.bed_seg = bed_df.groupby(self.SEGMENT_COLUMNS).agg(self.SEGMENT_AGG_FUN).query(f'sgrna >= {n_sgrna}')
+        self.bed_seg = bed_df.groupby(self.SEGMENT_COLUMNS).agg(self.SEGMENT_AGG_FUN)
         self.n_sgrna = n_sgrna
 
         super().__init__(
@@ -397,9 +395,13 @@ class CrispyGaussian(GaussianProcessRegressor):
 
     def fit(self, x, y, train_idx=None):
         if train_idx is not None:
-            return super().fit(self.bed_seg.iloc[train_idx][x], self.bed_seg.iloc[train_idx][y])
+            x = self.bed_seg.iloc[train_idx].query(f'sgrna >= {self.n_sgrna}')[x]
+            y = self.bed_seg.iloc[train_idx].query(f'sgrna >= {self.n_sgrna}')[y]
         else:
-            return super().fit(self.bed_seg[x], self.bed_seg[y])
+            x = self.bed_seg.query(f'sgrna >= {self.n_sgrna}')[x]
+            y = self.bed_seg.query(f'sgrna >= {self.n_sgrna}')[y]
+
+        return super().fit(x, y)
 
     def predict(self, x=None, return_std=False, return_cov=False):
         if x is None:
@@ -410,11 +412,13 @@ class CrispyGaussian(GaussianProcessRegressor):
         if return_std or return_cov:
             gp_mean, gp_std_cor = super().predict(x, return_std=return_std, return_cov=return_cov)
             gp_mean = pd.Series(gp_mean, index=x.index).rename('gp_mean')
+
             return gp_mean, gp_std_cor
 
         else:
             gp_mean = super().predict(x)
             gp_mean = pd.Series(gp_mean, index=x.index).rename('gp_mean')
+
             return gp_mean
 
     def score(self, x=None, y=None, sample_weight=None):

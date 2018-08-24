@@ -9,8 +9,9 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as plticker
 from natsort import natsorted
 from crispy.utils import Utils
+from matplotlib.patches import Arc
 from sklearn.metrics.ranking import auc
-from sklearn.metrics import precision_recall_curve, roc_auc_score
+from sklearn.metrics import roc_auc_score
 
 
 class QCplot(object):
@@ -22,8 +23,17 @@ class QCplot(object):
         'xtick.direction': 'out', 'ytick.direction': 'out'
     }
 
-    # MAIN PALETTE
+    # PALETTES
     PAL_DBGD = {0: '#656565', 1: '#F2C500', 2: '#E1E1E1'}
+
+    SV_PALETTE = {
+        'tandem-duplication': '#377eb8',
+        'deletion': '#e41a1c',
+        'translocation': '#984ea3',
+        'inversion': '#4daf4a',
+        'inversion_h_h': '#4daf4a',
+        'inversion_t_t': '#ff7f00',
+    }
 
     # BOXPLOT PROPOS
     FLIERPROPS = dict(
@@ -246,3 +256,136 @@ class QCplot(object):
     def get_palette_continuous(n_colors, color=PAL_DBGD[0]):
         pal = sns.light_palette(color, n_colors=n_colors + 2).as_hex()[2:]
         return pal
+
+    @classmethod
+    def plot_rearrangements(
+            cls, brass_bedpe, ascat_bed, crispy_bed, chrm, chrm_size=None, xlim=None, scale=1e6, show_legend=True,
+            unfold_inversions=False, sv_alpha=1., sv_lw=.3, highlight=None, mark_essential=False
+    ):
+        # - Define default params
+        chrm_size = Utils.CHR_SIZES_HG19 if chrm_size is None else chrm_size
+
+        xlim = (0, chrm_size[chrm]) if xlim is None else xlim
+
+        # - Build data-frames
+        # BRASS
+        brass_ = brass_bedpe[(brass_bedpe['chr1'] == chrm) | (brass_bedpe['chr2'] == chrm)]
+
+        # ASCAT
+        ascat_ = ascat_bed.query(f"chr == '{chrm}'")
+
+        # CRISPR
+        crispr_ = crispy_bed[crispy_bed['chr'] == chrm]
+        crispr_ = crispr_.assign(location=crispr_[['sgrna_start', 'sgrna_end']].mean(1))
+
+        crispr_gene_ = crispr_.groupby('gene')[['fold_change', 'location']].mean()
+
+        assert brass_.shape[0] != 0, 'No BRASS SVs'
+
+        # - Plot
+        f, (ax1, ax2, ax3) = plt.subplots(3, 1, sharex='all', gridspec_kw={'height_ratios': [1, 2, 2]})
+
+        # Top panel
+        ax1.axhline(0.0, lw=.3, color=cls.PAL_DBGD[0])
+        ax1.set_ylim(-1, 1)
+
+        # Middle panel
+        for i, (_, s, e, cn) in ascat_.iterrows():
+            ax2.plot((s / scale, e / scale), (cn, cn), alpha=1., c=cls.PAL_DBGD[2], zorder=3, label='ASCAT', lw=2)
+
+        # Bottom panel
+        ax3.scatter(crispr_['location'] / scale, crispr_['fold_change'], s=1, alpha=.5, lw=0, c=cls.PAL_DBGD[1], label='CRISPR-Cas9', zorder=1)
+        ax3.axhline(0.0, lw=.3, color=cls.PAL_DBGD[0])
+
+        for (s, e), gp_mean in crispr_.groupby(['start', 'end'])['fold_change']:
+            ax3.plot((s / scale, e / scale), (gp_mean.mean(), gp_mean.mean()), alpha=1., c=cls.PAL_DBGD[2], zorder=3, label='Segment mean', lw=2)
+
+        if mark_essential:
+            ess = Utils.get_adam_core_essential()
+            ax3.scatter(
+                crispr_gene_.reindex(ess)['location'] / scale, crispr_gene_.reindex(ess)['fold_change'], s=5, marker='x', lw=.3, c=cls.PAL_DBGD[1],
+                alpha=.4, edgecolors='#fc8d62', label='Core-essential'
+            )
+
+        # Highlight
+        if highlight is not None:
+            for ic, i in zip(*(sns.color_palette('tab20', n_colors=len(highlight)), highlight)):
+                if i in crispr_.index:
+                    ax3.scatter(crispr_.loc[i, 'location'] / scale, crispr_.loc[i]['fold_change'], s=14, marker='X', lw=0, c=ic, alpha=.9, label=i)
+
+        #
+        for c1, s1, e1, c2, s2, e2, st1, st2, sv in brass_[['chr1', 'start1', 'end1', 'chr2', 'start2', 'end2', 'strand1', 'strand2', 'svclass']].values:
+            stype = Utils.svtype(st1, st2, sv, unfold_inversions)
+            stype_col = cls.SV_PALETTE[stype]
+
+            zorder = 2 if stype == 'tandem-duplication' else 1
+
+            x1_mean, x2_mean = np.mean([s1, e1]), np.mean([s2, e2])
+
+            # Plot arc
+            if c1 == c2:
+                angle = 0 if stype in ['tandem-duplication', 'deletion'] else 180
+
+                xy = (np.mean([x1_mean, x2_mean]) / scale, 0)
+
+                ax1.add_patch(
+                    Arc(xy, (x2_mean - x1_mean) / scale, 1., angle=angle, theta1=0, theta2=180, edgecolor=stype_col, lw=sv_lw, zorder=zorder, alpha=sv_alpha)
+                )
+
+            # Plot segments
+            for ymin, ymax, ax in [(-1, 0.5, ax1), (-1, 1, ax2), (0, 1, ax3)]:
+                if (c1 == chrm) and (xlim[0] <= x1_mean <= xlim[1]):
+                    ax.axvline(
+                        x=x1_mean / scale, ymin=ymin, ymax=ymax, c=stype_col, linewidth=sv_lw, zorder=zorder, clip_on=False, label=stype, alpha=sv_alpha
+                    )
+
+                if (c2 == chrm) and (xlim[0] <= x2_mean <= xlim[1]):
+                    ax.axvline(
+                        x=x2_mean / scale, ymin=ymin, ymax=ymax, c=stype_col, linewidth=sv_lw, zorder=zorder, clip_on=False, label=stype, alpha=sv_alpha
+                    )
+
+            # Translocation label
+            if stype == 'translocation':
+                if (c1 == chrm) and (xlim[0] <= x1_mean <= xlim[1]):
+                    ax1.text(x1_mean / scale, 0, ' to {}'.format(c2), color=stype_col, ha='center', fontsize=5, rotation=90, va='bottom')
+
+                if (c2 == chrm) and (xlim[0] <= x2_mean <= xlim[1]):
+                    ax1.text(x2_mean / scale, 0, ' to {}'.format(c1), color=stype_col, ha='center', fontsize=5, rotation=90, va='bottom')
+
+        #
+        if show_legend:
+            by_label = {l.capitalize(): p for p, l in zip(*(ax2.get_legend_handles_labels())) if l in cls.SV_PALETTE}
+            ax1.legend(by_label.values(), by_label.keys(), loc='center left', bbox_to_anchor=(1.02, 0.5), prop={'size': 6}, frameon=False)
+
+            by_label = {l: p for p, l in zip(*(ax2.get_legend_handles_labels())) if l not in cls.SV_PALETTE}
+            ax2.legend(by_label.values(), by_label.keys(), loc='center left', bbox_to_anchor=(1.02, 0.5), prop={'size': 6}, frameon=False)
+
+            by_label = {l: p for p, l in zip(*(ax3.get_legend_handles_labels())) if l not in cls.SV_PALETTE}
+            ax3.legend(by_label.values(), by_label.keys(), loc='center left', bbox_to_anchor=(1.02, 0.5), prop={'size': 6}, frameon=False)
+
+        #
+        ax1.axis('off')
+
+        #
+        ax2.set_ylim(0, np.ceil(ascat_['copy_number'].quantile(0.9999) + .5))
+
+        #
+        ax2.yaxis.set_major_locator(plticker.MultipleLocator(base=2.))
+        ax3.yaxis.set_major_locator(plticker.MultipleLocator(base=1.))
+
+        #
+        ax2.tick_params(axis='both', which='major', labelsize=6)
+        ax3.tick_params(axis='both', which='major', labelsize=6)
+
+        #
+        ax1.set_ylabel('SV')
+        ax2.set_ylabel('Copy-number', fontsize=7)
+        ax3.set_ylabel('Loss of fitness', fontsize=7)
+
+        #
+        plt.xlabel('Position on chromosome {} (Mb)'.format(chrm.replace('chr', '')))
+
+        #
+        plt.xlim(xlim[0] / scale, xlim[1] / scale)
+
+        return ax1, ax2, ax3

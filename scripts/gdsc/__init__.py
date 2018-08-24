@@ -20,6 +20,9 @@ QC_FAILED_SGRNAS = [
     'sgPOLR2K_1'
 ]
 
+# WGS samples
+BRCA_SAMPLES = ['HCC1954', 'HCC1143', 'HCC38', 'HCC1187', 'HCC1937', 'HCC1395']
+
 # NON-EXPRESSED GENES: RNA-SEQ
 NON_EXP = 'non_expressed_genes.csv'
 BIOMART_HUMAN_ID_TABLE = 'rnaseq/biomart_human_id_table.csv'
@@ -28,12 +31,16 @@ GDSC_RNASEQ_SAMPLESHEET = 'rnaseq/merged_sample_annotation.csv'
 GDSC_RNASEQ_RPKM = 'rnaseq/merged_rpkm.csv'
 
 
-def import_crispy_beds():
+def import_crispy_beds(wgs=False):
     beds = {
         f.split('.')[0]:
-            pd.read_csv(f'{DIR}/bed/{f}', sep='\t') for f in os.listdir(f'{DIR}/bed/') if f.endswith('crispy.bed')
+            pd.read_csv(f'{DIR}/bed/{f}', sep='\t') for f in os.listdir(f'{DIR}/bed/') if (f.endswith('crispy.wgs.bed') if wgs else f.endswith('crispy.bed'))
     }
     return beds
+
+
+def import_brass_bedpes():
+    return {s: cy.Utils.import_brass_bedpe(f'{DIR}/wgs/{s}.brass.annot.bedpe') for s in BRCA_SAMPLES}
 
 
 def get_samplesheet():
@@ -46,6 +53,23 @@ def get_raw_counts():
 
 def get_copy_number_segments():
     return pd.read_csv(f'{DIR}/{COPYNUMBER}')
+
+
+def get_copy_number_segments_wgs(as_dict=False):
+    if as_dict:
+        wgs_copynumber = {
+            s:
+                pd.read_csv(f'{DIR}/wgs/{s}.wgs.ascat.bed', sep='\t', names=cy.Utils.ASCAT_HEADERS, comment='#')
+            for s in BRCA_SAMPLES
+        }
+
+    else:
+        wgs_copynumber = pd.concat([
+            pd.read_csv(f'{DIR}/wgs/{s}.wgs.ascat.bed', sep='\t', names=cy.Utils.ASCAT_HEADERS, comment='#').assign(sample=s)
+            for s in BRCA_SAMPLES
+        ])
+
+    return wgs_copynumber
 
 
 def get_ensembl_gene_id_table():

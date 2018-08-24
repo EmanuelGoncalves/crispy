@@ -16,6 +16,17 @@ class Utils(object):
         'chr17': 81195210, 'chr18': 78077248, 'chr19': 59128983, 'chr20': 63025520, 'chr21': 48129895, 'chr22': 51304566, 'chrX': 155270560, 'chrY': 59373566
     }
 
+    BRASS_HEADERS = [
+        'chr1', 'start1', 'end1', 'chr2', 'start2', 'end2', 'id/name', 'brass_score', 'strand1', 'strand2',
+        'sample', 'svclass', 'bkdist', 'assembly_score', 'readpair names', 'readpair count', 'bal_trans', 'inv',
+        'occL', 'occH', 'copynumber_flag', 'range_blat', 'Brass Notation', 'non-template', 'micro-homology',
+        'assembled readnames', 'assembled read count', 'gene1', 'gene_id1', 'transcript_id1', 'strand1', 'end_phase1',
+        'region1', 'region_number1', 'total_region_count1', 'first/last1', 'gene2', 'gene_id2', 'transcript_id2',
+        'strand2', 'phase2', 'region2', 'region_number2', 'total_region_count2', 'first/last2', 'fusion_flag'
+    ]
+
+    ASCAT_HEADERS = ['chr', 'start', 'end', 'copy_number']
+
     @staticmethod
     def bin_bkdist(distance):
         """
@@ -137,6 +148,28 @@ class Utils(object):
         assert cytobands.shape[0] > 0, '{} not found in cytobands file'
 
         return cytobands
+
+    @classmethod
+    def import_brass_bedpe(cls, bedpe_file, bkdist=None, splitreads=True):
+        # Import BRASS bedpe
+        bedpe_df = pd.read_csv(bedpe_file, sep='\t', names=cls.BRASS_HEADERS, comment='#')
+
+        # Correct sample name
+        bedpe_df['sample'] = bedpe_df['sample'].apply(lambda v: v.split(',')[0])
+
+        # SV larger than threshold
+        if bkdist is not None:
+            bedpe_df = bedpe_df[bedpe_df['bkdist'] >= bkdist]
+
+        # BRASS2 annotated SV
+        if splitreads:
+            bedpe_df = bedpe_df.query("assembly_score != '_'")
+
+        # Parse chromosome name
+        bedpe_df = bedpe_df.assign(chr1=bedpe_df['chr1'].apply(lambda x: 'chr{}'.format(x)).values)
+        bedpe_df = bedpe_df.assign(chr2=bedpe_df['chr2'].apply(lambda x: 'chr{}'.format(x)).values)
+
+        return bedpe_df
 
 
 class DotDict(dict):

@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 
 if __name__ == '__main__':
     # - Import crispy bed files
-    beds = gdsc.import_crispy_beds()
+    beds = gdsc.import_crispy_beds(wgs=True)
 
     # - Aggregate by segments
     agg_fun = dict(
@@ -53,5 +53,5 @@ if __name__ == '__main__':
                 plt.title('Copy-number effect on CRISPR-Cas9')
 
                 plt.gcf().set_size_inches(3, 3)
-                plt.savefig(f'reports/gdsc/bias_copynumber_{groupby}_{y_label}_{x_label}.png', bbox_inches='tight', dpi=600)
+                plt.savefig(f'reports/gdsc/wgs/bias_copynumber_{groupby}_{y_label}_{x_label}.png', bbox_inches='tight', dpi=600)
                 plt.close('all')

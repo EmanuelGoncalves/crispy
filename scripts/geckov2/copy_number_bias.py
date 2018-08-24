@@ -4,7 +4,6 @@
 import numpy as np
 import crispy as cy
 import pandas as pd
-import seaborn as sns
 import geckov2 as gecko
 import matplotlib.pyplot as plt
 
@@ -51,7 +50,7 @@ if __name__ == '__main__':
                 ax = cy.QCplot.bias_boxplot(cn_aucs_df, x=x_var, notch=False, add_n=True, n_text_y=.05)
 
                 ax.set_ylim(0, 1)
-                ax.axhline(.5, lw=.3, c=cy.PAL_DBGD[0], ls=':', zorder=0)
+                ax.axhline(.5, lw=.3, c=cy.QCplot.PAL_DBGD[0], ls=':', zorder=0)
 
                 x_label = x_var.replace('_', ' ').capitalize()
                 plt.xlabel(f'{x_label}')
