@@ -10,6 +10,7 @@ import matplotlib.ticker as plticker
 from natsort import natsorted
 from crispy.utils import Utils
 from matplotlib.patches import Arc
+from collections import OrderedDict
 from sklearn.metrics.ranking import auc
 from sklearn.metrics import roc_auc_score
 
@@ -256,6 +257,73 @@ class QCplot(object):
     def get_palette_continuous(n_colors, color=PAL_DBGD[0]):
         pal = sns.light_palette(color, n_colors=n_colors + 2).as_hex()[2:]
         return pal
+
+    @classmethod
+    def plot_chromosome(
+            cls, crispy_bed, ascat_bed, chrm, highlight=None, ax=None, legend=False, scale=1e6, tick_base=1, legend_size=5
+    ):
+
+        if ax is None:
+            ax = plt.gca()
+
+        # - Build data-frames
+        # ASCAT
+        ascat_ = ascat_bed.query(f"chr == '{chrm}'")
+
+        # CRISPR
+        crispr_ = crispy_bed[crispy_bed['chr'] == chrm]
+        crispr_ = crispr_.assign(location=crispr_[['sgrna_start', 'sgrna_end']].mean(1))
+
+        crispr_gene_ = crispr_.groupby('gene')[['fold_change', 'location']].mean()
+
+        # Plot original values
+        ax.scatter(crispr_['location'] / scale, crispr_['fold_change'], s=6, marker='.', lw=0, c=cls.PAL_DBGD[1], alpha=.4, label='CRISPR-Cas9')
+
+        # Segment mean
+        for (s, e), gp_mean in crispr_.groupby(['start', 'end'])['fold_change']:
+            ax.plot((s / scale, e / scale), (gp_mean.mean(), gp_mean.mean()), alpha=1., c=cls.PAL_DBGD[2], zorder=3, label='Segment mean', lw=2)
+
+        # Plot segments
+        for s, e, cn in ascat_[['start', 'end', 'copy_number']].values:
+            ax.plot((s / scale, e / scale), (cn, cn), alpha=1., c=cls.PAL_DBGD[0], zorder=3, label='ASCAT', lw=2)
+
+        # Highlight
+        if highlight is not None:
+            for ic, i in zip(*(sns.color_palette('tab20', n_colors=len(highlight)), highlight)):
+                if i in crispr_gene_.index:
+                    ax.scatter(
+                        crispr_gene_['location'].loc[i] / scale, crispr_gene_['fold_change'].loc[i], s=14, marker='X', lw=0, c=ic, alpha=.9, label=i
+                    )
+        # Misc
+        ax.axhline(0, lw=.3, ls='-', color='black')
+
+        # Cytobads
+        cytobands = Utils.get_cytobands(chrm=chrm)
+
+        for i, (s, e, t) in enumerate(cytobands[['start', 'end', 'band']].values):
+            if t == 'acen':
+                ax.axvline(s / scale, lw=.2, ls='-', color=cls.PAL_DBGD[0], alpha=.1)
+                ax.axvline(e / scale, lw=.2, ls='-', color=cls.PAL_DBGD[0], alpha=.1)
+
+            elif not i % 2:
+                ax.axvspan(s / scale, e / scale, alpha=0.1, facecolor=cls.PAL_DBGD[0])
+
+        # Legend
+        if legend:
+            handles, labels = plt.gca().get_legend_handles_labels()
+            by_label = OrderedDict(zip(labels, handles))
+            plt.legend()
+            ax.legend(
+                by_label.values(), by_label.keys(), loc='center left', bbox_to_anchor=(1, 0.5), prop={'size': legend_size}, frameon=False
+            )
+
+        ax.set_xlim(crispr_['start'].min() / scale, crispr_['end'].max() / scale)
+
+        ax.tick_params(axis='both', which='major', labelsize=5)
+
+        ax.yaxis.set_major_locator(plticker.MultipleLocator(base=tick_base))
+
+        return ax
 
     @classmethod
     def plot_rearrangements(
