@@ -4,7 +4,7 @@
 import numpy as np
 import pandas as pd
 import pkg_resources
-import scipy.stats as st
+from scipy.stats import gaussian_kde, rankdata, norm
 
 
 class Utils(object):
@@ -94,8 +94,8 @@ class Utils(object):
 
     @staticmethod
     def qnorm(x):
-        y = st.rankdata(x)
-        y = -st.norm.isf(y / (len(x) + 1))
+        y = rankdata(x)
+        y = -norm.isf(y / (len(x) + 1))
         return y
 
     @classmethod
@@ -170,6 +170,14 @@ class Utils(object):
         bedpe_df = bedpe_df.assign(chr2=bedpe_df['chr2'].apply(lambda x: 'chr{}'.format(x)).values)
 
         return bedpe_df
+
+    @staticmethod
+    def gkn(values, bound=1e7):
+        kernel = gaussian_kde(values)
+        kernel = pd.Series({
+            k: np.log(kernel.integrate_box_1d(-bound, v) / kernel.integrate_box_1d(v, bound)) for k, v in values.to_dict().items()
+        })
+        return kernel
 
 
 class DotDict(dict):

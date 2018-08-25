@@ -18,10 +18,12 @@ SGRNA_MAP = 'guide_gene_map.csv'
 
 
 def import_crispy_beds():
-    beds = {
-        f.split('.')[0]:
-            pd.read_csv(f'{DIR}/bed/{f}', sep='\t') for f in os.listdir(f'{DIR}/bed/') if f.endswith('crispy.bed')
-    }
+    beds = {}
+
+    for f in os.listdir(f'{DIR}/bed/'):
+        if f.endswith('crispy.bed'):
+            beds[f.split('.')[0]] = pd.read_csv(f'{DIR}/bed/{f}', sep='\t')
+
     return beds
 
 

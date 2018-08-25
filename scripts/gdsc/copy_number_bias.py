@@ -28,6 +28,7 @@ if __name__ == '__main__':
     beds_gene = {s: beds[s].groupby(['gene']).agg(agg_fun) for s in beds}
 
     # - Copy-number bias
+    aucs_df = []
     for y_label, y_var in [('original', 'fold_change'), ('corrected', 'corrected')]:
 
         for x_var, x_thres in [('copy_number', 10), ('ratio', 4)]:
@@ -55,3 +56,19 @@ if __name__ == '__main__':
                 plt.gcf().set_size_inches(3, 3)
                 plt.savefig(f'reports/gdsc/bias_copynumber_{groupby}_{y_label}_{x_label}.png', bbox_inches='tight', dpi=600)
                 plt.close('all')
+
+                # Export
+                cn_aucs_df = pd.melt(cn_aucs_df, id_vars=['sample', x_var], value_vars=['auc'])
+
+                cn_aucs_df = cn_aucs_df \
+                    .assign(fold_change=y_label) \
+                    .assign(feature=x_var) \
+                    .assign(groupby=groupby) \
+                    .drop(['variable'], axis=1) \
+                    .rename(columns={x_var: 'feature_value', 'value': 'auc'})
+
+                aucs_df.append(cn_aucs_df)
+
+    aucs_df = pd.concat(aucs_df)
+    aucs_df.to_csv(f'{gdsc.DIR}/bias_aucs.csv', index=False)
+

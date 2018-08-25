@@ -35,7 +35,7 @@ if __name__ == '__main__':
     aucs_df = []
     for y_label, y_var in [('original', 'fold_change'), ('corrected', 'corrected'), ('ceres', 'ceres')]:
 
-        for x_var, x_thres in [('copy_number', 10), ('ratio', 4)]:
+        for x_var, x_thres in [('copy_number', 10), ('ratio', 10)]:
 
             for groupby, df in [('segment', beds_seg), ('gene', beds_gene)]:
                 # Calculate bias

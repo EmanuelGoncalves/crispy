@@ -113,17 +113,24 @@ class QCplot(object):
         return aucs
 
     @classmethod
-    def bias_boxplot(cls, data, x='copy_number', y='auc', hue=None, despine=False, notch=True, add_n=False, n_text_y=None, n_text_offset=.05, palette=None, ax=None, tick_base=.1):
+    def bias_boxplot(
+            cls, data, x='copy_number', y='auc', hue=None, despine=False, notch=True, add_n=False, n_text_y=None,
+            n_text_offset=.05, palette=None, ax=None, tick_base=.1, hue_order=None
+    ):
         if ax is None:
             ax = plt.gca()
 
         order = natsorted(set(data[x]))
 
-        if palette is None:
+        if palette is None and hue is not None:
+            hue_order = natsorted(set(data['hue'])) if hue_order is None else hue_order
+            palette = dict(zip(*(hue_order, cls.get_palette_continuous(len(hue_order)))))
+
+        else:
             palette = dict(zip(*(order, cls.get_palette_continuous(len(order)))))
 
         sns.boxplot(
-            x, y, data=data, hue=hue, notch=notch, order=order, palette=palette, saturation=1., showcaps=False,
+            x, y, data=data, hue=hue, notch=notch, order=order, palette=palette, saturation=1., showcaps=False, hue_order=hue_order,
             medianprops=cls.MEDIANPROPS, flierprops=cls.FLIERPROPS, whiskerprops=cls.WHISKERPROPS, boxprops=cls.BOXPROPS, ax=ax
         )
 

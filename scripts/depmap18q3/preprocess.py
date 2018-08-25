@@ -10,6 +10,10 @@ import matplotlib.pyplot as plt
 
 
 def replicates_correlation():
+    sample_map = depmap18q3.get_replicates_map().dropna()
+    sample_map = sample_map.replace({'Broad_ID': samplesheet['CCLE_name']})
+    sample_map = sample_map.set_index('replicate_ID')
+
     rep_fold_changes = pd.concat([
         cy.Crispy(
             raw_counts=raw_counts[manifest[s] + plasmids[s]],
@@ -24,7 +28,11 @@ def replicates_correlation():
     corr = corr.where(np.triu(np.ones(corr.shape), 1).astype(np.bool))
     corr = corr.unstack().dropna().reset_index()
     corr = corr.set_axis(['sample_1', 'sample_2', 'corr'], axis=1, inplace=False)
-    corr['replicate'] = [int(s1.split(' Rep')[0] == s2.split(' Rep')[0]) for s1, s2 in corr[['sample_1', 'sample_2']].values]
+
+    corr = corr.assign(name_1=sample_map.loc[corr['sample_1'], 'Broad_ID'].values)
+    corr = corr.assign(name_2=sample_map.loc[corr['sample_2'], 'Broad_ID'].values)
+
+    corr = corr.assign(replicate=(corr['name_1'] == corr['name_2']).astype(int))
 
     replicates_corr = corr.query('replicate == 1')['corr'].mean()
     print(f'[INFO] Replicates correlation: {replicates_corr:.2f}')

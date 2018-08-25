@@ -27,7 +27,7 @@ BED_COLUMNS = ['chr', 'start', 'end', 'copy_number', 'sgrna_chr', 'sgrna_start',
 class Crispy(object):
 
     def __init__(
-            self, raw_counts, library, copy_number=None, plasmid='Plasmid_v1.1'
+            self, raw_counts, library=None, copy_number=None, plasmid='Plasmid_v1.1'
     ):
         f"""
         Initialise a Crispy processing pipeline object
