@@ -9,6 +9,25 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 
 
+def replicates_correlation_gene_level():
+    rep_fold_changes = pd.concat([
+        cy.Crispy(
+            raw_counts=raw_counts[manifest[sample] + [plasmid[sample]]],
+            copy_number=copy_number.query(f"sample == '{sample}'"),
+            library=lib,
+            plasmid=plasmid[sample]
+        ).gene_fold_changes(qc_replicates_thres=None, average_replicates=False) for sample in manifest
+    ], axis=1, sort=False).dropna()
+
+    corr = rep_fold_changes.corr()
+    corr = corr.where(np.triu(np.ones(corr.shape), 1).astype(np.bool))
+    corr = corr.unstack().dropna().reset_index()
+    corr = corr.set_axis(['sample_1', 'sample_2', 'corr'], axis=1, inplace=False)
+    corr['replicate'] = [int(samplesheet.loc[s1, 'name'] == samplesheet.loc[s2, 'name']) for s1, s2 in corr[['sample_1', 'sample_2']].values]
+
+    return corr
+
+
 def replicates_correlation():
     rep_fold_changes = pd.concat([
         cy.Crispy(

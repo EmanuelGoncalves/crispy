@@ -27,7 +27,7 @@ BED_COLUMNS = ['chr', 'start', 'end', 'copy_number', 'sgrna_chr', 'sgrna_start',
 class Crispy(object):
 
     def __init__(
-            self, raw_counts, library=None, copy_number=None, plasmid='Plasmid_v1.1'
+            self, raw_counts, library=None, copy_number=None, plasmid=None
     ):
         f"""
         Initialise a Crispy processing pipeline object
@@ -41,8 +41,8 @@ class Crispy(object):
         :param library: pandas.DataFrame
             CRISPR library, must have these columns {CRISPR_LIB_COLUMNS}
 
-        :param plasmid: str or list, optinal
-            Column(s) in raw_counts to compare to other samples
+        :param plasmid: str or list, optional
+            Column(s) in raw_counts to compare to other samples. If None last column is taken as control.
 
 
         """
@@ -52,14 +52,26 @@ class Crispy(object):
 
         self.library = cy.Utils.get_crispr_lib() if library is None else library
 
-        self.plasmid = [plasmid] if type(plasmid) == str else plasmid
+        if plasmid is None:
+            self.plasmid = [self.raw_counts.columns[-1]]
 
-    def correct(self, x_features=None, qc_replicates_thres=.7, n_sgrna=30, round_dec=5):
+        elif type(plasmid) == str:
+            self.plasmid = [plasmid]
+
+        else:
+            self.plasmid = plasmid
+
+        self.gpr = None
+
+    def correct(self, x_features=None, y_feature='fold_change', qc_replicates_thres=None, n_sgrna=10, round_dec=5):
         """
         Main pipeline function to process data from raw counts to corrected fold-changes.
 
         :param x_features: list
-            Columns to be used as features to predict segments fold-changes
+            Columns to be used as feature(s)
+
+        :param y_feature: str
+            Dependent variable
 
         :param qc_replicates_thres: float
             Replicate fold-change Pearson correlation threshold
@@ -74,7 +86,14 @@ class Crispy(object):
         """
         assert self.copy_number is not None, 'Copy-number information not provided'
 
-        x_features = ['ratio'] if x_features is None else x_features
+        if x_features is None:
+            x_features = ['ratio']
+
+        elif type(x_features) == str:
+            x_features = [x_features]
+
+        else:
+            x_features = x_features
 
         # - Estimate fold-changes from raw counts
         fc = self.fold_changes(qc_replicates_thres=qc_replicates_thres)
@@ -86,11 +105,9 @@ class Crispy(object):
         bed_df = self.intersect_sgrna_copynumber(fc)
 
         # - Fit Gaussian Process on segment fold-changes
-        gpr = CrispyGaussian(bed_df, n_sgrna=n_sgrna).fit(x=x_features, y='fold_change')
+        self.gpr = CrispyGaussian(bed_df, n_sgrna=n_sgrna).fit(x=x_features, y=y_feature)
 
-        gp_mean = gpr.predict(x=x_features)
-
-        bed_df['gp_mean'] = gp_mean[bed_df.set_index(gpr.SEGMENT_COLUMNS).index].values
+        bed_df['gp_mean'] = self.gpr.predict(bed_df[x_features])
 
         # - Correct fold-change by subtracting the estimated mean
         bed_df['corrected'] = bed_df.eval('fold_change - gp_mean')
@@ -258,12 +275,14 @@ class Crispy(object):
 
         return df
 
-    def fold_changes(self, qc_replicates_thres=.7):
+    def fold_changes(self, qc_replicates_thres=.7, average_replicates=True):
         """
         Fold-changes estimation
 
         :param qc_replicates_thres: float, optional default = 0.7
             Replicate fold-change Pearson correlation threshold
+
+        :param average_replicates: bool
 
         :returns pandas.Series: fold-changes compared to plasmid
 
@@ -289,12 +308,13 @@ class Crispy(object):
             fold_changes = fold_changes[samples]
 
         # Average replicates
-        fold_changes = fold_changes.mean(1)
+        if average_replicates:
+            fold_changes = fold_changes.mean(1)
 
         return fold_changes
 
     # TODO: Note to potential duplciate sgrnas in library
-    def gene_fold_changes(self, bed_df=None, qc_replicates_thres=.7):
+    def gene_fold_changes(self, bed_df=None, qc_replicates_thres=.7, average_replicates=True):
         """
         Gene level fold-changes
 
@@ -303,11 +323,13 @@ class Crispy(object):
         :param qc_replicates_thres: float, optional default = 0.7
             Replicate fold-change Pearson correlation threshold
 
+        :param average_replicates:
+
         :return: pandas.Series
         """
 
         if bed_df is None:
-            fc = self.fold_changes(qc_replicates_thres=qc_replicates_thres)
+            fc = self.fold_changes(qc_replicates_thres=qc_replicates_thres, average_replicates=average_replicates)
         else:
             fc = bed_df.set_index('sgrna')['fold_change']
 
@@ -397,6 +419,7 @@ class CrispyGaussian(GaussianProcessRegressor):
         if train_idx is not None:
             x = self.bed_seg.iloc[train_idx].query(f'sgrna >= {self.n_sgrna}')[x]
             y = self.bed_seg.iloc[train_idx].query(f'sgrna >= {self.n_sgrna}')[y]
+
         else:
             x = self.bed_seg.query(f'sgrna >= {self.n_sgrna}')[x]
             y = self.bed_seg.query(f'sgrna >= {self.n_sgrna}')[y]
@@ -406,20 +429,8 @@ class CrispyGaussian(GaussianProcessRegressor):
     def predict(self, x=None, return_std=False, return_cov=False):
         if x is None:
             x = self.bed_seg[['ratio']]
-        elif type(x) == list:
-            x = self.bed_seg[x]
 
-        if return_std or return_cov:
-            gp_mean, gp_std_cor = super().predict(x, return_std=return_std, return_cov=return_cov)
-            gp_mean = pd.Series(gp_mean, index=x.index).rename('gp_mean')
-
-            return gp_mean, gp_std_cor
-
-        else:
-            gp_mean = super().predict(x)
-            gp_mean = pd.Series(gp_mean, index=x.index).rename('gp_mean')
-
-            return gp_mean
+        return super().predict(x, return_std=return_std, return_cov=return_cov)
 
     def score(self, x=None, y=None, sample_weight=None):
         if x is None:
@@ -432,12 +443,12 @@ class CrispyGaussian(GaussianProcessRegressor):
 
         return super().score(x, y, sample_weight=sample_weight)
 
-    def plot(self, x='ratio', y='fold_change', ax=None):
+    def plot(self, x_feature='ratio', y_feature='fold_change', ax=None):
         """
         Plot original data and GPR
 
-        :param x: str, x axis variable
-        :param y: str, y axis variable
+        :param x_feature: str, x axis variable
+        :param y_feature: str, y axis variable
         :param ax: matplotlib.plot
         :return: matplotlib.plot
         """
@@ -445,22 +456,37 @@ class CrispyGaussian(GaussianProcessRegressor):
         if ax is None:
             ax = plt.gca()
 
-        # Plot data
-        ax.scatter(self.bed_seg[x], self.bed_seg[y], marker='o', s=5, alpha=.4, color=cy.QCplot.PAL_DBGD[0], lw=0)
+        # - Data
+        x, y = self.bed_seg.query(f'sgrna >= {self.n_sgrna}')[x_feature], self.bed_seg.query(f'sgrna >= {self.n_sgrna}')[y_feature]
+        x_, y_ = self.bed_seg.query(f'sgrna < {self.n_sgrna}')[x_feature], self.bed_seg.query(f'sgrna < {self.n_sgrna}')[y_feature]
+
+        x_pred = np.arange(0, x.max(), .1)
+        y_pred, y_pred_std = self.predict(x_pred.reshape(-1, 1), return_std=True)
+
+        # - Plot
+        # Segments used for fitting
+        ax.scatter(
+            x, y, c=cy.QCplot.PAL_DBGD[0], alpha=.7, edgecolors='white', lw=.3, label='#(sgRNA) >= 10'
+        )
+
+        # Segments not used for fitting
+        plt.scatter(
+            x_, y_, c=cy.QCplot.PAL_DBGD[0], marker='X', alpha=.3, edgecolors='white', lw=.3, label='#(sgRNA) < 10'
+        )
 
         # Plot GP fit
-        x_ = np.arange(0, self.bed_seg[x].max(), .1)
-        y_mean, y_std = self.predict(x_.reshape(-1, 1), return_std=True)
-
-        ax.plot(x_, y_mean, color=cy.QCplot.PAL_DBGD[1], lw=1, label='GPR', zorder=3)
-        ax.fill_between(x_, y_mean - y_std, y_mean + y_std, color=cy.QCplot.PAL_DBGD[1], alpha=0.2, zorder=3, lw=0)
+        # GP fit
+        plt.plot(x_pred, y_pred, ls='-', lw=1., c=cy.QCplot.PAL_DBGD[1], label='GPR mean')
+        plt.fill_between(x_pred, y_pred - y_pred_std, y_pred + y_pred_std, alpha=0.2, color=cy.QCplot.PAL_DBGD[1], lw=0)
 
         # Misc
-        ax.axhline(0, lw=.3, color=cy.QCplot.PAL_DBGD[2], ls=':', zorder=0)
+        plt.axhline(0, ls=':', color=cy.QCplot.PAL_DBGD[2], lw=.3)
 
-        ax.legend(frameon=False, prop={'size': 4}, loc=3)
+        plt.xlabel(f'Segment\n{x_feature}')
+        plt.ylabel(f'Segment\nmean {y_feature}')
 
-        ax.set_xlabel('Copy-number')
-        ax.set_ylabel('Fold-change')
+        plt.title(f'{self.kernel_}', fontsize=6)
+
+        plt.legend(frameon=False)
 
         return ax

@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # Copyright (C) 2018 Emanuel Goncalves
 
+import utils
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -8,7 +9,6 @@ import scipy.stats as st
 import matplotlib.pyplot as plt
 import matplotlib.ticker as plticker
 from natsort import natsorted
-from crispy.utils import Utils
 from matplotlib.patches import Arc
 from collections import OrderedDict
 from sklearn.metrics.ranking import auc
@@ -80,10 +80,10 @@ class QCplot(object):
     @staticmethod
     def pr_curve(rank, true_set=None, false_set=None, min_events=10):
         if true_set is None:
-            true_set = Utils.get_essential_genes(return_series=False)
+            true_set = utils.Utils.get_essential_genes(return_series=False)
 
         if false_set is None:
-            false_set = Utils.get_non_essential_genes(return_series=False)
+            false_set = utils.Utils.get_non_essential_genes(return_series=False)
 
         index_set = true_set.union(false_set)
 
@@ -101,7 +101,7 @@ class QCplot(object):
 
     @classmethod
     def recall_curve_discretise(cls, rank, discrete, thres, min_events=10):
-        discrete = discrete.apply(Utils.bin_cnv, args=(thres,))
+        discrete = discrete.apply(utils.Utils.bin_cnv, args=(thres,))
 
         aucs = pd.DataFrame([
             {
@@ -123,10 +123,10 @@ class QCplot(object):
         order = natsorted(set(data[x]))
 
         if palette is None and hue is not None:
-            hue_order = natsorted(set(data['hue'])) if hue_order is None else hue_order
+            hue_order = natsorted(set(data[hue])) if hue_order is None else hue_order
             palette = dict(zip(*(hue_order, cls.get_palette_continuous(len(hue_order)))))
 
-        else:
+        elif palette is None:
             palette = dict(zip(*(order, cls.get_palette_continuous(len(order)))))
 
         sns.boxplot(
@@ -305,7 +305,7 @@ class QCplot(object):
         ax.axhline(0, lw=.3, ls='-', color='black')
 
         # Cytobads
-        cytobands = Utils.get_cytobands(chrm=chrm)
+        cytobands = utils.Utils.get_cytobands(chrm=chrm)
 
         for i, (s, e, t) in enumerate(cytobands[['start', 'end', 'band']].values):
             if t == 'acen':
@@ -338,7 +338,7 @@ class QCplot(object):
             unfold_inversions=False, sv_alpha=1., sv_lw=.3, highlight=None, mark_essential=False
     ):
         # - Define default params
-        chrm_size = Utils.CHR_SIZES_HG19 if chrm_size is None else chrm_size
+        chrm_size = utils.Utils.CHR_SIZES_HG19 if chrm_size is None else chrm_size
 
         xlim = (0, chrm_size[chrm]) if xlim is None else xlim
 
@@ -355,7 +355,8 @@ class QCplot(object):
 
         crispr_gene_ = crispr_.groupby('gene')[['fold_change', 'location']].mean()
 
-        assert brass_.shape[0] != 0, 'No BRASS SVs'
+        if brass_.shape[0] == 0:
+            return None, None, None
 
         # - Plot
         f, (ax1, ax2, ax3) = plt.subplots(3, 1, sharex='all', gridspec_kw={'height_ratios': [1, 2, 2]})
@@ -376,7 +377,7 @@ class QCplot(object):
             ax3.plot((s / scale, e / scale), (gp_mean.mean(), gp_mean.mean()), alpha=1., c=cls.PAL_DBGD[2], zorder=3, label='Segment mean', lw=2)
 
         if mark_essential:
-            ess = Utils.get_adam_core_essential()
+            ess = utils.Utils.get_adam_core_essential()
             ax3.scatter(
                 crispr_gene_.reindex(ess)['location'] / scale, crispr_gene_.reindex(ess)['fold_change'], s=5, marker='x', lw=.3, c=cls.PAL_DBGD[1],
                 alpha=.4, edgecolors='#fc8d62', label='Core-essential'
@@ -390,7 +391,7 @@ class QCplot(object):
 
         #
         for c1, s1, e1, c2, s2, e2, st1, st2, sv in brass_[['chr1', 'start1', 'end1', 'chr2', 'start2', 'end2', 'strand1', 'strand2', 'svclass']].values:
-            stype = Utils.svtype(st1, st2, sv, unfold_inversions)
+            stype = utils.Utils.svtype(st1, st2, sv, unfold_inversions)
             stype_col = cls.SV_PALETTE[stype]
 
             zorder = 2 if stype == 'tandem-duplication' else 1

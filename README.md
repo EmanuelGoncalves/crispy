@@ -2,33 +2,40 @@
 
 [![License](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause) [![PyPI version](https://badge.fury.io/py/cy.svg)](https://badge.fury.io/py/cy)
 
-
-Identify associations between genomic alterations (e.g. structural variation, copy-number variation) and CRISPR-Cas9 knockout response.
+Method to correct gene independent copy-number effects on CRISPR-Cas9 screens.
 
 
 Description
 --
-Crispy uses [Sklearn](http://scikit-learn.org/stable/index.html) implementation of [Gaussian Process Regression](http://scikit-learn.org/stable/modules/generated/sklearn.gaussian_process.GaussianProcessRegressor.html#sklearn.gaussian_process.GaussianProcessRegressor), fitting by default each chromosome of each sample independently.
+Crispy uses [Sklearn](http://scikit-learn.org/stable/index.html) implementation of [Gaussian Process Regression](http://scikit-learn.org/stable/modules/generated/sklearn.gaussian_process.GaussianProcessRegressor.html#sklearn.gaussian_process.GaussianProcessRegressor), fitting each sample independently.
 
 
 Example
 --
 ```python
-import pandas as pd
 import crispy as cy
+import matplotlib.pyplot as plt
 
 # Import data
-data = cy.get_example_data()
+rawcounts, copynumber = cy.Utils.get_example_data()
 
-# Association analysis
-crispy = cy.CRISPRCorrection()\
-    .fit_by(by=data['chr'], X=data[['cnv']], y=data['fc'])
+# Import CRISPR-Cas9 library
+lib = cy.Utils.get_crispr_lib()
 
-# Export
-crispy = pd.concat([v.to_dataframe() for k, v in crispy.items()])\
-    .sort_values(['cnv', 'k_mean'], ascending=[False, True])
+# Instantiate Crispy
+crispy = cy.Crispy(
+    raw_counts=rawcounts, copy_number=copynumber, library=lib
+)
 
-print(crispy)
+# Fold-changes and correction integrated funciton.
+# Output is a modified/expanded BED output with sgRNA and segments information
+bed_df = crispy.correct(x_features='ratio', y_feature='fold_change')
+print(bed_df.head())
+
+# Gaussian Process Regression is stored
+crispy.gpr.plot(x_feature='ratio', y_feature='fold_change')
+plt.show()
+
 ```
 
 

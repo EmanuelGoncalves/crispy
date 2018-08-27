@@ -5,7 +5,6 @@ import gdsc
 import numpy as np
 import crispy as cy
 import pandas as pd
-import seaborn as sns
 import matplotlib.pyplot as plt
 
 
@@ -48,7 +47,7 @@ if __name__ == '__main__':
         ('HCC1395', 'chr3', (100e6, 200e6), -2., 8),
         ('HCC1954', 'chr8', (60e6, 150e6), -2., 12),
         ('HCC1954', 'chr5', None, -2., 20),
-        ('HCC38', 'chr5', None, -2., 8)
+        ('HCC38', 'chr5', (0, 100e6), -2., 8)
     ]
 
     #
@@ -70,3 +69,28 @@ if __name__ == '__main__':
         plt.gcf().set_size_inches(3, 2)
         plt.savefig(f'reports/gdsc/wgs/svs_{s}_{chrm}.pdf', bbox_inches='tight', transparent=True)
         plt.close('all')
+
+    # -
+    chrms = [
+        'chr1', 'chr2', 'chr3', 'chr4', 'chr5', 'chr6', 'chr7', 'chr8', 'chr9', 'chr10',
+        'chr11', 'chr12', 'chr13', 'chr14', 'chr15', 'chr16', 'chr17', 'chr18', 'chr19',
+        'chr20', 'chr21', 'chr22'
+    ]
+
+    for s in crispy_beds:
+        for chrm in chrms:
+            crispy_bed, brass_bedpe, ascat_bed = crispy_beds[s], brass_bedpes[s], ascat_beds[s]
+
+            ax1, ax2, ax3 = cy.QCplot.plot_rearrangements(
+                brass_bedpe, ascat_bed, crispy_bed, chrm, show_legend=False
+            )
+
+            if ax1 is not None:
+                y_lim = ax3.get_ylim()
+                ax3.set_ylim(-2.5, y_lim[1])
+
+                plt.suptitle(f'{s}', y=1.05)
+
+                plt.gcf().set_size_inches(3, 2)
+                plt.savefig(f'reports/gdsc/wgs/all_svs/svs_{s}_{chrm}.pdf', bbox_inches='tight', transparent=True)
+                plt.close('all')

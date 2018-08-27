@@ -25,7 +25,7 @@ def aupr_comparison(aucs):
     aucs_mean = aucs_mean.assign(copy_number=aucs_mean.index)
 
     aucs_perc_down = pd.pivot_table(
-        plot_df, index='feature_value', columns='fold_change', values='auc', aggfunc=lambda v: np.percentile(v, 15)
+        plot_df, index='feature_value', columns='fold_change', values='auc', aggfunc=lambda v: np.percentile(v, 25)
     ).loc[order]
     aucs_perc_down = aucs_perc_down.assign(copy_number=aucs_perc_down.index)
 
@@ -45,6 +45,9 @@ def aupr_comparison(aucs):
         xerr = np.array([x - x_err_min, x_err_max - x]).reshape(2, -1)
 
         plt.errorbar(x, y, yerr=yerr, xerr=xerr, c=pal[i], label=i, fmt='o', lw=.3)
+
+    plt.xlim((None, .8))
+    plt.ylim((None, .8))
 
     (x0, x1), (y0, y1) = plt.xlim(), plt.ylim()
     lims = [max(x0, y0), min(x1, y1)]

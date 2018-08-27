@@ -23,7 +23,7 @@ def copynumber_bias_comparison(cn_bias):
     aucs_mean = aucs_mean.assign(copy_number=aucs_mean.index)
 
     aucs_perc_down = pd.pivot_table(
-        plot_df, index='feature_value', columns='fold_change', values='auc', aggfunc=lambda v: np.percentile(v, 15)
+        plot_df, index='feature_value', columns='fold_change', values='auc', aggfunc=lambda v: np.percentile(v, 25)
     ).loc[order]
     aucs_perc_down = aucs_perc_down.assign(copy_number=aucs_perc_down.index)
 

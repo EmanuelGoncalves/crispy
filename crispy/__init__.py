@@ -2,9 +2,8 @@
 # Copyright (C) 2017 Emanuel Goncalves
 
 import seaborn as sns
-from crispy.utils import Utils
-from crispy.ssgsea import SSGSEA
 from crispy.qc_plot import QCplot
+from crispy.utils import Utils, SSGSEA
 from crispy.crispy import Crispy, CrispyGaussian
 
 

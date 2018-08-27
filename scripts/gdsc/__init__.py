@@ -31,6 +31,30 @@ GDSC_RNASEQ_SAMPLESHEET = 'rnaseq/merged_sample_annotation.csv'
 GDSC_RNASEQ_RPKM = 'rnaseq/merged_rpkm.csv'
 
 
+def samplesheet_suppmaterial():
+    beds = import_crispy_beds()
+    ploidy = pd.Series({s: beds[s]['ploidy'].mean() for s in beds})
+
+    sinfo = pd.read_csv(f'{DIR}/{SAMPLE_INFO}', index_col=0)
+    samples = pd.read_csv(f'{DIR}/{SAMPLESHEET}')
+
+    cols = ['Master ID', 'COSMIC ID', 'Tissue', 'Cancer Type', 'CCLE ID']
+
+    ss = sinfo[sinfo.index.isin(samples['name'])]
+    ss = pd.concat([ss[cols], ploidy.rename('ploidy')], axis=1, sort=False)
+    ss['COSMIC ID'] = ss['COSMIC ID'].astype(int)
+
+    return ss
+
+
+def get_gene_ratios():
+    beds = import_crispy_beds()
+
+    ratios = pd.DataFrame({s: beds[s].groupby('gene')['ratio'].median() for s in beds})
+
+    return ratios
+
+
 def import_crispy_beds(wgs=False):
     beds = {
         f.split('.')[0]:

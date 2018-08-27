@@ -128,6 +128,24 @@ def ratios_heatmap_bias(data, min_evetns=10):
     plt.title('Mean CRISPR-Cas9 fold-change\n(non-expressed genes)')
 
 
+def ratios_heatmap_bias_count(data):
+    x, y, z = 'copy_number_bin', 'chr_copy_bin', 'scaled'
+
+    plot_df = data.groupby([x, y])[z].count().reset_index()
+    plot_df = pd.pivot_table(plot_df, index=x, columns=y, values=z, fill_value=0)
+
+    g = sns.heatmap(
+        plot_df.loc[natsorted(plot_df.index, reverse=False)].T, cmap='Greys_r', annot=True, fmt='.0f', square=True,
+        linewidths=.3, cbar=False, annot_kws={'fontsize': 7}, center=0
+    )
+    plt.setp(g.get_yticklabels(), rotation=0)
+
+    plt.ylabel('Chromosome copy-number')
+    plt.xlabel('Gene absolute copy-number')
+
+    plt.title('Mean CRISPR-Cas9 fold-change\n(non-expressed genes)')
+
+
 def ratios_histogram(plot_df):
     f, axs = plt.subplots(2, 1, sharex='all')
 
@@ -165,6 +183,22 @@ def ratios_histogram(plot_df):
     plt.grid(False)
 
 
+def copy_number_aucs_per_sample_chrcopy(cn_aucs_chr_df):
+    ax = cy.QCplot.bias_boxplot(
+        cn_aucs_chr_df[~cn_aucs_chr_df['copy_number'].isin(['0', '1'])], x='copy_number', hue='chr_copy_bin', notch=False, add_n=True, n_text_y=.05
+    )
+
+    ax.set_ylim(0, 1)
+    ax.axhline(.5, lw=.3, c=cy.QCplot.PAL_DBGD[0], ls=':', zorder=0)
+
+    plt.xlabel('Copy-number')
+    plt.ylabel('Copy-number AURC (per cell line)')
+
+    plt.title('Copy-number effect on CRISPR-Cas9\n(non-expressed genes)')
+
+    plt.legend(title='Chr copies', loc='center left', bbox_to_anchor=(1, 0.5), prop={'size': 6}, fontsize=6, frameon=False)
+
+
 if __name__ == '__main__':
     # - Non-expressed genes
     nexp = gdsc.get_non_exp()
@@ -191,8 +225,9 @@ if __name__ == '__main__':
     bed_nexp_gene = bed_nexp_gene.assign(ratio_bin=bed_nexp_gene['ratio'].apply(cy.Utils.bin_cnv, args=(4,)))
     bed_nexp_gene = bed_nexp_gene.assign(chr_copy_bin=bed_nexp_gene['chr_copy'].apply(cy.Utils.bin_cnv, args=(6,)))
 
-    # Get ploidy
+    # Get ploidy and chromosome copies
     ploidy = pd.Series({s: beds[s]['ploidy'].mean() for s in beds})
+    chr_copy = pd.DataFrame({s: beds[s].groupby('chr')['chr_copy'].mean() for s in beds}).unstack()
 
     # - Copy-number/Ratio bias
     # Copy-number recall curves
@@ -219,6 +254,18 @@ if __name__ == '__main__':
         c: cy.QCplot.recall_curve(bed_nexp_gene['scaled'], bed_nexp_gene.query('ratio_bin == @c').index) for c in order_ratio
     }
 
+    # Copy-number AURCs per sample
+    chrms = natsorted(set(bed_nexp_gene['chr']))
+
+    cn_aucs_chr_df = pd.concat([cy.QCplot.recall_curve_discretise(
+        bed_nexp_gene.query('sample == @s').query('chr == @c')['scaled'],
+        bed_nexp_gene.query('sample == @s').query('chr == @c')['copy_number'],
+        10
+    ).assign(sample=s).assign(chr=c) for s in beds for c in chrms])
+
+    cn_aucs_chr_df = cn_aucs_chr_df.assign(chr_copy=[chr_copy.loc[(s, c)] for s, c in cn_aucs_chr_df[['sample', 'chr']].values])
+    cn_aucs_chr_df = cn_aucs_chr_df.assign(chr_copy_bin=cn_aucs_chr_df['chr_copy'].apply(cy.Utils.bin_cnv, args=(6,)))
+
     # - Plot
     # Cancer type coverage
     tissue_coverage(list(beds))
@@ -244,6 +291,12 @@ if __name__ == '__main__':
     plt.savefig('reports/gdsc_bias_copynumber_boxplots_by_ploidy.pdf', bbox_inches='tight', transparent=True)
     plt.close('all')
 
+    # Plot bias per cell line group by chromosome copy
+    copy_number_aucs_per_sample_chrcopy(cn_aucs_chr_df)
+    plt.gcf().set_size_inches(3, 3)
+    plt.savefig('reports/gdsc_bias_copynumber_boxplots_by_chrm_copy.pdf', bbox_inches='tight', transparent=True)
+    plt.close('all')
+
     # Ratios histogram
     ratios_histogram(bed_nexp_gene)
     plt.title('Copy-number ratio histogram (non-expressed genes)')
@@ -261,6 +314,12 @@ if __name__ == '__main__':
     ratios_heatmap_bias(bed_nexp_gene)
     plt.gcf().set_size_inches(5.5, 5.5)
     plt.savefig('reports/gdsc_bias_ratio_heatmap.pdf', bbox_inches='tight', transparent=True)
+    plt.close('all')
+
+    # Ratio heatmap count
+    ratios_heatmap_bias_count(bed_nexp_gene)
+    plt.gcf().set_size_inches(5.5, 5.5)
+    plt.savefig('reports/gdsc_bias_ratio_heatmap_count.pdf', bbox_inches='tight', transparent=True)
     plt.close('all')
 
     # Ratio fold-change boxplots
