@@ -9,6 +9,12 @@ Description
 --
 Crispy uses [Sklearn](http://scikit-learn.org/stable/index.html) implementation of [Gaussian Process Regression](http://scikit-learn.org/stable/modules/generated/sklearn.gaussian_process.GaussianProcessRegressor.html#sklearn.gaussian_process.GaussianProcessRegressor), fitting each sample independently.
 
+Install
+--
+
+```
+pip install cy
+```
 
 Example
 --
@@ -39,12 +45,6 @@ plt.show()
 ```
 ![GPR](/images/example_gp_fit.png)
 
-Install
---
-
-```
-pip install cy
-```
 
 Credits and License
 --
