@@ -34,7 +34,7 @@ crispy = cy.Crispy(
 )
 
 # Fold-changes and correction integrated funciton.
-# Output is a modified/expanded BED output with sgRNA and segments information
+# Output is a modified/expanded BED formated data-frame with sgRNA and segments information
 bed_df = crispy.correct(x_features='ratio', y_feature='fold_change')
 print(bed_df.head())
 
