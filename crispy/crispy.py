@@ -480,7 +480,7 @@ class CrispyGaussian(GaussianProcessRegressor):
         plt.fill_between(x_pred, y_pred - y_pred_std, y_pred + y_pred_std, alpha=0.2, color=cy.QCplot.PAL_DBGD[1], lw=0)
 
         # Misc
-        plt.axhline(0, ls=':', color=cy.QCplot.PAL_DBGD[2], lw=.3)
+        plt.axhline(0, ls=':', color=cy.QCplot.PAL_DBGD[2], lw=.3, zorder=0)
 
         plt.xlabel(f'Segment\n{x_feature}')
         plt.ylabel(f'Segment\nmean {y_feature}')

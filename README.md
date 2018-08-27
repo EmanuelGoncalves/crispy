@@ -37,7 +37,7 @@ crispy.gpr.plot(x_feature='ratio', y_feature='fold_change')
 plt.show()
 
 ```
-[GPR fit example](images/example_gp_fit.png)
+![GPR fit example](images/example_gp_fit.png)
 
 Install
 --
