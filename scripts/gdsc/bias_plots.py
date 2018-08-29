@@ -206,8 +206,15 @@ if __name__ == '__main__':
     # - Crispy bed files
     beds = gdsc.import_crispy_beds()
 
+    # - Add ceres gene scores to bed
+    ccleanr = gdsc.import_ccleanr()
+    beds = {s: beds[s].assign(ccleanr=ccleanr.loc[beds[s]['gene'], s].values) for s in beds}
+
     # - Aggregate by gene
-    agg_fun = dict(fold_change=np.mean, copy_number=np.mean, ploidy=np.mean, chr_copy=np.mean, ratio=np.mean, chr='first')
+    agg_fun = dict(
+        fold_change=np.mean, copy_number=np.mean, ploidy=np.mean, chr_copy=np.mean, ratio=np.mean, chr='first',
+        ccleanr=np.mean, corrected=np.mean
+    )
 
     bed_nexp_gene = []
 

@@ -466,12 +466,12 @@ class CrispyGaussian(GaussianProcessRegressor):
         # - Plot
         # Segments used for fitting
         ax.scatter(
-            x, y, c=cy.QCplot.PAL_DBGD[0], alpha=.7, edgecolors='white', lw=.3, label='#(sgRNA) >= 10'
+            x, y, c=cy.QCplot.PAL_DBGD[0], alpha=.7, edgecolors='white', lw=.3, label=f'#(sgRNA) >= {self.n_sgrna}'
         )
 
         # Segments not used for fitting
         plt.scatter(
-            x_, y_, c=cy.QCplot.PAL_DBGD[0], marker='X', alpha=.3, edgecolors='white', lw=.3, label='#(sgRNA) < 10'
+            x_, y_, c=cy.QCplot.PAL_DBGD[0], marker='X', alpha=.3, edgecolors='white', lw=.3, label=f'#(sgRNA) < {self.n_sgrna}'
         )
 
         # Plot GP fit

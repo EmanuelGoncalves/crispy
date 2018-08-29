@@ -63,6 +63,11 @@ def import_crispy_beds(wgs=False):
     return beds
 
 
+def import_ccleanr():
+    ccleanr = pd.read_csv(f'{DIR}/CRISPRcleaned_logFCs.tsv', sep='\t', index_col=0)
+    return ccleanr
+
+
 def import_brass_bedpes():
     return {s: cy.Utils.import_brass_bedpe(f'{DIR}/wgs/{s}.brass.annot.bedpe') for s in BRCA_SAMPLES}
 

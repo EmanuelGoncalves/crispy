@@ -1,4 +1,4 @@
-![Crispy logo](images/logo.png)
+[Crispy logo](https://github.com/EmanuelGoncalves/crispy/blob/master/images/logo.png)
 
 [![License](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause) [![PyPI version](https://badge.fury.io/py/cy.svg)](https://badge.fury.io/py/cy)
 
