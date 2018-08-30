@@ -1,21 +1,23 @@
 #!/usr/bin/env python
 # Copyright (C) 2018 Emanuel Goncalves
 
-import utils
+import operator
 import numpy as np
 import pandas as pd
 import seaborn as sns
 import scipy.stats as st
 import matplotlib.pyplot as plt
 import matplotlib.ticker as plticker
+from utils import Utils
 from natsort import natsorted
 from matplotlib.patches import Arc
 from collections import OrderedDict
 from sklearn.metrics.ranking import auc
+from matplotlib.gridspec import GridSpec
 from sklearn.metrics import roc_auc_score
 
 
-class QCplot(object):
+class CrispyPlot(object):
     # PLOTING PROPS
     SNS_RC = {
         'axes.linewidth': .3,
@@ -44,6 +46,13 @@ class QCplot(object):
     BOXPROPS = dict(linewidth=1.)
     WHISKERPROPS = dict(linewidth=1.)
 
+    @staticmethod
+    def get_palette_continuous(n_colors, color=PAL_DBGD[0]):
+        pal = sns.light_palette(color, n_colors=n_colors + 2).as_hex()[2:]
+        return pal
+
+
+class QCplot(CrispyPlot):
     @staticmethod
     def recall_curve(rank, index_set, min_events=None):
         """
@@ -80,10 +89,10 @@ class QCplot(object):
     @staticmethod
     def pr_curve(rank, true_set=None, false_set=None, min_events=10):
         if true_set is None:
-            true_set = utils.Utils.get_essential_genes(return_series=False)
+            true_set = Utils.get_essential_genes(return_series=False)
 
         if false_set is None:
-            false_set = utils.Utils.get_non_essential_genes(return_series=False)
+            false_set = Utils.get_non_essential_genes(return_series=False)
 
         index_set = true_set.union(false_set)
 
@@ -101,7 +110,7 @@ class QCplot(object):
 
     @classmethod
     def recall_curve_discretise(cls, rank, discrete, thres, min_events=10):
-        discrete = discrete.apply(utils.Utils.bin_cnv, args=(thres,))
+        discrete = discrete.apply(Utils.bin_cnv, args=(thres,))
 
         aucs = pd.DataFrame([
             {
@@ -260,11 +269,6 @@ class QCplot(object):
 
         return g
 
-    @staticmethod
-    def get_palette_continuous(n_colors, color=PAL_DBGD[0]):
-        pal = sns.light_palette(color, n_colors=n_colors + 2).as_hex()[2:]
-        return pal
-
     @classmethod
     def plot_chromosome(
             cls, crispy_bed, ascat_bed, chrm, highlight=None, ax=None, legend=False, scale=1e6, tick_base=1, legend_size=5
@@ -305,7 +309,7 @@ class QCplot(object):
         ax.axhline(0, lw=.3, ls='-', color='black')
 
         # Cytobads
-        cytobands = utils.Utils.get_cytobands(chrm=chrm)
+        cytobands = Utils.get_cytobands(chrm=chrm)
 
         for i, (s, e, t) in enumerate(cytobands[['start', 'end', 'band']].values):
             if t == 'acen':
@@ -338,7 +342,7 @@ class QCplot(object):
             unfold_inversions=False, sv_alpha=1., sv_lw=.3, highlight=None, mark_essential=False
     ):
         # - Define default params
-        chrm_size = utils.Utils.CHR_SIZES_HG19 if chrm_size is None else chrm_size
+        chrm_size = Utils.CHR_SIZES_HG19 if chrm_size is None else chrm_size
 
         xlim = (0, chrm_size[chrm]) if xlim is None else xlim
 
@@ -377,7 +381,7 @@ class QCplot(object):
             ax3.plot((s / scale, e / scale), (gp_mean.mean(), gp_mean.mean()), alpha=1., c=cls.PAL_DBGD[2], zorder=3, label='Segment mean', lw=2)
 
         if mark_essential:
-            ess = utils.Utils.get_adam_core_essential()
+            ess = Utils.get_adam_core_essential()
             ax3.scatter(
                 crispr_gene_.reindex(ess)['location'] / scale, crispr_gene_.reindex(ess)['fold_change'], s=5, marker='x', lw=.3, c=cls.PAL_DBGD[1],
                 alpha=.4, edgecolors='#fc8d62', label='Core-essential'
@@ -391,7 +395,7 @@ class QCplot(object):
 
         #
         for c1, s1, e1, c2, s2, e2, st1, st2, sv in brass_[['chr1', 'start1', 'end1', 'chr2', 'start2', 'end2', 'strand1', 'strand2', 'svclass']].values:
-            stype = utils.Utils.svtype(st1, st2, sv, unfold_inversions)
+            stype = Utils.svtype(st1, st2, sv, unfold_inversions)
             stype_col = cls.SV_PALETTE[stype]
 
             zorder = 2 if stype == 'tandem-duplication' else 1
@@ -465,3 +469,51 @@ class QCplot(object):
         plt.xlim(xlim[0] / scale, xlim[1] / scale)
 
         return ax1, ax2, ax3
+
+
+class GSEAplot(CrispyPlot):
+    @classmethod
+    def plot_gsea(cls, hits, running_hit, dataset=None, vertical_lines=False, shade=False):
+        x, y = np.array(range(len(hits))), np.array(running_hit)
+
+        if dataset is not None:
+            gs = GridSpec(2, 1, height_ratios=[3, 2], hspace=0.1)
+            axs = [plt.subplot(gs[0]), plt.subplot(gs[1])]
+
+        else:
+            axs = [plt.gca()]
+
+        # GSEA running hit
+        axs[0].plot(x, y, '-', c=CrispyPlot.PAL_DBGD[0])
+
+        if shade:
+            axs[0].fill_between(x, 0, y, alpha=.5, color=CrispyPlot.PAL_DBGD[2])
+
+        if vertical_lines:
+            for i in x[np.array(hits, dtype='bool')]:
+                axs[0].axvline(i, c=CrispyPlot.PAL_DBGD[0], lw=.3, alpha=.2, zorder=0)
+
+        axs[0].axhline(0, c=CrispyPlot.PAL_DBGD[0], lw=.1, ls='-')
+        axs[0].set_ylabel('Enrichment score')
+        axs[0].get_xaxis().set_visible(False)
+        axs[0].set_xlim([0, len(x)])
+
+        if dataset is not None:
+            dataset = list(zip(*sorted(dataset.items(), key=operator.itemgetter(1), reverse=False)))
+
+            # Data
+            axs[1].scatter(x, dataset[1], c=CrispyPlot.PAL_DBGD[0], linewidths=0, s=2)
+
+            if shade:
+                axs[1].fill_between(x, 0, dataset[1], alpha=.5, color=CrispyPlot.PAL_DBGD[2])
+
+            if vertical_lines:
+                for i in x[np.array(hits, dtype='bool')]:
+                    axs[1].axvline(i, c=CrispyPlot.PAL_DBGD[0], lw=.3, alpha=.2, zorder=0)
+
+            axs[1].axhline(0, c='black', lw=.3, ls='-')
+            axs[1].set_ylabel('Data value')
+            axs[1].get_xaxis().set_visible(False)
+            axs[1].set_xlim([0, len(x)])
+
+        return axs[0] if dataset is None else axs

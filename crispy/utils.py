@@ -2,13 +2,10 @@
 # Copyright (C) 2018 Emanuel Goncalves
 
 import random
-import qc_plot
 import operator
 import numpy as np
 import pandas as pd
 import pkg_resources
-import matplotlib.pyplot as plt
-from matplotlib.gridspec import GridSpec
 from scipy.stats import gaussian_kde, rankdata, norm
 
 
@@ -264,49 +261,3 @@ class SSGSEA(object):
                 es = r
 
         return es
-
-    @classmethod
-    def plot_gsea(cls, hits, running_hit, dataset=None, vertical_lines=False, shade=False):
-        x, y = np.array(range(len(hits))), np.array(running_hit)
-
-        if dataset is not None:
-            gs = GridSpec(2, 1, height_ratios=[3, 2], hspace=0.1)
-            axs = [plt.subplot(gs[0]), plt.subplot(gs[1])]
-
-        else:
-            axs = [plt.gca()]
-
-        # GSEA running hit
-        axs[0].plot(x, y, '-', c=qc_plot.QCplot.PAL_DBGD[0])
-
-        if shade:
-            axs[0].fill_between(x, 0, y, alpha=.5, color=qc_plot.QCplot.PAL_DBGD[2])
-
-        if vertical_lines:
-            for i in x[np.array(hits, dtype='bool')]:
-                axs[0].axvline(i, c=qc_plot.QCplot.PAL_DBGD[0], lw=.3, alpha=.2, zorder=0)
-
-        axs[0].axhline(0, c=qc_plot.QCplot.PAL_DBGD[0], lw=.1, ls='-')
-        axs[0].set_ylabel('Enrichment score')
-        axs[0].get_xaxis().set_visible(False)
-        axs[0].set_xlim([0, len(x)])
-
-        if dataset is not None:
-            dataset = list(zip(*sorted(dataset.items(), key=operator.itemgetter(1), reverse=False)))
-
-            # Data
-            axs[1].scatter(x, dataset[1], c=qc_plot.QCplot.PAL_DBGD[0], linewidths=0, s=2)
-
-            if shade:
-                axs[1].fill_between(x, 0, dataset[1], alpha=.5, color=qc_plot.QCplot.PAL_DBGD[2])
-
-            if vertical_lines:
-                for i in x[np.array(hits, dtype='bool')]:
-                    axs[1].axvline(i, c=qc_plot.QCplot.PAL_DBGD[0], lw=.3, alpha=.2, zorder=0)
-
-            axs[1].axhline(0, c='black', lw=.3, ls='-')
-            axs[1].set_ylabel('Data value')
-            axs[1].get_xaxis().set_visible(False)
-            axs[1].set_xlim([0, len(x)])
-
-        return axs[0] if dataset is None else axs
