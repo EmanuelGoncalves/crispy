@@ -1,4 +1,4 @@
-![Crispy logo](images/logo.png)
+![Crispy logo](data/images/logo.png)
 
 [![License](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause) [![PyPI version](https://badge.fury.io/py/cy.svg)](https://badge.fury.io/py/cy)
 
@@ -43,7 +43,7 @@ crispy.gpr.plot(x_feature='ratio', y_feature='fold_change')
 plt.show()
 
 ```
-![GPR](/images/example_gp_fit.png)
+![GPR](data/images/example_gp_fit.png)
 
 
 Credits and License
