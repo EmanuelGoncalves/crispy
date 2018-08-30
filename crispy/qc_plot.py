@@ -8,7 +8,7 @@ import seaborn as sns
 import scipy.stats as st
 import matplotlib.pyplot as plt
 import matplotlib.ticker as plticker
-from utils import Utils
+from crispy import Utils
 from natsort import natsorted
 from matplotlib.patches import Arc
 from collections import OrderedDict

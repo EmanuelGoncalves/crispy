@@ -12,7 +12,11 @@ Crispy uses [Sklearn](http://scikit-learn.org/stable/index.html) implementation 
 Install
 --
 
+Install [`pybedtools`](https://daler.github.io/pybedtools/main.html#quick-install-via-conda) and then install `Crispy`
+
 ```
+conda install -c bioconda pybedtools
+
 pip install cy
 ```
 

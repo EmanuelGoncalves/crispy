@@ -33,7 +33,7 @@ requirements = [
 
 setuptools.setup(
     name='cy',
-    version='0.2.3',
+    version='0.2.4',
 
     author='Emanuel Goncalves',
     author_email='eg14@sanger.ac.uk',
