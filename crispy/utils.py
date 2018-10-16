@@ -127,7 +127,8 @@ class Utils(object):
     @classmethod
     def get_crispr_lib(cls, dfile='crispr_libs/KY_Library_v1.1_annotated.csv'):
         r_cols = dict(
-            index='sgrna', CHRM='chr', STARTpos='start', ENDpos='end', GENES='gene', EXONE='exon', CODE='code', STRAND='strand'
+            index='sgrna', CHRM='chr', STARTpos='start', ENDpos='end', GENES='gene', EXONE='exon', CODE='code',
+            STRAND='strand'
         )
 
         lib = pd.read_csv('{}/{}'.format(cls.DPATH, dfile), index_col=0).reset_index()
@@ -140,7 +141,11 @@ class Utils(object):
 
     @classmethod
     def get_adam_core_essential(cls, dfile='gene_sets/pancan_core.csv'):
-        return set(pd.read_csv('{}/{}'.format(cls.DPATH, dfile))['ADAM PanCancer Core-Fitness genes'].rename('adam_essential'))
+        return set(pd.read_csv('{}/{}'.format(cls.DPATH, dfile))['ADAM PanCancer Core-Fitness genes'])
+
+    @classmethod
+    def get_broad_core_essential(cls, dfile='gene_sets/pan_core_essential_broad_depmap18Q3.txt'):
+        return set(pd.read_csv('{}/{}'.format(cls.DPATH, dfile)).iloc[:, 0].apply(lambda v: v.split(' ')[0]))
 
     @classmethod
     def get_cytobands(cls, dfile='cytoBand.txt', chrm=None):
