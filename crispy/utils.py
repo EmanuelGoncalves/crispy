@@ -144,7 +144,7 @@ class Utils(object):
         return set(pd.read_csv('{}/{}'.format(cls.DPATH, dfile))['ADAM PanCancer Core-Fitness genes'])
 
     @classmethod
-    def get_broad_core_essential(cls, dfile='gene_sets/pan_core_essential_broad_depmap18Q3.txt'):
+    def get_broad_core_essential(cls, dfile='gene_sets/pan_core_essential_broad_depmap18Q4.txt'):
         return set(pd.read_csv('{}/{}'.format(cls.DPATH, dfile)).iloc[:, 0].apply(lambda v: v.split(' ')[0]))
 
     @classmethod

@@ -8,13 +8,15 @@ with open('README.md', 'r') as fh:
 
 included_files = {
     'crispy': [
-    	'data/cytoBand.txt',
+        'data/cytoBand.txt',
         'data/example_copynumber.csv',
         'data/example_rawcounts.csv',
         'data/crispr_libs/KY_Library_v1.1_annotated.csv',
         'data/gene_sets/pancan_core.csv',
         'data/gene_sets/curated_BAGEL_essential.csv',
         'data/gene_sets/curated_BAGEL_nonEssential.csv',
+        'data/gene_sets/pan_core_essential_broad_depmap18Q3.txt',
+        'data/gene_sets/pan_core_essential_broad_depmap18Q4.txt',
         'data/images/example_gp_fit.png',
         'data/images/logo.png',
     ]
@@ -33,7 +35,7 @@ requirements = [
 
 setuptools.setup(
     name='cy',
-    version='0.2.4',
+    version='0.2.7',
 
     author='Emanuel Goncalves',
     author_email='eg14@sanger.ac.uk',
