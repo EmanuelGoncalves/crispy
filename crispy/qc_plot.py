@@ -292,11 +292,11 @@ class QCplot(CrispyPlot):
 
         # Segment mean
         for (s, e), gp_mean in crispr_.groupby(['start', 'end'])['fold_change']:
-            ax.plot((s / scale, e / scale), (gp_mean.mean(), gp_mean.mean()), alpha=1., c=cls.PAL_DBGD[2], zorder=3, label='Segment mean', lw=2)
+            ax.plot((s / scale, e / scale), (gp_mean.mean(), gp_mean.mean()), alpha=1., c=cls.PAL_DBGD[2], zorder=3, label='CRISPR-Cas9 segment mean', lw=2)
 
         # Plot segments
         for s, e, cn in ascat_[['start', 'end', 'copy_number']].values:
-            ax.plot((s / scale, e / scale), (cn, cn), alpha=1., c=cls.PAL_DBGD[0], zorder=3, label='ASCAT', lw=2)
+            ax.plot((s / scale, e / scale), (cn, cn), alpha=1., c=cls.PAL_DBGD[0], zorder=3, label='Copy-number segment', lw=2)
 
         # Highlight
         if highlight is not None:

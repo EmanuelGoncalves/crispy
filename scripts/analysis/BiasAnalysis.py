@@ -1,37 +1,15 @@
 #!/usr/bin/env python
 # Copyright (C) 2018 Emanuel Goncalves
 
-import gdsc
 import numpy as np
 import crispy as cy
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 from natsort import natsorted
-
-
-def tissue_coverage(samples):
-    # Samplesheet
-    ss = gdsc.get_sample_info()
-
-    # Data-frame
-    plot_df = ss.loc[samples, 'Cancer Type']\
-        .value_counts(ascending=True)\
-        .reset_index()\
-        .rename(columns={'index': 'Cancer type', 'Cancer Type': 'Counts'})\
-        .sort_values('Counts', ascending=False)
-    plot_df = plot_df.assign(ypos=np.arange(plot_df.shape[0]))
-
-    # Plot
-    sns.barplot(plot_df['Counts'], plot_df['Cancer type'], color=cy.QCplot.PAL_DBGD[0])
-
-    for xx, yy in plot_df[['Counts', 'ypos']].values:
-        plt.text(xx - .25, yy, str(xx), color='white', ha='right', va='center', fontsize=6)
-
-    plt.grid(color=cy.QCplot.PAL_DBGD[2], ls='-', lw=.3, axis='x')
-
-    plt.xlabel('Number cell lines')
-    plt.title('CRISPR-Cas9 screens\n({} cell lines)'.format(plot_df['Counts'].sum()))
+from scipy.stats import ttest_ind
+from analysis.DataImporter import DataImporter
+from statsmodels.stats.multitest import multipletests
 
 
 def copy_number_recall_curves(cn_curves):
@@ -135,8 +113,8 @@ def ratios_heatmap_bias_count(data):
     plot_df = pd.pivot_table(plot_df, index=x, columns=y, values=z, fill_value=0)
 
     g = sns.heatmap(
-        plot_df.loc[natsorted(plot_df.index, reverse=False)].T, cmap='Greys_r', annot=True, fmt='.0f', square=True,
-        linewidths=.3, cbar=False, annot_kws={'fontsize': 7}, center=0
+        plot_df.loc[natsorted(plot_df.index, reverse=False)].T, cmap='Greys', annot=True, fmt='.0f', square=True,
+        linewidths=.3, cbar=False, annot_kws={'fontsize': 7}
     )
     plt.setp(g.get_yticklabels(), rotation=0)
 
@@ -157,8 +135,8 @@ def ratios_histogram(plot_df):
     axs[0].axvline(1, lw=.3, ls='--', c=c)
     axs[1].axvline(1, lw=.3, ls='--', c=c)
 
-    axs[0].set_ylim(500000, 650000)  # outliers only
-    axs[1].set_ylim(0, 200000)  # most of the data
+    axs[0].set_ylim(500000, 1000000)  # outliers only
+    axs[1].set_ylim(0, 400000)  # most of the data
 
     axs[0].spines['bottom'].set_visible(False)
     axs[1].spines['top'].set_visible(False)
@@ -200,24 +178,22 @@ def copy_number_aucs_per_sample_chrcopy(cn_aucs_chr_df):
 
 
 if __name__ == '__main__':
-    # - Non-expressed genes
-    nexp = gdsc.get_non_exp()
+    # - Imports
+    data = DataImporter()
 
-    # - Crispy bed files
-    beds = gdsc.import_crispy_beds()
+    # Non-expressed genes
+    nexp = data.get_rnaseq_nexp(filter_essential=True)
 
-    # - Add ceres gene scores to bed
-    ccleanr = gdsc.import_ccleanr()
-    beds = {s: beds[s].assign(ccleanr=ccleanr.loc[beds[s]['gene'], s].values) for s in beds}
+    # Crispy bed files
+    beds = data.get_crispy_beds()
 
     # - Aggregate by gene
     agg_fun = dict(
         fold_change=np.mean, copy_number=np.mean, ploidy=np.mean, chr_copy=np.mean, ratio=np.mean, chr='first',
-        ccleanr=np.mean, corrected=np.mean
+        corrected=np.mean
     )
 
     bed_nexp_gene = []
-
     for s in beds:
         df = beds[s].groupby('gene').agg(agg_fun)
         df = df.assign(scaled=cy.Crispy.scale_crispr(df['fold_change']))
@@ -254,6 +230,22 @@ if __name__ == '__main__':
     cn_aucs_df = cn_aucs_df.assign(ploidy=ploidy[cn_aucs_df['sample']].values)
     cn_aucs_df = cn_aucs_df.assign(ploidy_bin=cn_aucs_df['ploidy'].apply(cy.Utils.bin_cnv, args=(5,)))
 
+    # LOF comparison between cell lines groups
+    lof_tests = []
+    for c in natsorted(set(cn_aucs_df['copy_number'])):
+        if c not in ['0', '1']:
+            diploid = cn_aucs_df.query(f"(copy_number == '{c}') & (ploidy_bin == '2')")
+            tetraploid = cn_aucs_df.query(f"(copy_number == '{c}') & ((ploidy_bin == '4') | (ploidy_bin == '5+'))")
+
+            t, p = ttest_ind(diploid['auc'], tetraploid['auc'], equal_var=False)
+
+            lof_tests.append(dict(t=t, p=p, c=c, n_diploid=diploid.shape[0], n_tetraploid=tetraploid.shape[0]))
+
+            print(f'{c}, {t}, {p:.1e}, {diploid.shape}, {tetraploid.shape}')
+    lof_tests = pd.DataFrame(lof_tests).dropna()
+    lof_tests['fdr'] = multipletests(lof_tests['p'], method='fdr_bh')[1]
+    lof_tests.to_csv('data/analysis/lof_comparison_ploidy_groups.csv', index=False)
+
     # Ratio recall curves
     order_ratio = natsorted(set(bed_nexp_gene['ratio_bin']))
 
@@ -274,59 +266,53 @@ if __name__ == '__main__':
     cn_aucs_chr_df = cn_aucs_chr_df.assign(chr_copy_bin=cn_aucs_chr_df['chr_copy'].apply(cy.Utils.bin_cnv, args=(6,)))
 
     # - Plot
-    # Cancer type coverage
-    tissue_coverage(list(beds))
-    plt.gcf().set_size_inches(2, 3)
-    plt.savefig('reports/cancer_types_histogram.pdf', bbox_inches='tight', transparent=True)
-    plt.close('all')
-
     # Copy-number recall curves
     copy_number_recall_curves(cn_curves)
     plt.gcf().set_size_inches(3, 3)
-    plt.savefig('reports/gdsc_bias_copynumber_curves.pdf', bbox_inches='tight', transparent=True)
+    plt.savefig('reports/analysis/bias_copynumber_curves.pdf', bbox_inches='tight', transparent=True)
     plt.close('all')
 
     # Copy-number AURCs per sample
     copy_number_aurcs_per_sample(cn_aucs_df)
     plt.gcf().set_size_inches(3, 3)
-    plt.savefig('reports/gdsc_bias_copynumber_boxplots.pdf', bbox_inches='tight', transparent=True)
+    plt.savefig('reports/analysis/bias_copynumber_boxplots.pdf', bbox_inches='tight', transparent=True)
     plt.close('all')
 
     # Plot bias per cell line group by ploidy
     copy_number_aucs_per_sample_ploidy(cn_aucs_df)
     plt.gcf().set_size_inches(3, 3)
-    plt.savefig('reports/gdsc_bias_copynumber_boxplots_by_ploidy.pdf', bbox_inches='tight', transparent=True)
+    plt.savefig('reports/analysis/bias_copynumber_boxplots_by_ploidy.pdf', bbox_inches='tight', transparent=True)
     plt.close('all')
 
     # Plot bias per cell line group by chromosome copy
     copy_number_aucs_per_sample_chrcopy(cn_aucs_chr_df)
     plt.gcf().set_size_inches(3, 3)
-    plt.savefig('reports/gdsc_bias_copynumber_boxplots_by_chrm_copy.pdf', bbox_inches='tight', transparent=True)
+    plt.savefig('reports/analysis/bias_copynumber_boxplots_by_chrm_copy.pdf', bbox_inches='tight', transparent=True)
     plt.close('all')
 
     # Ratios histogram
     ratios_histogram(bed_nexp_gene)
     plt.title('Copy-number ratio histogram (non-expressed genes)')
     plt.gcf().set_size_inches(4, 3)
-    plt.savefig('reports/gdsc_bias_ratio_histogram.pdf', bbox_inches='tight', transparent=True)
+    plt.savefig('reports/analysis/bias_ratio_histogram.pdf', bbox_inches='tight', transparent=True)
     plt.close('all')
 
     # Ratio recall curves
     ratio_recall_curves(ratio_curves)
     plt.gcf().set_size_inches(3, 3)
-    plt.savefig('reports/gdsc_bias_ratio_curves.pdf', bbox_inches='tight', transparent=True)
+    plt.savefig('reports/analysis/bias_ratio_curves.pdf', bbox_inches='tight', transparent=True)
     plt.close('all')
 
     # Ratio heatmap
     ratios_heatmap_bias(bed_nexp_gene)
     plt.gcf().set_size_inches(5.5, 5.5)
-    plt.savefig('reports/gdsc_bias_ratio_heatmap.pdf', bbox_inches='tight', transparent=True)
+    plt.savefig('reports/analysis/bias_ratio_heatmap.pdf', bbox_inches='tight', transparent=True)
     plt.close('all')
 
     # Ratio heatmap count
     ratios_heatmap_bias_count(bed_nexp_gene)
     plt.gcf().set_size_inches(5.5, 5.5)
-    plt.savefig('reports/gdsc_bias_ratio_heatmap_count.pdf', bbox_inches='tight', transparent=True)
+    plt.savefig('reports/analysis/bias_ratio_heatmap_count.pdf', bbox_inches='tight', transparent=True)
     plt.close('all')
 
     # Ratio fold-change boxplots
@@ -340,5 +326,29 @@ if __name__ == '__main__':
     ax.set_title('Copy-number ratio effect\n(non-expressed genes)')
 
     plt.gcf().set_size_inches(2, 3)
-    plt.savefig('reports/gdsc_bias_ratio_boxplot.pdf', bbox_inches='tight', transparent=True)
+    plt.savefig('reports/analysis/bias_ratio_boxplot.png', bbox_inches='tight', transparent=True, dpi=600)
+    plt.close('all')
+
+    # Representative example
+    gene = 'NEUROD2'
+
+    plot_df = bed_nexp_gene[bed_nexp_gene['index'] == gene].sort_values('copy_number')
+    plot_df['Cancer Type'] = data.samplesheet.loc[plot_df['sample'], 'Cancer Type'].values
+
+    f, (ax1, ax2) = plt.subplots(1, 2, sharex='none', sharey='row')
+
+    cy.QCplot.bias_boxplot(plot_df, 'copy_number_bin', 'scaled', ax=ax1, tick_base=.5, notch=False, add_n=True)
+    ax1.axhline(0, ls='-', color='black', lw=.1, zorder=0, alpha=.5)
+    ax1.set_xlabel('Copy-number')
+    ax1.set_ylabel('CRISPR-Cas9 fold-change')
+
+    cy.QCplot.bias_boxplot(plot_df, 'ratio_bin', 'scaled', ax=ax2, tick_base=.5, notch=False, add_n=True)
+    ax2.axhline(0, ls='-', color='black', lw=.1, zorder=0, alpha=.5)
+    ax2.set_xlabel('Copy-number ratio')
+    ax2.set_ylabel('')
+
+    plt.suptitle(gene, fontsize=10, y=1.02)
+
+    plt.gcf().set_size_inches(4, 2)
+    plt.savefig(f'reports/analysis/bias_ratio_example.pdf', bbox_inches='tight', transparent=True)
     plt.close('all')

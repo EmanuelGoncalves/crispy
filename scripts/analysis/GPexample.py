@@ -1,21 +1,20 @@
 #!/usr/bin/env python
 # Copyright (C) 2018 Emanuel Goncalves
 
-import gdsc
 import numpy as np
 import pandas as pd
 import crispy as cy
 import seaborn as sns
 import matplotlib.pyplot as plt
+from analysis.DataImporter import DataImporter
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import WhiteKernel, ConstantKernel, RBF
-
 
 if __name__ == '__main__':
     # - Example cell line
     sample = 'AU565'
 
-    bed = pd.read_csv(f'{gdsc.DIR}/bed/{sample}.crispy.bed', sep='\t')
+    bed = DataImporter().get_crispy_bed(f'{sample}.crispy.bed')
 
     # - Aggregate by segment
     agg = dict(ratio=np.mean, fold_change=np.mean, sgrna='count')
@@ -35,6 +34,7 @@ if __name__ == '__main__':
     #
     bed_ = bed.assign(gp_mean=gpr.predict(bed[['ratio']]))
     bed_ = bed_.assign(corrected=bed_.eval('fold_change - gp_mean').values)
+
     cy.QCplot.recall_curve_discretise(
         bed_.groupby('gene')['corrected'].mean(), bed_.groupby('gene')['ratio'].mean(), 10
     )
@@ -67,5 +67,5 @@ if __name__ == '__main__':
     plt.legend(frameon=False)
 
     plt.gcf().set_size_inches(3, 3)
-    plt.savefig(f'reports/gdsc/gpfit.pdf', bbox_inches='tight', transparent=True)
+    plt.savefig(f'reports/analysis/crispy_gp_fit_example.pdf', bbox_inches='tight', transparent=True)
     plt.close('all')
