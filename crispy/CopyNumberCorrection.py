@@ -24,7 +24,7 @@ BED_COLUMNS = ['chr', 'start', 'end', 'copy_number', 'sgrna_chr', 'sgrna_start',
 
 
 # TODO: add check for minimum number of reads 15M
-class Crispy(object):
+class Crispy:
 
     def __init__(
             self, raw_counts, library=None, copy_number=None, plasmid=None

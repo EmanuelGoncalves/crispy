@@ -148,6 +148,10 @@ class Utils(object):
         return set(pd.read_csv('{}/{}'.format(cls.DPATH, dfile)).iloc[:, 0].apply(lambda v: v.split(' ')[0]))
 
     @classmethod
+    def get_dummy_aa_vep(cls, dfile='bedit/aa_vep_jak1.csv'):
+        return pd.read_csv('{}/{}'.format(cls.DPATH, dfile))
+
+    @classmethod
     def get_cytobands(cls, dfile='cytoBand.txt', chrm=None):
         cytobands = pd.read_csv('{}/{}'.format(cls.DPATH, dfile), sep='\t')
 

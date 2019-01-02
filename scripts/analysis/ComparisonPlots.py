@@ -358,9 +358,6 @@ if __name__ == '__main__':
     plot_df = plot_df.eval('original - corrected').rename('diff').sort_values().to_frame().reset_index()
     plot_df['cancer_type'] = data.samplesheet.loc[plot_df['sample'], 'Cancer Type'].values
 
-    sns.boxplot('cancer_type', 'diff', data=plot_df)
-    plt.show()
-
     #
     samples_replicates = pd.read_csv(f'data/analysis/replicates_correlation_gene_fc.csv').query('replicate == 1')
 

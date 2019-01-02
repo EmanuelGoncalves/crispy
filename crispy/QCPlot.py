@@ -8,48 +8,13 @@ import seaborn as sns
 import scipy.stats as st
 import matplotlib.pyplot as plt
 import matplotlib.ticker as plticker
-from crispy import Utils
 from natsort import natsorted
 from matplotlib.patches import Arc
 from collections import OrderedDict
+from crispy import Utils, CrispyPlot
 from sklearn.metrics.ranking import auc
 from matplotlib.gridspec import GridSpec
 from sklearn.metrics import roc_auc_score
-
-
-class CrispyPlot(object):
-    # PLOTING PROPS
-    SNS_RC = {
-        'axes.linewidth': .3,
-        'xtick.major.width': .3, 'ytick.major.width': .3,
-        'xtick.major.size': 2., 'ytick.major.size': 2.,
-        'xtick.direction': 'out', 'ytick.direction': 'out'
-    }
-
-    # PALETTES
-    PAL_DBGD = {0: '#656565', 1: '#F2C500', 2: '#E1E1E1'}
-
-    SV_PALETTE = {
-        'tandem-duplication': '#377eb8',
-        'deletion': '#e41a1c',
-        'translocation': '#984ea3',
-        'inversion': '#4daf4a',
-        'inversion_h_h': '#4daf4a',
-        'inversion_t_t': '#ff7f00',
-    }
-
-    # BOXPLOT PROPOS
-    FLIERPROPS = dict(
-        marker='o', markerfacecolor='black', markersize=2., linestyle='none', markeredgecolor='none', alpha=.6
-    )
-    MEDIANPROPS = dict(linestyle='-', linewidth=1., color='red')
-    BOXPROPS = dict(linewidth=1.)
-    WHISKERPROPS = dict(linewidth=1.)
-
-    @staticmethod
-    def get_palette_continuous(n_colors, color=PAL_DBGD[0]):
-        pal = sns.light_palette(color, n_colors=n_colors + 2).as_hex()[2:]
-        return pal
 
 
 class QCplot(CrispyPlot):
@@ -124,7 +89,7 @@ class QCplot(CrispyPlot):
     @classmethod
     def bias_boxplot(
             cls, data, x='copy_number', y='auc', hue=None, despine=False, notch=True, add_n=False, n_text_y=None,
-            n_text_offset=.05, palette=None, ax=None, tick_base=.1, hue_order=None
+            n_text_offset=.05, palette=None, ax=None, tick_base=.1, hue_order=None, n_fontsize=3.5
     ):
         if ax is None:
             ax = plt.gca()
@@ -151,7 +116,7 @@ class QCplot(CrispyPlot):
 
             for i, c in enumerate(order):
                 n = np.sum(data[x] == c)
-                ax.text(i, text_y, f'N={n}', ha='center', va='bottom', fontsize=3.5)
+                ax.text(i, text_y, f'N={n}', ha='center', va='bottom', fontsize=n_fontsize)
 
             y_lim = ax.get_ylim()
             ax.set_ylim(text_y, y_lim[1])
