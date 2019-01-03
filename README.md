@@ -1,6 +1,7 @@
 ![Crispy logo](crispy/data/images/logo.png)
 
-[![License](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause) [![PyPI version](https://badge.fury.io/py/cy.svg)](https://badge.fury.io/py/cy)
+[![License](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause) [![PyPI version](https://badge.fury.io/py/cy.svg)](https://badge.fury.io/py/cy) [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.2530755.svg)](https://doi.org/10.5281/zenodo.2530755)
+
 
 Method to correct gene independent copy-number effects on CRISPR-Cas9 screens.
 
