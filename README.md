@@ -53,6 +53,8 @@ plt.show()
 
 Credits and License
 --
-Developed at the [Wellcome Sanger Institue](https://www.sanger.ac.uk/) (2017-2018).
+Developed at the [Wellcome Sanger Institue](https://www.sanger.ac.uk/) (2017-2019).
 
-For citation please refer to: [biorxiv pre-print](https://www.biorxiv.org/content/early/2018/05/25/325076)
+For citation please refer to:
+[https://doi.org/10.1186/s13059-019-1637-z](Gonçalves E, Behan FM, Louzada S, Arnol D, Stronach EA, Yang F, Yusa K, Stegle O, Iorio F, Garnett MJ (2019) Structural 
+rearrangements generate cell-specific, gene-independent CRISPR-Cas9 loss of fitness effects. Genome Biol 20: 27)
