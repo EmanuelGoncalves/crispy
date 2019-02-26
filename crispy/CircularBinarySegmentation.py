@@ -5,8 +5,8 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
-from CrispyPlot import MidpointNormalize
 from crispy.Bedit import CrispyPlot
+from CrispyPlot import MidpointNormalize
 
 
 class CBS:
