@@ -14,7 +14,7 @@ from crispy.CopyNumberCorrection import Crispy, CrispyGaussian
 __version__ = "0.3.0"
 
 # - Package paths
-dpath = pkg_resources.resource_filename("dtrace", "data/")
+dpath = pkg_resources.resource_filename("crispy", "data/")
 
 # - SET STYLE
 sns.set(
@@ -25,6 +25,14 @@ sns.set(
     rc=CrispyPlot.SNS_RC,
 )
 
+# - Logging
+logger = logging.getLogger()
+
+ch = logging.StreamHandler(sys.stdout)
+ch.setFormatter(logging.Formatter("[%(asctime)s - %(levelname)s]: %(message)s"))
+logger.addHandler(ch)
+
+logger.setLevel(logging.INFO)
 
 # - HANDLES
 __all__ = [
@@ -35,13 +43,7 @@ __all__ = [
     "SSGSEA",
     "GSEAplot",
     "Utils",
+    "dpath",
+    "logger",
+    "__version__"
 ]
-
-# - Logging
-logger = logging.getLogger()
-
-ch = logging.StreamHandler(sys.stdout)
-ch.setFormatter(logging.Formatter("[%(asctime)s - %(levelname)s]: %(message)s"))
-logger.addHandler(ch)
-
-logger.setLevel(logging.INFO)

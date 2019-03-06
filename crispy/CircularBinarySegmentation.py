@@ -5,8 +5,8 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
-from crispy.Bedit import CrispyPlot
-from CrispyPlot import MidpointNormalize
+from crispy import dpath
+from CrispyPlot import MidpointNormalize, CrispyPlot
 
 
 class CBS:
@@ -222,3 +222,10 @@ class CBS:
         ax.set_title(data.name)
 
         return ax
+
+
+if __name__ == '__main__':
+    fc = pd.read_csv(f"{dpath}/example_ccleanr.csv")
+
+    segs = CBS.run(fc.query("CHR == '1'")['avgFC'], shuffles=int(1e5), p=0.01)
+
