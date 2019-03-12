@@ -196,7 +196,7 @@ class Utils(object):
         return geneset
 
     @classmethod
-    def get_crispr_lib(cls, dfile="crispr_libs/KY_Library_v1.1_annotated.csv"):
+    def get_crispr_lib(cls, dfile="crispr_libs/Yusa_v1.1.csv.gz"):
         r_cols = dict(
             index="sgrna",
             CHRM="chr",

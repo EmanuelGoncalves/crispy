@@ -3,7 +3,6 @@
 
 import sys
 import logging
-import pkg_resources
 import seaborn as sns
 from crispy.Utils import Utils, SSGSEA
 from crispy.CrispyPlot import CrispyPlot
@@ -12,9 +11,6 @@ from crispy.CopyNumberCorrection import Crispy, CrispyGaussian
 
 
 __version__ = "0.3.0"
-
-# - Package paths
-dpath = pkg_resources.resource_filename("crispy", "data/")
 
 # - SET STYLE
 sns.set(
@@ -43,7 +39,6 @@ __all__ = [
     "SSGSEA",
     "GSEAplot",
     "Utils",
-    "dpath",
     "logger",
     "__version__"
 ]
