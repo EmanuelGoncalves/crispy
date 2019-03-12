@@ -22,13 +22,16 @@ sns.set(
 )
 
 # - Logging
-logger = logging.getLogger()
+__name__ = "Crispy"
 
-ch = logging.StreamHandler(sys.stdout)
-ch.setFormatter(logging.Formatter("[%(asctime)s - %(levelname)s]: %(message)s"))
-logger.addHandler(ch)
+logger = logging.getLogger(__name__)
 
-logger.setLevel(logging.INFO)
+if not logger.handlers:
+    ch = logging.StreamHandler(sys.stdout)
+    ch.setFormatter(logging.Formatter("[%(asctime)s - %(levelname)s]: %(message)s"))
+    logger.addHandler(ch)
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
 
 # - HANDLES
 __all__ = [
@@ -39,6 +42,5 @@ __all__ = [
     "SSGSEA",
     "GSEAplot",
     "Utils",
-    "logger",
     "__version__"
 ]
