@@ -17,13 +17,20 @@ LOG = logging.getLogger("Crispy")
 DATA_DIR = pkg_resources.resource_filename("crispy", "data/crispr_rawcounts/")
 LIBS_DIR = pkg_resources.resource_filename("crispy", "data/crispr_libs/")
 
-DATASETS = dict(
-    Yusa_v1=dict(
+DATASETS = {
+    "Yusa_v1": dict(
+        name="Yusa v1",
         read_counts="Yusa_v1_Score_readcount.csv.gz",
         library="Yusa_v1.csv.gz",
-        plasmids=["ERS717283.plasmid"]
+        plasmids=["ERS717283.plasmid"],
     ),
-)
+    "Yusa_v1.1": dict(
+        name="Yusa v1.1",
+        read_counts="Yusa_v1.1_Score_readcount.csv.gz",
+        library="Yusa_v1.1.csv.gz",
+        plasmids=["CRISPR_C6596666.sample"],
+    ),
+}
 
 
 class Library:
@@ -66,40 +73,66 @@ class Library:
 
 
 class ReadCounts(DataFrame):
-    def __init__(self, raw_counts):
-        if type(raw_counts) == str:
-            counts = pd.read_csv(raw_counts, index_col=0)
+    PSEUDO_COUNT = 1
 
-        elif type(raw_counts) == pd.DataFrame:
-            counts = raw_counts
+    def __init__(
+        self,
+        data=None,
+        index=None,
+        columns=None,
+        dtype=None,
+        copy=False,
+    ):
+        super().__init__(data, index, columns, dtype, copy)
 
-        else:
-            assert False, "Only str (file path) and pandas.DataFrame types supported"
+    @property
+    def _constructor(self):
+        return ReadCounts
 
-        super().__init__(counts)
+    def norm_rpm(self, scale=1e6):
+        factors = self.sum() / scale
+        return self.divide(factors)
 
     def norm_mean(self):
         factors = self.sum().mean() / self.sum()
-        return factors
-
-    def norm_total(self, scale=1e7):
-        factors = self.sum() * scale
-        return factors
+        return self.divide(factors)
 
     def norm_gmean(self):
         sgrna_gmean = st.gmean(self, axis=1)
         factors = self.divide(sgrna_gmean, axis=0).median()
-        return factors
+        return self.divide(factors)
+
+    def foldchange(self, controls):
+        return (
+            self.add(self.PSEUDO_COUNT)
+            .divide(self[controls].mean(1), axis=0)
+            .drop(controls, axis=1)
+            .apply(np.log2)
+        )
+
+    def remove_low_counts(self, controls, counts_threshold=30):
+        return self[self[controls].mean(1) >= counts_threshold]
 
 
-class CRISPRDataSet(ReadCounts):
+class CRISPRDataSet:
     def __init__(self, dataset_name):
-        assert dataset_name in DATASETS, f"CRISPR data-set {dataset_name} not supported: {DATASETS}"
+        self.name = dataset_name
 
-        super().__init__(f"{DATA_DIR}/{DATASETS[dataset_name]['read_counts']}")
+        assert (
+            self.name in DATASETS
+        ), f"CRISPR data-set {self.name} not supported: {DATASETS}"
 
-        self.clib = Library.load_library(DATASETS[dataset_name]["library"])
-        self.plasmids = DATASETS[dataset_name]["plasmids"]
+        self.plasmids = DATASETS[self.name]["plasmids"]
 
-        LOG.info(f"#(sgRNAs)={self.clib.shape[0]}")
-        LOG.info(f"#(samples)={self.shape[1]}")
+        self.lib = Library.load_library(DATASETS[self.name]["library"])
+
+        data = pd.read_csv(
+            f"{DATA_DIR}/{DATASETS[self.name]['read_counts']}", index_col=0
+        )
+        self.counts = ReadCounts(data=data)
+
+        LOG.info(f"#(sgRNAs)={self.lib.shape[0]}")
+        LOG.info(f"#(samples)={self.counts.shape[1]}")
+
+    def get_plasmids_counts(self):
+        return self.counts[self.plasmids]
