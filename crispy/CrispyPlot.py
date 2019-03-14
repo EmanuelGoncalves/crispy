@@ -18,8 +18,8 @@ class CrispyPlot:
         "ytick.minor.width": 0.3,
         "xtick.minor.size": 1.5,
         "ytick.minor.size": 1.5,
-        "xtick.direction": "in",
-        "ytick.direction": "in",
+        "xtick.direction": "out",
+        "ytick.direction": "out",
     }
 
     # PALETTES
