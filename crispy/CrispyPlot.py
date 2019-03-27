@@ -47,6 +47,14 @@ class CrispyPlot:
         alpha=0.6,
     )
 
+    # CORRELATION PLOT PROPS
+    ANNOT_KWS = dict(stat="R")
+    MARGINAL_KWS = dict(kde=False, hist_kws={"linewidth": 0})
+
+    LINE_KWS = dict(lw=1.0, color=PAL_DBGD[1], alpha=1.0)
+    SCATTER_KWS = dict(edgecolor="w", lw=0.3, s=10, alpha=0.6, color=PAL_DBGD[0])
+    JOINT_KWS = dict(lowess=True, scatter_kws=SCATTER_KWS, line_kws=LINE_KWS)
+
     @staticmethod
     def get_palette_continuous(n_colors, color=PAL_DBGD[0]):
         pal = sns.light_palette(color, n_colors=n_colors + 2).as_hex()[2:]
