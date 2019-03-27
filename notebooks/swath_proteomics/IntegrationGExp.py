@@ -63,7 +63,7 @@ logger.info(
     f"Prot={len(set(prot.index))}; "
     f"Trans={len(set(trans.index))}; "
     f"CRISPR={len(set(crispr.index))}; "
-    f"Overlap={len(genes)}",
+    f"Overlap={len(genes)}"
 )
 
 samples = list(set(prot).intersection(trans))
@@ -72,7 +72,7 @@ logger.info(
     f"Prot={len(set(prot))}; "
     f"Trans={len(set(trans))}; "
     f"CRISPR={len(set(crispr))}; "
-    f"Overlap={len(samples)}",
+    f"Overlap={len(samples)}"
 )
 
 
@@ -108,7 +108,7 @@ for gene in ["VIM", "EGFR"]:
     plt.close("all")
 
 
-#
+# Systematic correlation between gene-expression and protein abundance
 
 gene_corr = []
 for dtype, dataset in [("imputation", prot), ("no_imputation", prot_)]:
@@ -135,14 +135,84 @@ for dtype, dataset in [("imputation", prot), ("no_imputation", prot_)]:
 gene_corr = pd.DataFrame(gene_corr).sort_values("pval")
 print(gene_corr.groupby("dtype")["corr"].median())
 
-g = sns.FacetGrid(gene_corr, col="dtype", sharex=True, sharey=False, despine=False)
-g.map(
-    sns.distplot,
-    "corr",
-    color=CrispyPlot.PAL_DBGD[0],
-    kde_kws=dict(cut=0),
 
-)
+#
+
+g = sns.FacetGrid(gene_corr, col="dtype", sharex=True, sharey=False, despine=False)
+g.map(sns.distplot, "corr", color=CrispyPlot.PAL_DBGD[0], kde_kws=dict(cut=0))
 g.fig.set_size_inches(4, 2)
 plt.savefig(f"{rpath}/gexp_corr_histograms.pdf", bbox_inches="tight", transparent=True)
 plt.close("all")
+
+
+#
+
+plot_df = pd.pivot_table(
+    gene_corr, index="gene", columns="dtype", values="corr"
+).dropna()
+
+plot_df = pd.concat([
+    plot_df,
+    prot.mean(1).rename("imputation_mean"),
+    prot_.mean(1).rename("no_imputation_mean"),
+    prot_.count(1).rename("n_measurements"),
+], axis=1, sort=False).dropna()
+
+
+#
+
+sns.regplot(
+    "imputation",
+    "no_imputation",
+    plot_df,
+    truncate=True,
+    line_kws=CrispyPlot.LINE_KWS,
+    scatter_kws=CrispyPlot.SCATTER_KWS,
+)
+
+plt.xlabel("imputation")
+plt.ylabel("no_imputation")
+
+plt.gcf().set_size_inches(2, 2)
+plt.savefig(f"{rpath}/gexp_corr_datasets_regplot.pdf", bbox_inches="tight", transparent=True)
+plt.close("all")
+
+
+#
+
+for dtype in ["imputation", "no_imputation"]:
+    sns.regplot(
+        dtype,
+        f"{dtype}_mean",
+        plot_df,
+        truncate=True,
+        line_kws=CrispyPlot.LINE_KWS,
+        scatter_kws=CrispyPlot.SCATTER_KWS,
+    )
+
+    plt.xlabel("GExp ~ Protein correlation")
+    plt.ylabel("Protein mean")
+
+    plt.gcf().set_size_inches(2, 2)
+    plt.savefig(f"{rpath}/gexp_corr_abundance_regplot_{dtype}.pdf", bbox_inches="tight", transparent=True)
+    plt.close("all")
+
+
+#
+
+for dtype in ["imputation", "no_imputation"]:
+    sns.regplot(
+        dtype,
+        "n_measurements",
+        plot_df,
+        truncate=True,
+        line_kws=CrispyPlot.LINE_KWS,
+        scatter_kws=CrispyPlot.SCATTER_KWS,
+    )
+
+    plt.xlabel(f"GExp ~ Protein correlation ({dtype})")
+    plt.ylabel("Number of measurements")
+
+    plt.gcf().set_size_inches(2, 2)
+    plt.savefig(f"{rpath}/gexp_corr_nmeas_{dtype}.pdf", bbox_inches="tight", transparent=True)
+    plt.close("all")
