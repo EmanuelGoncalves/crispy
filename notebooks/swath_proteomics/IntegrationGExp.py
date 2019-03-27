@@ -58,8 +58,7 @@ crispr = crispr_obj.get_data()
 # Overlap
 
 genes = list(set(prot.index).intersection(trans.index))
-logger.log(
-    logging.INFO,
+logger.info(
     f"Genes: "
     f"Prot={len(set(prot.index))}; "
     f"Trans={len(set(trans.index))}; "
@@ -68,8 +67,7 @@ logger.log(
 )
 
 samples = list(set(prot).intersection(trans))
-logger.log(
-    logging.INFO,
+logger.info(
     f"Genes: "
     f"Prot={len(set(prot))}; "
     f"Trans={len(set(trans))}; "
@@ -113,28 +111,38 @@ for gene in ["VIM", "EGFR"]:
 #
 
 gene_corr = []
-for g in genes:
-    df = pd.concat(
-        [
-            trans.loc[g, samples].rename("transcript"),
-            prot.loc[g, samples].rename("protein"),
-        ],
-        axis=1,
-    ).dropna()
+for dtype, dataset in [("imputation", prot), ("no_imputation", prot_)]:
+    logger.info(dtype)
 
-    if df.shape[0] < 10:
-        continue
+    for g in genes:
+        df = pd.concat(
+            [
+                trans.loc[g, samples].rename("transcript"),
+                dataset.loc[g, samples].rename("protein"),
+            ],
+            axis=1,
+        ).dropna()
 
-    c, p = spearmanr(df["transcript"], df["protein"])
+        if df.shape[0] < 10:
+            continue
 
-    res = dict(gene=g, corr=c, pval=p, len=df.shape[0])
+        c, p = spearmanr(df["transcript"], df["protein"])
 
-    gene_corr.append(res)
+        res = dict(gene=g, corr=c, pval=p, len=df.shape[0], dtype=dtype)
+
+        gene_corr.append(res)
 
 gene_corr = pd.DataFrame(gene_corr).sort_values("pval")
+print(gene_corr.groupby("dtype")["corr"].median())
 
-print(gene_corr["corr"].median())
+g = sns.FacetGrid(gene_corr, col="dtype", sharex=True, sharey=False, despine=False)
+g.map(
+    sns.distplot,
+    "corr",
+    color=CrispyPlot.PAL_DBGD[0],
+    kde_kws=dict(cut=0),
 
-plt.figure(figsize=(1.5, 1.5), dpi=300)
-gene_corr["corr"].hist(bins=30, linewidth=0)
-plt.show()
+)
+g.fig.set_size_inches(4, 2)
+plt.savefig(f"{rpath}/gexp_corr_histograms.pdf", bbox_inches="tight", transparent=True)
+plt.close("all")
