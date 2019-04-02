@@ -219,3 +219,5 @@ g.map(
 g.fig.set_size_inches(6, 8)
 plt.savefig(f"{rpath}/gexp_corr_factors.pdf", bbox_inches="tight", transparent=True)
 plt.close("all")
+
+# Copyright (C) 2019 Emanuel Goncalves
