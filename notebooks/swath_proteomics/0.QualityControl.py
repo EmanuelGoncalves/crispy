@@ -51,7 +51,8 @@ for dtype in dtypes:
     f, axs = plt.subplots(2, 1, dpi=300, figsize=(12, 3), sharex="none", sharey="all")
 
     for i, (m, df) in enumerate(data.manifest.groupby("Machine")):
-        plot_df = data.get_data(dtype)[df.index].dropna(how="all")
+        plot_df = data.get_data(dtype, average_replicates=False, map_ids=False)
+        plot_df = plot_df[df.index].dropna(how="all")
         plot_df = np.log10(plot_df)
 
         sns.boxplot(
@@ -64,7 +65,10 @@ for dtype in dtypes:
             ax=axs[i]
         )
 
+        axs[i].set_ylabel(f"{m}")
         axs[i].axes.xaxis.set_visible(False)
+
+    plt.suptitle(f"Proteomics data-set {dtype}")
 
     plt.savefig(
         f"{rpath}/{dtype}_counts_boxplots.png", bbox_inches="tight", transparent=True

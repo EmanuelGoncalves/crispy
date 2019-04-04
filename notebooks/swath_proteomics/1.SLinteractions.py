@@ -37,16 +37,48 @@ rpath = pkg_resources.resource_filename("notebooks", "swath_proteomics/reports/"
 
 # # Import data-sets
 
-
 slethal = SLethal()
 
 
 #
 
 genes = set.intersection(
-    set(slethal.gexp.index), set(slethal.prot.index), set(slethal.crispr.index)
+    set(slethal.gexp.index), set(slethal.prot.index)
 )
 logger.info(f"Genes={len(genes)}")
+
+
+#
+
+gi_gexp = slethal.genetic_interactions(slethal.gexp.loc[genes])
+gi_prot = slethal.genetic_interactions(slethal.prot.loc[genes])
+
+
+#
+
+gis = pd.concat([
+    gi_gexp.set_index(["phenotype", "gene"]).add_suffix("_gexp"),
+    gi_prot.set_index(["phenotype", "gene"]).add_suffix("_prot"),
+], axis=1, sort=False)
+
+
+#
+
+plt.figure(figsize=(2.5, 2), dpi=600)
+
+g = plt.hexbin(
+    gis["beta_gexp"], gis["beta_prot"], cmap="Spectral_r", gridsize=30, mincnt=1, bins="log", linewidths=0
+)
+
+plt.colorbar(g, spacing="uniform", extend="max")
+
+plt.xlabel(f"CRISPR-Cas9 ~ RNA-Seq")
+plt.ylabel(f"SWATH-MS ~ RNA-Seq")
+
+plt.grid(True, ls=":", lw=.1, alpha=1., zorder=0)
+
+plt.savefig(f"{rpath}/gi_betas_hexbin.png", bbox_inches="tight")
+plt.close("all")
 
 
 #
@@ -80,6 +112,26 @@ for f in ["gexp", "prot"]:
 
     plt.savefig(f"{rpath}/essentiality_correlation_{f}.png", bbox_inches="tight")
     plt.close("all")
+
+
+#
+
+f, ax = plt.subplots(1, 1, figsize=(2.5, 2), dpi=600)
+
+g = ax.hexbin(
+    df["gexp"], df["prot"], cmap="Spectral_r", gridsize=30, mincnt=1, bins="log", linewidths=0
+)
+
+plt.colorbar(g, spacing="uniform", extend="max")
+
+plt.xlabel(f"RNA-Seq")
+plt.ylabel("SWATH-MS")
+
+plt.grid(True, ls=":", lw=.1, alpha=1., zorder=0)
+
+plt.savefig(f"{rpath}/prot_gexp_correlation.png", bbox_inches="tight")
+plt.close("all")
+
 
 # #
 #

@@ -41,12 +41,12 @@ class SLethal:
         self.logger.info(f"Gene-expression={self.gexp.shape}")
 
         self.prot = self.prot_obj.filter(
-            subset=self.samples, dtype="protein"
+            subset=self.samples, dtype="imputed"
         )
         self.logger.info(f"Proteomics={self.prot.shape}")
 
         self.crispr = self.crispr_obj.filter(
-            subset=self.samples, scale=True
+            subset=self.samples, scale=True, abs_thres=0.5
         )
         self.logger.info(f"CRISPR-Cas9={self.crispr.shape}")
 
@@ -147,31 +147,31 @@ class SLethal:
 
         return res
 
-    def genetic_interactions_gexp(self, add_covariates=True, add_random_effects=True):
+    def genetic_interactions(self, x, add_covariates=True, add_random_effects=True):
         # - Kinship matrix (random effects)
         k = self.kinship(self.gexp.T) if add_random_effects else None
         m = self.get_covariates() if add_covariates else None
 
         # - Single feature linear mixed regression
         # Association
-        gi_gexp = []
+        gi = []
 
         for gene in self.crispr.index:
             if self.verbose > 0:
                 self.logger.info(f"GIs LMM test of {gene}")
 
             gis = self.lmm_single_phenotype(
-                self.crispr.loc[[gene]].T, self.gexp.T, k=k, m=m
+                self.crispr.loc[[gene]].T, x.T, k=k, m=m
             )
 
-            gi_gexp.append(gis)
+            gi.append(gis)
 
-        gi_gexp = pd.concat(gi_gexp)
+        gi = pd.concat(gi)
 
         # Multiple p-value correction
-        gi_gexp = self.multipletests_per_phenotype(gi_gexp, method=self.pvaladj_method)
+        gi = self.multipletests_per_phenotype(gi, method=self.pvaladj_method)
 
         # Sort p-values
-        gi_gexp = gi_gexp.sort_values(["adjpval", "pval"])
+        gi = gi.sort_values(["adjpval", "pval"])
 
-        return gi_gexp
+        return gi
