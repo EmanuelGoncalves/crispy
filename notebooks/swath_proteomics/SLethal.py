@@ -9,11 +9,23 @@ import matplotlib.pyplot as plt
 from limix.qtl import st_scan
 from sklearn.preprocessing import StandardScaler
 from statsmodels.stats.multitest import multipletests
-from crispy.DataImporter import GeneExpression, CRISPR, Proteomics, Sample
+from crispy.DataImporter import GeneExpression, CRISPR, Proteomics, WES, Sample
 
 
 class SLethal:
-    def __init__(self, pvaladj_method="bonferroni", min_events=5, verbose=1):
+    def __init__(
+        self,
+        pvaladj_method="bonferroni",
+        min_events=5,
+        verbose=1,
+        use_wes=True,
+        use_proteomics=True,
+        use_transcriptomics=True,
+        filter_crispr_kws=None,
+        filter_gexp_kws=None,
+        filter_prot_kws=None,
+        filter_wes_kws=None,
+    ):
         self.verbose = verbose
         self.min_events = min_events
         self.pvaladj_method = pvaladj_method
@@ -23,35 +35,64 @@ class SLethal:
         self.gexp_obj = GeneExpression()
         self.prot_obj = Proteomics()
         self.crispr_obj = CRISPR()
+        self.wes_obj = WES()
 
-        self.samples = list(
-            set.intersection(
-                set(self.gexp_obj.get_data().columns),
-                set(self.crispr_obj.get_data().columns),
-                set(self.prot_obj.get_data().columns),
+        # Samples overlap
+        self.samples = set(self.crispr_obj.get_data().columns)
+
+        if use_transcriptomics:
+            self.samples = self.samples.intersection(self.gexp_obj.get_data().columns)
+
+        if use_proteomics:
+            self.samples = self.samples.intersection(self.prot_obj.get_data().columns)
+
+        if use_wes:
+            self.samples = self.samples.intersection(
+                self.wes_obj.get_data(as_matrix=True).columns
             )
-        )
 
+        # Get logger
         self.logger = logging.getLogger("Crispy")
         self.logger.info(f"Samples={len(self.samples)}")
 
-        self.gexp = self.gexp_obj.filter(
-            subset=self.samples, dtype="voom"
+        # Filter kws
+        self.filter_crispr_kws = (
+            dict(scale=True, abs_thres=0.5)
+            if filter_crispr_kws is None
+            else filter_crispr_kws
         )
+        self.filter_crispr_kws["subset"] = self.samples
+
+        self.filter_gexp_kws = (
+            dict(dtype="voom") if filter_gexp_kws is None else filter_gexp_kws
+        )
+        self.filter_gexp_kws["subset"] = self.samples
+
+        self.filter_prot_kws = (
+            dict(dtype="imputed") if filter_prot_kws is None else filter_prot_kws
+        )
+        self.filter_prot_kws["subset"] = self.samples
+
+        self.filter_wes_kws = (
+            dict(as_matrix=True) if filter_wes_kws is None else filter_wes_kws
+        )
+        self.filter_wes_kws["subset"] = self.samples
+
+        # Load and filter data-sets
+        self.gexp = self.gexp_obj.filter(**self.filter_gexp_kws)
         self.logger.info(f"Gene-expression={self.gexp.shape}")
 
-        self.prot = self.prot_obj.filter(
-            subset=self.samples, dtype="imputed"
-        )
+        self.prot = self.prot_obj.filter(**self.filter_prot_kws)
         self.logger.info(f"Proteomics={self.prot.shape}")
 
-        self.crispr = self.crispr_obj.filter(
-            subset=self.samples, scale=True, abs_thres=0.5
-        )
+        self.crispr = self.crispr_obj.filter(**self.filter_crispr_kws)
         self.logger.info(f"CRISPR-Cas9={self.crispr.shape}")
 
+        self.wes = self.wes_obj.filter(**self.filter_wes_kws)
+        self.logger.info(f"WES={self.wes.shape}")
+
     def get_covariates(self):
-        # CRISPR institute of origin PC
+        # CRISPR institute of origin
         crispr_insitute = pd.get_dummies(self.crispr_obj.institute)
 
         # Cell lines culture conditions
@@ -90,17 +131,30 @@ class SLethal:
         return K
 
     @staticmethod
-    def lmm_limix(y, x, m=None, k=None, add_intercept=True, lik="normal"):
+    def lmm_limix(
+        y,
+        x,
+        m=None,
+        k=None,
+        add_intercept=True,
+        lik="normal",
+        scale_y=True,
+        scale_x=True,
+    ):
         # Build matrices
         Y = y.dropna()
-        Y = pd.DataFrame(
-            StandardScaler().fit_transform(Y), index=Y.index, columns=Y.columns
-        )
+
+        if scale_y:
+            Y = pd.DataFrame(
+                StandardScaler().fit_transform(Y), index=Y.index, columns=Y.columns
+            )
 
         X = x.loc[Y.index]
-        X = pd.DataFrame(
-            StandardScaler().fit_transform(X), index=X.index, columns=X.columns
-        )
+
+        if scale_x:
+            X = pd.DataFrame(
+                StandardScaler().fit_transform(X), index=X.index, columns=X.columns
+            )
 
         # Random effects matrix
         if k is None:
@@ -132,7 +186,7 @@ class SLethal:
 
     @staticmethod
     def lmm_single_phenotype(y, x, m=None, k=None):
-        lmm, params = SLethal.lmm_limix(y, x, m, k)
+        lmm, params = SLethal.lmm_limix(y, x, m, k, scale_x=(x.dtypes[0] != np.int))
 
         res = pd.DataFrame(
             dict(
@@ -147,10 +201,10 @@ class SLethal:
 
         return res
 
-    def genetic_interactions(self, x, add_covariates=True, add_random_effects=True):
+    def genetic_interactions(self, x, m=None, k=None):
         # - Kinship matrix (random effects)
-        k = self.kinship(self.gexp.T) if add_random_effects else None
-        m = self.get_covariates() if add_covariates else None
+        k = self.kinship(x.T) if k is None else k
+        m = self.get_covariates() if m is None else m
 
         # - Single feature linear mixed regression
         # Association
@@ -160,9 +214,7 @@ class SLethal:
             if self.verbose > 0:
                 self.logger.info(f"GIs LMM test of {gene}")
 
-            gis = self.lmm_single_phenotype(
-                self.crispr.loc[[gene]].T, x.T, k=k, m=m
-            )
+            gis = self.lmm_single_phenotype(self.crispr.loc[[gene]].T, x.T, k=k, m=m)
 
             gi.append(gis)
 
