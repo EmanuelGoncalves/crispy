@@ -177,7 +177,7 @@ class Utils(object):
     def get_essential_genes(
         cls, dfile="gene_sets/curated_BAGEL_essential.csv", return_series=True
     ):
-        geneset = set(pd.read_csv("{}/{}".format(cls.DPATH, dfile), sep="\t")["gene"])
+        geneset = set(pd.read_csv(f"{cls.DPATH}/{dfile}", sep="\t")["gene"])
 
         if return_series:
             geneset = pd.Series(list(geneset)).rename("essential")
@@ -188,7 +188,7 @@ class Utils(object):
     def get_non_essential_genes(
         cls, dfile="gene_sets/curated_BAGEL_nonEssential.csv", return_series=True
     ):
-        geneset = set(pd.read_csv("{}/{}".format(cls.DPATH, dfile), sep="\t")["gene"])
+        geneset = set(pd.read_csv(f"{cls.DPATH}/{dfile}", sep="\t")["gene"])
 
         if return_series:
             geneset = pd.Series(list(geneset)).rename("non-essential")
@@ -221,10 +221,14 @@ class Utils(object):
     @classmethod
     def get_adam_core_essential(cls, dfile="gene_sets/pancan_core.csv"):
         return set(
-            pd.read_csv("{}/{}".format(cls.DPATH, dfile))[
+            pd.read_csv(f"{cls.DPATH}/{dfile}")[
                 "ADAM PanCancer Core-Fitness genes"
             ]
         )
+
+    @classmethod
+    def get_sanger_essential(cls, dfile="gene_sets/essential_sanger_depmap19.tsv"):
+        return pd.read_csv(f"{cls.DPATH}/{dfile}", sep="\t")
 
     @classmethod
     def get_broad_core_essential(

@@ -27,6 +27,7 @@ included_files = {
         "data/gene_sets/curated_BAGEL_nonEssential.csv",
         "data/gene_sets/pan_core_essential_broad_depmap18Q3.txt",
         "data/gene_sets/pan_core_essential_broad_depmap18Q4.txt",
+        "data/gene_sets/essential_sanger_depmap19.tsv",
         "data/images/example_gp_fit.png",
         "data/images/logo.png",
         "data/model_list_2018-09-28_1452.csv",

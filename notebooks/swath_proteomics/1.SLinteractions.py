@@ -39,7 +39,7 @@ rpath = pkg_resources.resource_filename("notebooks", "swath_proteomics/reports/"
 
 # # Import data-sets
 
-slethal = SLethal()
+slethal = SLethal(use_wes=False)
 
 
 #
@@ -50,8 +50,11 @@ logger.info(f"Genes={len(genes)}")
 
 #
 
-gi_gexp = slethal.genetic_interactions(slethal.gexp.loc[genes])
-gi_prot = slethal.genetic_interactions(slethal.prot.loc[genes])
+k_gexp = slethal.kinship(slethal.gexp_obj.get_data()[slethal.samples].T)
+gi_gexp = slethal.genetic_interactions(slethal.gexp.loc[genes], k=k_gexp)
+
+k_prot = slethal.kinship(slethal.prot_obj.get_data(dtype="imputed")[slethal.samples].T)
+gi_prot = slethal.genetic_interactions(slethal.prot.loc[genes], k=k_prot)
 
 
 #

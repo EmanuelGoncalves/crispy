@@ -1,0 +1,279 @@
+gene_symbol,driver_gene_status
+ABCB1,Tumour Suppressor
+ABL2,Tumour Suppressor
+ACACA,Tumour Suppressor
+ACVR1B,Tumour Suppressor
+ACVR2A,Tumour Suppressor
+ADCY1,Oncogene
+ADGRL2,Tumour Suppressor
+AFDN,Tumour Suppressor
+AFF4,Tumour Suppressor
+AHCTF1,Tumour Suppressor
+AHNAK,Tumour Suppressor
+AKAP9,Tumour Suppressor
+AKT1,Oncogene
+ALK,Tumour Suppressor
+AMER1,Tumour Suppressor
+AMOT,Tumour Suppressor
+ANK3,Tumour Suppressor
+APAF1,Tumour Suppressor
+APC,Tumour Suppressor
+AQR,Tumour Suppressor
+ARAP3,Tumour Suppressor
+ARFGAP3,Tumour Suppressor
+ARFGEF1,Tumour Suppressor
+ARFGEF2,Tumour Suppressor
+ARHGAP26,Oncogene
+ARHGAP29,Tumour Suppressor
+ARHGEF6,Tumour Suppressor
+ARID1A,Tumour Suppressor
+ARID2,Tumour Suppressor
+ARID4A,Tumour Suppressor
+ARID4B,Tumour Suppressor
+ARID5B,Tumour Suppressor
+ASH1L,Tumour Suppressor
+ASPM,Tumour Suppressor
+ASXL1,Tumour Suppressor
+ATM,Tumour Suppressor
+ATR,Tumour Suppressor
+ATRX,Tumour Suppressor
+AXIN1,Tumour Suppressor
+AXIN2,Tumour Suppressor
+B2M,Tumour Suppressor
+BAP1,Tumour Suppressor
+BAZ2B,Tumour Suppressor
+BCLAF1,Tumour Suppressor
+BCOR,Tumour Suppressor
+BLM,Tumour Suppressor
+BMPR2,Tumour Suppressor
+BNC2,Tumour Suppressor
+BPTF,Tumour Suppressor
+BRAF,Tumour Suppressor
+BRCA1,Tumour Suppressor
+BRCA2,Tumour Suppressor
+BRWD1,Tumour Suppressor
+CAD,Tumour Suppressor
+CASP8,Tumour Suppressor
+CCAR1,Tumour Suppressor
+CCND1,Oncogene
+CDC27,Tumour Suppressor
+CDC73,Tumour Suppressor
+CDH1,Tumour Suppressor
+CDK12,Tumour Suppressor
+CDKN1A,Tumour Suppressor
+CDKN1B,Tumour Suppressor
+CDKN2A,Tumour Suppressor
+CEP290,Tumour Suppressor
+CHD4,Tumour Suppressor
+CHD6,Tumour Suppressor
+CHD9,Tumour Suppressor
+CIC,Tumour Suppressor
+CLASP2,Tumour Suppressor
+CLOCK,Tumour Suppressor
+CLSPN,Tumour Suppressor
+CMTR2,Tumour Suppressor
+CNOT1,Tumour Suppressor
+CNOT3,Tumour Suppressor
+COL1A1,Tumour Suppressor
+CREBBP,Tumour Suppressor
+CTCF,Tumour Suppressor
+CTNNB1,Oncogene
+CTNND1,Tumour Suppressor
+CUL2,Tumour Suppressor
+CUL3,Tumour Suppressor
+CUX1,Tumour Suppressor
+CYLD,Tumour Suppressor
+DDX3X,Tumour Suppressor
+DDX5,Oncogene
+DHX15,Tumour Suppressor
+DHX9,Tumour Suppressor
+DICER1,Tumour Suppressor
+DLG1,Tumour Suppressor
+DNMT3A,Tumour Suppressor
+EGFR,Tumour Suppressor
+EIF4G1,Tumour Suppressor
+ELF1,Tumour Suppressor
+ELF3,Tumour Suppressor
+EPHA2,Tumour Suppressor
+EPHA4,Tumour Suppressor
+ERBB2,Oncogene
+ERBB3,Oncogene
+ERBIN,Tumour Suppressor
+EZH2,Tumour Suppressor
+F8,Tumour Suppressor
+FAF1,Tumour Suppressor
+FAT1,Tumour Suppressor
+FAT2,Tumour Suppressor
+FBXW7,Tumour Suppressor
+FIP1L1,Tumour Suppressor
+FLT3,Oncogene
+FN1,Tumour Suppressor
+FOXP1,Tumour Suppressor
+FRG1BP,Tumour Suppressor
+FXR1,Tumour Suppressor
+G3BP2,Oncogene
+GATA3,Tumour Suppressor
+GNA11,Oncogene
+GPS2,Tumour Suppressor
+HDAC9,Tumour Suppressor
+HGF,Tumour Suppressor
+HLA-A,Tumour Suppressor
+HLA-B,Tumour Suppressor
+HNF1A,Tumour Suppressor
+HRAS,Oncogene
+HSPA8,Oncogene
+IDH1,Oncogene
+IDH2,Oncogene
+INPP4A,Tumour Suppressor
+INPPL1,Tumour Suppressor
+IREB2,Tumour Suppressor
+ITSN1,Tumour Suppressor
+KALRN,Tumour Suppressor
+KAT6B,Tumour Suppressor
+KDM5C,Tumour Suppressor
+KDM6A,Tumour Suppressor
+KDR,Tumour Suppressor
+KEAP1,Tumour Suppressor
+KIT,Tumour Suppressor
+KMT2A,Tumour Suppressor
+KMT2D,Tumour Suppressor
+KRAS,Oncogene
+LAMA2,Tumour Suppressor
+LARP4B,Tumour Suppressor
+LIMA1,Tumour Suppressor
+LNPEP,Tumour Suppressor
+LRP6,Tumour Suppressor
+LRPPRC,Tumour Suppressor
+MACF1,Tumour Suppressor
+MAGI2,Tumour Suppressor
+MAP2K1,Oncogene
+MAP2K4,Tumour Suppressor
+MAP3K1,Tumour Suppressor
+MAP3K4,Tumour Suppressor
+MAP4K3,Tumour Suppressor
+MAX,Oncogene
+MCM3,Tumour Suppressor
+MECOM,Tumour Suppressor
+MED12,Tumour Suppressor
+MED23,Tumour Suppressor
+MED24,Tumour Suppressor
+MET,Tumour Suppressor
+MGA,Tumour Suppressor
+MKL1,Tumour Suppressor
+MLH1,Tumour Suppressor
+MLH3,Tumour Suppressor
+MNDA,Tumour Suppressor
+MSR1,Tumour Suppressor
+MTOR,Tumour Suppressor
+MYC,Oncogene
+MYCN,Oncogene
+MYH11,Tumour Suppressor
+MYH14,Tumour Suppressor
+MYH9,Tumour Suppressor
+NCOR1,Tumour Suppressor
+NCOR2,Tumour Suppressor
+NF1,Tumour Suppressor
+NF2,Tumour Suppressor
+NFE2L2,Oncogene
+NOTCH1,Tumour Suppressor
+NOTCH2,Tumour Suppressor
+NPM1,Tumour Suppressor
+NR4A2,Tumour Suppressor
+NRAS,Oncogene
+NSD1,Tumour Suppressor
+NSD2,Tumour Suppressor
+NSD3,Tumour Suppressor
+NTN4,Oncogene
+NTRK2,Oncogene
+NUP93,Tumour Suppressor
+NUP98,Tumour Suppressor
+NUTM1,Tumour Suppressor
+PABPC3,Tumour Suppressor
+PBRM1,Tumour Suppressor
+PCDH18,Tumour Suppressor
+PCSK5,Tumour Suppressor
+PGR,Tumour Suppressor
+PHF6,Tumour Suppressor
+PHLPP1,Tumour Suppressor
+PIK3C2B,Tumour Suppressor
+PIK3CA,Tumour Suppressor
+PIK3CB,Oncogene
+PIK3R1,Tumour Suppressor
+PLCB1,Tumour Suppressor
+PLCG1,Oncogene
+PLXNA1,Tumour Suppressor
+POLR2B,Tumour Suppressor
+PPP2R1A,Oncogene
+PSIP1,Tumour Suppressor
+PTCH1,Tumour Suppressor
+PTEN,Tumour Suppressor
+PTPN11,Oncogene
+PTPRU,Tumour Suppressor
+RAC1,Oncogene
+RAD21,Tumour Suppressor
+RASA1,Tumour Suppressor
+RASA2,Tumour Suppressor
+RB1,Tumour Suppressor
+RBM10,Tumour Suppressor
+RBM5,Tumour Suppressor
+RGS3,Tumour Suppressor
+RHOA,Oncogene
+RHOT1,Oncogene
+RNF43,Tumour Suppressor
+ROBO2,Tumour Suppressor
+RPGR,Tumour Suppressor
+RTN4,Tumour Suppressor
+RUNX1,Tumour Suppressor
+SCAI,Tumour Suppressor
+SEC31A,Tumour Suppressor
+SETD2,Tumour Suppressor
+SETDB1,Tumour Suppressor
+SF3B1,Oncogene
+SIN3A,Tumour Suppressor
+SMAD2,Tumour Suppressor
+SMAD4,Tumour Suppressor
+SMARCA1,Tumour Suppressor
+SMARCA4,Tumour Suppressor
+SMARCB1,Tumour Suppressor
+SMC1A,Oncogene
+SOS1,Tumour Suppressor
+SOS2,Tumour Suppressor
+SOX9,Tumour Suppressor
+SPOP,Oncogene
+SPTAN1,Tumour Suppressor
+SRGAP1,Tumour Suppressor
+SRGAP3,Tumour Suppressor
+STAG1,Tumour Suppressor
+STAG2,Tumour Suppressor
+STIP1,Tumour Suppressor
+STK11,Tumour Suppressor
+STK4,Oncogene
+SVEP1,Tumour Suppressor
+TAOK1,Tumour Suppressor
+TBL1XR1,Tumour Suppressor
+TBX3,Tumour Suppressor
+TCF12,Tumour Suppressor
+TCF4,Tumour Suppressor
+TCF7L2,Tumour Suppressor
+TET2,Tumour Suppressor
+THRAP3,Tumour Suppressor
+TJP1,Tumour Suppressor
+TJP2,Tumour Suppressor
+TP53,Tumour Suppressor
+TRIO,Tumour Suppressor
+TSC1,Tumour Suppressor
+U2AF1,Oncogene
+UPF3B,Tumour Suppressor
+USP6,Tumour Suppressor
+VHL,Tumour Suppressor
+WNK1,Tumour Suppressor
+XPO1,Oncogene
+XRN1,Tumour Suppressor
+ZC3H11A,Tumour Suppressor
+ZFHX3,Tumour Suppressor
+ZFP36L1,Tumour Suppressor
+ZFP36L2,Tumour Suppressor
+ZMYM2,Tumour Suppressor
+ZNF292,Tumour Suppressor
+ZNF638,Tumour Suppressor
+ZNRF3,Tumour Suppressor

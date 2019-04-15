@@ -10,6 +10,7 @@ import seaborn as sns
 import scipy.stats as st
 import matplotlib.pyplot as plt
 from pandas import DataFrame
+from crispy.Utils import Utils
 
 
 LOG = logging.getLogger("Crispy")
@@ -29,6 +30,25 @@ DATASETS = {
         read_counts="Yusa_v1.1_Score_readcount.csv.gz",
         library="Yusa_v1.1.csv.gz",
         plasmids=["CRISPR_C6596666.sample"],
+    ),
+    "DepMap19Q1": dict(
+        name="DepMap19Q1",
+        read_counts="Avana_DepMap19Q1_readcount.csv.gz",
+        library="Avana_v1.csv.gz",
+        plasmids=[
+            "pDNA Avana4_010115_1.5Ex_batch1",
+            "pDNA Avana4_060115_1.5Ex_batch1",
+            "pDNA Avana4_0101215_0.55Ex_batch1",
+            "pDNA Avana4_060115_0.55Ex_batch1",
+            "pDNA Avana4_010115_1.5Ex_batch0",
+            "pDNA Avana4_060115_1.5Ex_batch0",
+            "Avana 4+ Hu pDNA (M-AA40, 9/30/15)_batch3",
+            "Avana 4+ Hu pDNA (M-AA40, 9/30/15) (0.2pg/uL)_batch3",
+            "Avana4pDNA20160601-311cas9 RepG09_batch2",
+            "Avana4pDNA20160601-311cas9 RepG10_batch2",
+            "Avana4pDNA20160601-311cas9 RepG11_batch2",
+            "Avana4pDNA20160601-311cas9 RepG12_batch2",
+        ],
     ),
 }
 
@@ -75,14 +95,7 @@ class Library:
 class ReadCounts(DataFrame):
     PSEUDO_COUNT = 1
 
-    def __init__(
-        self,
-        data=None,
-        index=None,
-        columns=None,
-        dtype=None,
-        copy=False,
-    ):
+    def __init__(self, data=None, index=None, columns=None, dtype=None, copy=False):
         super().__init__(data, index, columns, dtype, copy)
 
     @property
@@ -112,6 +125,28 @@ class ReadCounts(DataFrame):
 
     def remove_low_counts(self, controls, counts_threshold=30):
         return self[self[controls].mean(1) >= counts_threshold]
+
+    def scale(self, essential=None, non_essential=None, metric=np.median):
+        if essential is None:
+            essential = Utils.get_essential_genes(return_series=False)
+
+        if non_essential is None:
+            non_essential = Utils.get_non_essential_genes(return_series=False)
+
+        assert (
+            len(essential.intersection(self.index)) != 0
+        ), "DataFrame has no index overlapping with essential list"
+
+        assert (
+            len(non_essential.intersection(self.index)) != 0
+        ), "DataFrame has no index overlapping with non essential list"
+
+        essential_metric = metric(self.reindex(essential).dropna(), axis=0)
+        non_essential_metric = metric(self.reindex(non_essential).dropna(), axis=0)
+
+        return self.subtract(non_essential_metric).divide(
+            non_essential_metric - essential_metric
+        )
 
 
 class CRISPRDataSet:
