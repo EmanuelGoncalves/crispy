@@ -187,10 +187,10 @@ class QCplot(CrispyPlot):
         return ax, plot_stats
 
     @classmethod
-    def aucs_scatter(cls, x, y, data, diagonal_line=True, rugplot=False, s=4, marker='x', lw=.5):
+    def aucs_scatter(cls, x, y, data, diagonal_line=True, rugplot=False, s=4, marker='x', lw=.05):
         ax = plt.gca()
 
-        ax.scatter(data[x], data[y], c=cls.PAL_DBGD[0], s=s, marker=marker, lw=lw)
+        ax.scatter(data[x], data[y], c=cls.PAL_DBGD[0], s=s, marker=marker, lw=lw, edgecolor="white")
 
         if rugplot:
             sns.rugplot(data[x], height=.02, axis='x', c=cls.PAL_DBGD[0], lw=.3, ax=ax)

@@ -23,6 +23,7 @@ import pandas as pd
 import pkg_resources
 import seaborn as sns
 import matplotlib.pyplot as plt
+from scipy.interpolate import interpn
 from CRISPRData import ReadCounts
 from crispy.Utils import Utils
 from pyensembl import EnsemblRelease
@@ -68,29 +69,33 @@ ky_fc = ky_fc.drop(avana_guides)
 
 
 # -
-ky_sgrnas = [i for i in ky_fc.index if i.startswith(f"{gene}_")]
-ky_fc.loc[ky_sgrnas].T.corr()
-ky_fc.loc[ky_sgrnas].median(1)
+crtl_sgrnas_fc = ky_fc.reindex(crtl_sgrnas).median(1).dropna()
+ness_sgrnas_fc = ky_fc.reindex(non_essential_sgrnas).median(1).dropna()
+ess_sgrnas_fc = ky_fc.reindex(essential_sgrnas).median(1).dropna()
 
 
 # -
-crtl_sgrnas_fc = ky_fc.loc[crtl_sgrnas].median(1)
-ness_sgrnas_fc = ky_fc.loc[non_essential_sgrnas].dropna().median(1)
-ess_sgrnas_fc = ky_fc.loc[essential_sgrnas].dropna().median(1)
-
-
-sgrna = "MPG_CCDS32345.1_ex2_16:133085-133108:-_5-3"
-
 plt.figure(figsize=(2.5, 2), dpi=600)
 
-sns.distplot(crtl_sgrnas_fc, hist=False, label="Control", kde_kws={"cut": 0})
-sns.distplot(ness_sgrnas_fc, hist=False, label="Non-essential", kde_kws={"cut": 0})
-sns.distplot(ess_sgrnas_fc, hist=False, label="Essential", kde_kws={"cut": 0})
-sns.distplot(ky_fc.loc[sgrna], hist=False, label="sgRNA", kde_kws={"cut": 0})
+sns.distplot(
+    crtl_sgrnas_fc, hist=False, label="Control", kde_kws={"cut": 0}, color="#3182bd"
+)
+sns.distplot(
+    ness_sgrnas_fc,
+    hist=False,
+    label="Non-essential",
+    kde_kws={"cut": 0},
+    color="#31a354",
+)
+sns.distplot(
+    ess_sgrnas_fc, hist=False, label="Essential", kde_kws={"cut": 0}, color="#f03b20"
+)
 
 plt.xlabel("Fold-change")
 plt.legend(frameon=False)
-plt.show()
+
+plt.savefig(f"{rpath}/fc_sgrnas_distplot.png", bbox_inches="tight", dpi=600)
+plt.close("all")
 
 
 # -
@@ -115,74 +120,77 @@ ks_sgrna["median_fc"] = ky_fc.loc[ks_sgrna.index].median(1).values
 ks_sgrna["gene"] = ky_counts.lib.loc[ks_sgrna.index, "GENES"].values
 
 # -
-plt.figure(figsize=(2, 2), dpi=600)
-sns.jointplot("ks_ctrl", "median_fc", ks_sgrna)
-plt.show()
+x, y = ks_sgrna["ks_ctrl"], ks_sgrna["median_fc"]
 
-# -
-x, y = "ks_ctrl", "ks_ness"
-
-grid = sns.JointGrid(x, y, data=ks_sgrna, space=0)
-
-grid.ax_joint.scatter(
-    x=ks_sgrna[x],
-    y=ks_sgrna[y],
-    edgecolor="w",
-    lw=0.05,
-    s=5,
-    color=CrispyPlot.PAL_DBGD[2],
-    alpha=0.5,
+data, x_e, y_e = np.histogram2d(x, y, bins=20)
+z = interpn(
+    (0.5 * (x_e[1:] + x_e[:-1]), 0.5 * (y_e[1:] + y_e[:-1])),
+    data,
+    np.vstack([x, y]).T,
+    method="splinef2d",
+    bounds_error=False,
 )
 
-sgrnas_lists = [
-    ("control", "#3182bd", crtl_sgrnas),
-    # ("essential", "#f03b20", essential_sgrnas),
-    # ("non-essential", "#31a354", non_essential_sgrnas),
-]
-for (n, c, sgrnas) in sgrnas_lists:
-    grid.ax_joint.scatter(
-        x=ks_sgrna.loc[sgrnas, x],
-        y=ks_sgrna.loc[sgrnas, y],
-        edgecolor="w",
-        lw=0.05,
-        s=5,
-        color=c,
-        alpha=0.7,
-        label=n,
-    )
-
-    sns.distplot(
-        ks_sgrna.loc[sgrnas, x],
-        hist=False,
-        kde_kws=dict(cut=0, shade=True),
-        color=c,
-        vertical=False,
-        ax=grid.ax_marg_x,
-    )
-    grid.ax_marg_x.set_xlabel("")
-    grid.ax_marg_x.set_ylabel("")
-
-    sns.distplot(
-        ks_sgrna.loc[sgrnas, y],
-        hist=False,
-        kde_kws=dict(cut=0, shade=True),
-        color=c,
-        vertical=True,
-        ax=grid.ax_marg_y,
-        label=n,
-    )
-    grid.ax_marg_y.set_xlabel("")
-    grid.ax_marg_y.set_ylabel("")
-
-    grid.ax_marg_y.legend(loc="center left", bbox_to_anchor=(1, 0.5), frameon=False)
-
-plt.gcf().set_size_inches(2, 2)
-plt.savefig(f"{rpath}/ks_jointplot.png", bbox_inches="tight", dpi=600)
+plt.figure(figsize=(2.5, 2), dpi=600)
+g = plt.scatter(
+    x,
+    y,
+    c=z,
+    marker="o",
+    edgecolor="",
+    cmap="Spectral_r",
+    s=1,
+    alpha=0.85,
+)
+plt.colorbar(g, spacing="uniform", extend="max")
+plt.xlabel("K-S statistic")
+plt.ylabel("Median fold-change")
+plt.title("Test sgRNAs are drawn from\nnon-targeting guides distribution")
+plt.savefig(f"{rpath}/ks_median_jointplot.png", bbox_inches="tight", dpi=600)
 plt.close("all")
 
 
 # -
+sgrnas_lists = [
+    ("control", "#3182bd", crtl_sgrnas),
+    ("essential", "#f03b20", essential_sgrnas),
+    ("non-essential", "#31a354", non_essential_sgrnas),
+    ("tumour-suppressors", "#756bb1", set(ks_sgrna[ks_sgrna["gene"].isin(["TP53", "PTEN"])].index))
+]
 
+for (n, c, sgrnas) in sgrnas_lists:
+    plt.figure(figsize=(2, 2), dpi=600)
+
+    plt.scatter(
+        ks_sgrna["ks_ctrl"], ks_sgrna["median_fc"],
+        marker="o",
+        edgecolor="",
+        color=CrispyPlot.PAL_DBGD[2],
+        s=1,
+        alpha=0.5,
+        label='all',
+    )
+
+    plt.scatter(
+        ks_sgrna.loc[sgrnas, "ks_ctrl"], ks_sgrna.loc[sgrnas, "median_fc"],
+        marker="o",
+        edgecolor="",
+        color=c,
+        s=1,
+        alpha=0.75,
+        label=n
+    )
+
+    plt.xlabel("K-S statistic")
+    plt.ylabel("Median fold-change")
+    plt.title("Test sgRNAs are drawn from\nnon-targeting guides distribution")
+    plt.legend(frameon=False)
+
+    plt.savefig(f"{rpath}/ks_median_jointplot_{n}.png", bbox_inches="tight", dpi=600)
+    plt.close("all")
+
+
+# -
 ky_fc_genes = ky_fc.groupby(ky_counts.lib.loc[ky_fc.index, "GENES"].dropna()).mean()
 _, original_stats = QCplot.plot_cumsum_auc(ky_fc_genes, Utils.get_essential_genes())
 plt.close("all")
@@ -213,13 +221,16 @@ ess_aucs = pd.concat(
     sort=False,
 )
 
-plt.figure(figsize=(2, 2), dpi=600)
-QCplot.aucs_scatter(x="original", y="filtered", data=ess_aucs)
-plt.show()
+plt.figure(figsize=(2.0, 2.0), dpi=600)
+QCplot.aucs_scatter(x="original", y="filtered", data=ess_aucs, marker="o")
+plt.xlabel("All guides (AURC)")
+plt.ylabel("Top 2 guides (AURC)")
+plt.title("Recall essential genes (Hart et al.)\nKosuke v1.1")
+plt.savefig(f"{rpath}/ess_aurc_k_v1.1.png", bbox_inches="tight", dpi=600)
+plt.close("all")
 
 
 # -
-
 ky_v1_counts = CRISPRDataSet("Yusa_v1")
 
 ky_v1_fc = (
@@ -228,7 +239,7 @@ ky_v1_fc = (
     .foldchange(ky_v1_counts.plasmids)
 )
 
-
+# All guides
 ky_v1_fc_genes = ky_v1_fc.groupby(
     ky_v1_counts.lib.loc[ky_v1_fc.index, "Gene"].dropna()
 ).mean()
@@ -239,19 +250,19 @@ _, original_v1_stats = QCplot.plot_cumsum_auc(
 )
 plt.close("all")
 
-
+# Filtered guides
 ky_v1_fc_filtered_genes = ky_v1_fc.loc[filtered_guides.index].dropna()
 ky_v1_fc_filtered_genes = ky_v1_fc_filtered_genes.groupby(
     ky_v1_counts.lib.loc[ky_v1_fc_filtered_genes.index, "Gene"].dropna()
 ).mean()
-ky_v1_fc_genes = ReadCounts(ky_v1_fc_genes).scale()
+ky_v1_fc_filtered_genes = ReadCounts(ky_v1_fc_filtered_genes).scale()
 
 _, v1_filtered_stats = QCplot.plot_cumsum_auc(
     ky_v1_fc_filtered_genes, Utils.get_essential_genes()
 )
 plt.close("all")
 
-
+# Plot
 v1_ess_aucs = pd.concat(
     [
         pd.Series(original_v1_stats["auc"]).rename("original"),
@@ -262,8 +273,44 @@ v1_ess_aucs = pd.concat(
 )
 
 plt.figure(figsize=(2, 2), dpi=600)
-QCplot.aucs_scatter(x="original", y="filtered", data=v1_ess_aucs)
-plt.show()
+QCplot.aucs_scatter(x="original", y="filtered", data=v1_ess_aucs, marker="o")
+plt.xlabel("All guides (AURC)")
+plt.ylabel("Top 2 guides (AURC)")
+plt.title("Recall essential genes (Hart et al.)\nKosuke v1.0")
+plt.savefig(f"{rpath}/ess_aurc_k_v1.0.png", bbox_inches="tight", dpi=600)
+plt.close("all")
+
+# Random guides
+random_guides = ks_sgrna.sample(frac=1).dropna().groupby("gene").head(2)
+
+ky_v1_fc_random_genes = ky_v1_fc.loc[random_guides.index].dropna()
+ky_v1_fc_random_genes = ky_v1_fc_random_genes.groupby(
+    ky_v1_counts.lib.loc[ky_v1_fc_random_genes.index, "Gene"].dropna()
+).mean()
+ky_v1_fc_random_genes = ReadCounts(ky_v1_fc_random_genes).scale()
+
+_, v1_random_stats = QCplot.plot_cumsum_auc(
+    ky_v1_fc_random_genes, Utils.get_essential_genes()
+)
+plt.close("all")
+
+# Plot
+v1_ess_aucs = pd.concat(
+    [
+        pd.Series(original_v1_stats["auc"]).rename("original"),
+        pd.Series(v1_random_stats["auc"]).rename("random"),
+    ],
+    axis=1,
+    sort=False,
+)
+
+plt.figure(figsize=(2, 2), dpi=600)
+QCplot.aucs_scatter(x="original", y="random", data=v1_ess_aucs, marker="o")
+plt.xlabel("All guides (AURC)")
+plt.ylabel("Random 2 guides (AURC)")
+plt.title("Recall essential genes (Hart et al.)\nKosuke v1.0")
+plt.savefig(f"{rpath}/ess_aurc_k_v1.0_random.png", bbox_inches="tight", dpi=600)
+plt.close("all")
 
 
 # -
@@ -297,13 +344,11 @@ sns.distplot(
     color=CrispyPlot.PAL_DBGD[1],
     label="Driver genes",
 )
-plt.show()
-
-
-# -
-plt.figure(figsize=(2, 2), dpi=600)
-sns.jointplot(ky_v1_fc_filtered_genes.loc[gene, samples], ky_v1_fc_genes.loc[gene, samples])
-plt.show()
+plt.xlabel("FC correlation (spearman)")
+plt.title("Compare gene fold-change\nAll vs top 2")
+plt.legend(frameon=False)
+plt.savefig(f"{rpath}/gene_fc_corr_distplot_k_v1.png", bbox_inches="tight", dpi=600)
+plt.close("all")
 
 
 # -
