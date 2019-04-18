@@ -34,7 +34,7 @@ DATASETS = {
     "Sabatini_Lander_AML": dict(
         name="Sabatini Lander AML",
         read_counts="Sabatini_Lander_v2_AML_readcounts.csv.gz",
-        library="Sabatini_Lander_v2.csv.gz",
+        library="Sabatini_Lander_v3.csv.gz",
         plasmids={
             "P31/FUJ-final": ["P31/FUJ-initial"],
             "NB4 (replicate A)-final": ["NB4-initial"],
