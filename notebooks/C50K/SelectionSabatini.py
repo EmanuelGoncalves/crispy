@@ -7,6 +7,7 @@ import pkg_resources
 import seaborn as sns
 import matplotlib.pyplot as plt
 from crispy.Utils import Utils
+from crispy.QCPlot import QCplot
 from scipy.interpolate import interpn
 from crispy.CrispyPlot import CrispyPlot
 from crispy.CRISPRData import CRISPRDataSet
@@ -21,7 +22,9 @@ def sgrna_mean_correlation(fc, lib, method="pearson"):
         print(f"Correlating {g}")
         g_fc = fc.reindex(df.index).mean()
 
-        sg_corrs = fc.loc[df.index].T.apply(lambda col: col.corr(g_fc, method=method), axis=0)
+        sg_corrs = fc.loc[df.index].T.apply(
+            lambda col: col.corr(g_fc, method=method), axis=0
+        )
 
         sgrna_corr.append(sg_corrs)
     sgrna_corr = pd.concat(sgrna_corr)
@@ -29,12 +32,16 @@ def sgrna_mean_correlation(fc, lib, method="pearson"):
     return sgrna_corr
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
 
     rpath = pkg_resources.resource_filename("notebooks", "C50K/reports/")
 
     # - JACKS
-    jacks = pd.read_csv("/Users/eg14/Downloads/whitehead_jacks_results/jacks_29cNov2018_whitehead_grna_JACKS_results.txt", sep="\t", index_col=0)
+    jacks = pd.read_csv(
+        "/Users/eg14/Downloads/whitehead_jacks_results/jacks_29cNov2018_whitehead_grna_JACKS_results.txt",
+        sep="\t",
+        index_col=0,
+    )
 
     # - Data-set
     counts = CRISPRDataSet("Sabatini_Lander_AML")
@@ -45,14 +52,24 @@ if __name__ == '__main__':
         .foldchange(counts.plasmids)
     )
 
+    fc_gene = fc.groupby(counts.lib.reindex(fc.index)["Symbol"]).mean()
+
+    # -
+    _, original_stats = QCplot.plot_cumsum_auc(fc_gene, Utils.get_essential_genes())
+    plt.show()
+
     # -
     sgrna_corr = sgrna_mean_correlation(fc, counts.lib)
     sgrna_corr_spearman = sgrna_mean_correlation(fc, counts.lib, method="spearman")
 
     # - Sets of sgRNAs
     sgrnas_essential = Utils.get_sanger_essential()
-    sgrnas_essential = set(sgrnas_essential[sgrnas_essential["ADM_PanCancer_CF"]]["Gene"])
-    sgrnas_essential = set(counts.lib[counts.lib["Symbol"].isin(sgrnas_essential)].index)
+    sgrnas_essential = set(
+        sgrnas_essential[sgrnas_essential["ADM_PanCancer_CF"]]["Gene"]
+    )
+    sgrnas_essential = set(
+        counts.lib[counts.lib["Symbol"].isin(sgrnas_essential)].index
+    )
 
     sgrnas_nonessential = Utils.get_non_essential_genes(return_series=False)
     sgrnas_nonessential = set(
@@ -86,9 +103,10 @@ if __name__ == '__main__':
     plt.xlabel("Fold-change")
     plt.legend(frameon=False)
 
-    plt.savefig(f"{rpath}/sabatini_sgrnas_fc_distplot.png", bbox_inches="tight", dpi=600)
+    plt.savefig(
+        f"{rpath}/sabatini_sgrnas_fc_distplot.png", bbox_inches="tight", dpi=600
+    )
     plt.close("all")
-
 
     # -
     sgrnas_control_fc = fc.reindex(sgrnas_control).median(1).dropna()
@@ -102,10 +120,8 @@ if __name__ == '__main__':
         ks_sgrna.append(
             {
                 "sgrna": sgrna,
-
                 "ks_ctrl": d_ctrl,
                 "pval_ctrl": p_ctrl,
-
                 "ks_intergenic": d_inter,
                 "pval_intergenic": p_inter,
             }
@@ -147,7 +163,6 @@ if __name__ == '__main__':
     plt.savefig(f"{rpath}/sabatini_spearman_medianfc.png", bbox_inches="tight", dpi=600)
     plt.close("all")
 
-
     # -
     x, y = "ks_ctrl", "ks_intergenic"
 
@@ -183,9 +198,10 @@ if __name__ == '__main__':
         plt.xlabel("Control (K-S statistic)")
         plt.ylabel("Intergenic (K-S statistic)")
         plt.title(n)
-        plt.savefig(f"{rpath}/sabatini_ks_distplot_{n}.png", bbox_inches="tight", dpi=600)
+        plt.savefig(
+            f"{rpath}/sabatini_ks_distplot_{n}.png", bbox_inches="tight", dpi=600
+        )
         plt.close("all")
-
 
     # -
     for c in conditions:
@@ -238,9 +254,10 @@ if __name__ == '__main__':
         grid.ax_marg_y.legend(loc="center left", bbox_to_anchor=(1, 0.5), frameon=False)
 
         plt.gcf().set_size_inches(2, 2)
-        plt.savefig(f"{rpath}/sabatini_ks_jointplot_{c}.png", bbox_inches="tight", dpi=600)
+        plt.savefig(
+            f"{rpath}/sabatini_ks_jointplot_{c}.png", bbox_inches="tight", dpi=600
+        )
         plt.close("all")
-
 
     # -
     plt.figure(figsize=(2.5, 2), dpi=600)
@@ -265,5 +282,7 @@ if __name__ == '__main__':
     plt.xlabel("Fold-change")
     plt.legend(frameon=False)
 
-    plt.savefig(f"{rpath}/sabatini_sgrnas_corr_distplot.png", bbox_inches="tight", dpi=600)
+    plt.savefig(
+        f"{rpath}/sabatini_sgrnas_corr_distplot.png", bbox_inches="tight", dpi=600
+    )
     plt.close("all")
