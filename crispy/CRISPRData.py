@@ -31,6 +31,26 @@ DATASETS = {
         library="Yusa_v1.1.csv.gz",
         plasmids=["CRISPR_C6596666.sample"],
     ),
+    "Sabatini_Lander_AML": dict(
+        name="Sabatini Lander AML",
+        read_counts="Sabatini_Lander_v2_AML_readcounts.csv.gz",
+        library="Sabatini_Lander_v2.csv.gz",
+        plasmids={
+            "P31/FUJ-final": ["P31/FUJ-initial"],
+            "NB4 (replicate A)-final": ["NB4-initial"],
+            "NB4 (replicate B)-final": ["NB4-initial"],
+            "OCI-AML2-final": ["OCI-AML2-initial"],
+            "OCI-AML3-final": ["OCI-AML3-initial"],
+            "SKM-1-final": ["SKM-1-initial"],
+            "EOL-1-final": ["EOL-1-initial"],
+            "HEL-final": ["HEL-initial"],
+            "Molm-13-final": ["Molm-13-initial"],
+            "MonoMac1-final": ["MonoMac1-initial"],
+            "MV4;11-final": ["MV4;11-initial"],
+            "PL-21-final": ["PL-21-initial"],
+            "OCI-AML5-final": ["OCI-AML5-initial"],
+        },
+    ),
     "DepMap19Q1": dict(
         name="DepMap19Q1",
         read_counts="Avana_DepMap19Q1_readcount.csv.gz",
@@ -116,12 +136,22 @@ class ReadCounts(DataFrame):
         return self.divide(factors)
 
     def foldchange(self, controls):
-        return (
-            self.add(self.PSEUDO_COUNT)
-            .divide(self[controls].mean(1), axis=0)
-            .drop(controls, axis=1)
-            .apply(np.log2)
-        )
+        if type(controls) == dict:
+            fc = self.add(self.PSEUDO_COUNT)
+            fc = pd.DataFrame(
+                {c: fc[c].divide(fc[controls[c]].mean(1), axis=0) for c in controls}
+            )
+            fc = fc.apply(np.log2)
+
+        else:
+            fc = (
+                self.add(self.PSEUDO_COUNT)
+                .divide(self[controls].mean(1), axis=0)
+                .drop(controls, axis=1)
+                .apply(np.log2)
+            )
+
+        return fc
 
     def remove_low_counts(self, controls, counts_threshold=30):
         return self[self[controls].mean(1) >= counts_threshold]

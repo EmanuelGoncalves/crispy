@@ -24,6 +24,9 @@ import pkg_resources
 import seaborn as sns
 import matplotlib.pyplot as plt
 from scipy.interpolate import interpn
+from sklearn.model_selection import ShuffleSplit
+from sklearn.neighbors import NearestNeighbors
+from sklearn.svm import SVC
 from CRISPRData import ReadCounts
 from crispy.Utils import Utils
 from pyensembl import EnsemblRelease
@@ -38,6 +41,18 @@ rpath = pkg_resources.resource_filename("notebooks", "C50K/reports/")
 
 # -
 gene = "PPARGC1B"
+
+# -
+jacks = pd.read_csv("/Users/eg14/Data/gdsc/crispr/grna_efficacy_v1.1.tab", sep="\t", index_col=0)
+
+# -
+ky_v1_counts = CRISPRDataSet("Yusa_v1")
+
+ky_v1_fc = (
+    ky_v1_counts.counts.remove_low_counts(ky_v1_counts.plasmids)
+    .norm_rpm()
+    .foldchange(ky_v1_counts.plasmids)
+)
 
 # -
 ky_counts = CRISPRDataSet("Yusa_v1.1")
@@ -67,6 +82,11 @@ ky_fc = (
 avana_guides = [i for i in ky_fc.index if i.startswith("sg")]
 ky_fc = ky_fc.drop(avana_guides)
 
+# -
+control_diff = ky_fc.reindex(crtl_sgrnas).mean() - ky_fc.reindex(non_essential_sgrnas).mean()
+
+samples = list(control_diff[control_diff > 0.3].index)
+ky_fc = ky_fc[samples]
 
 # -
 crtl_sgrnas_fc = ky_fc.reindex(crtl_sgrnas).median(1).dropna()
@@ -77,6 +97,9 @@ ess_sgrnas_fc = ky_fc.reindex(essential_sgrnas).median(1).dropna()
 # -
 plt.figure(figsize=(2.5, 2), dpi=600)
 
+sns.distplot(
+    ky_fc.median(1), hist=False, label="All", kde_kws=dict(cut=0, shade=True), color=CrispyPlot.PAL_DBGD[2]
+)
 sns.distplot(
     crtl_sgrnas_fc, hist=False, label="Control", kde_kws={"cut": 0}, color="#3182bd"
 )
@@ -118,6 +141,107 @@ for sgrna in ky_fc.index:
 ks_sgrna = pd.DataFrame(ks_sgrna).set_index("sgrna")
 ks_sgrna["median_fc"] = ky_fc.loc[ks_sgrna.index].median(1).values
 ks_sgrna["gene"] = ky_counts.lib.loc[ks_sgrna.index, "GENES"].values
+ks_sgrna["jacks"] = jacks.loc[ks_sgrna.index, "Efficacy"]
+
+# -
+x, y = "ks_ctrl", "ks_ness"
+
+data, x_e, y_e = np.histogram2d(ks_sgrna[x], ks_sgrna[y], bins=20)
+density = interpn(
+    (0.5 * (x_e[1:] + x_e[:-1]), 0.5 * (y_e[1:] + y_e[:-1])),
+    data,
+    np.vstack([ks_sgrna[x], ks_sgrna[y]]).T,
+    method="splinef2d",
+    bounds_error=False,
+)
+
+z_metrics = [
+    ("difference", ks_sgrna.eval("ks_ctrl + ks_ness")),
+    ("median_fc", ks_sgrna["median_fc"]),
+    ("density", density),
+    ("jacks", ks_sgrna["jacks"]),
+]
+
+for n, z_metric in z_metrics:
+    plt.figure(figsize=(2.5, 2), dpi=600)
+    g = plt.scatter(
+        ks_sgrna[x],
+        ks_sgrna[y],
+        c=z_metric,
+        marker="o",
+        edgecolor="",
+        cmap="Spectral_r",
+        s=1,
+        alpha=0.85,
+    )
+    plt.colorbar(g, spacing="uniform", extend="max")
+    plt.xlabel("Control\n(K-S statistic)")
+    plt.ylabel("Non-essential\n(K-S statistic)")
+    plt.title(n)
+    plt.savefig(f"{rpath}/ks_ness_ctrl_jointplot_{n}.png", bbox_inches="tight", dpi=600)
+    plt.close("all")
+
+
+# -
+sgrnas_lists = [
+    ("control", "#3182bd", crtl_sgrnas),
+    ("essential", "#f03b20", essential_sgrnas),
+    ("non-essential", "#31a354", non_essential_sgrnas),
+]
+
+for (n, c, sgrnas) in sgrnas_lists:
+    grid = sns.JointGrid(x, y, data=ks_sgrna, space=0)
+
+    grid.ax_joint.scatter(
+        x=ks_sgrna[x],
+        y=ks_sgrna[y],
+        edgecolor="w",
+        lw=0.05,
+        s=5,
+        color=CrispyPlot.PAL_DBGD[2],
+        alpha=0.5,
+    )
+
+    grid.ax_joint.scatter(
+        x=ks_sgrna.loc[sgrnas, x],
+        y=ks_sgrna.loc[sgrnas, y],
+        edgecolor="w",
+        lw=0.05,
+        s=5,
+        color=c,
+        alpha=0.7,
+        label=n,
+    )
+
+    sns.distplot(
+        ks_sgrna.loc[sgrnas, x],
+        hist=False,
+        kde_kws=dict(cut=0, shade=True),
+        color=c,
+        vertical=False,
+        ax=grid.ax_marg_x,
+    )
+    grid.ax_marg_x.set_xlabel("")
+    grid.ax_marg_x.set_ylabel("")
+
+    sns.distplot(
+        ks_sgrna.loc[sgrnas, y],
+        hist=False,
+        kde_kws=dict(cut=0, shade=True),
+        color=c,
+        vertical=True,
+        ax=grid.ax_marg_y,
+        label=n,
+    )
+    grid.ax_marg_y.set_xlabel("")
+    grid.ax_marg_y.set_ylabel("")
+
+    grid.ax_marg_y.legend(loc="center left", bbox_to_anchor=(1, 0.5), frameon=False)
+
+    plt.gcf().set_size_inches(2, 2)
+    plt.savefig(f"{rpath}/ks_ness_ctrl_jointplot_{n}.png", bbox_inches="tight", dpi=600)
+    plt.close("all")
+
 
 # -
 x, y = ks_sgrna["ks_ctrl"], ks_sgrna["median_fc"]
@@ -197,7 +321,7 @@ plt.close("all")
 
 
 filtered_guides = (
-    ks_sgrna.sort_values("ks_ctrl", ascending=False).dropna().groupby("gene").head(2)
+    ks_sgrna.sort_values("jacks", ascending=False).dropna().groupby("gene").head(2)
 )
 
 ky_fc_filtered_genes = ky_fc.loc[filtered_guides.index]
@@ -231,14 +355,6 @@ plt.close("all")
 
 
 # -
-ky_v1_counts = CRISPRDataSet("Yusa_v1")
-
-ky_v1_fc = (
-    ky_v1_counts.counts.remove_low_counts(ky_v1_counts.plasmids)
-    .norm_rpm()
-    .foldchange(ky_v1_counts.plasmids)
-)
-
 # All guides
 ky_v1_fc_genes = ky_v1_fc.groupby(
     ky_v1_counts.lib.loc[ky_v1_fc.index, "Gene"].dropna()
@@ -251,7 +367,7 @@ _, original_v1_stats = QCplot.plot_cumsum_auc(
 plt.close("all")
 
 # Filtered guides
-ky_v1_fc_filtered_genes = ky_v1_fc.loc[filtered_guides.index].dropna()
+ky_v1_fc_filtered_genes = ky_v1_fc.reindex(filtered_guides.index).dropna()
 ky_v1_fc_filtered_genes = ky_v1_fc_filtered_genes.groupby(
     ky_v1_counts.lib.loc[ky_v1_fc_filtered_genes.index, "Gene"].dropna()
 ).mean()
@@ -283,7 +399,7 @@ plt.close("all")
 # Random guides
 random_guides = ks_sgrna.sample(frac=1).dropna().groupby("gene").head(2)
 
-ky_v1_fc_random_genes = ky_v1_fc.loc[random_guides.index].dropna()
+ky_v1_fc_random_genes = ky_v1_fc.reindex(random_guides.index).dropna()
 ky_v1_fc_random_genes = ky_v1_fc_random_genes.groupby(
     ky_v1_counts.lib.loc[ky_v1_fc_random_genes.index, "Gene"].dropna()
 ).mean()
@@ -314,7 +430,7 @@ plt.close("all")
 
 
 # -
-genes = set(ky_v1_fc_filtered_genes.index).intersection(ky_v1_fc_genes.index)
+genes = set(ky_v1_fc_filtered_genes.index).intersection(ky_v1_fc_genes.index).intersection(ky_v1_fc_random_genes.index)
 samples = set(ky_v1_fc_filtered_genes).intersection(ky_v1_fc_genes)
 
 gene_corr = {}
@@ -322,7 +438,12 @@ for g in genes:
     r, p = spearmanr(
         ky_v1_fc_filtered_genes.loc[g, samples], ky_v1_fc_genes.loc[g, samples]
     )
-    gene_corr[g] = dict(spearmanr=r, pval=p)
+
+    r_rand, p_rand = spearmanr(
+        ky_v1_fc_random_genes.loc[g, samples], ky_v1_fc_genes.loc[g, samples]
+    )
+
+    gene_corr[g] = dict(spearmanr=r, pval=p, spearmanr_rand=r, pval_rand=p)
 gene_corr = pd.DataFrame(gene_corr).T.sort_values("spearmanr")
 
 drive_genes = pd.read_csv(
@@ -334,11 +455,18 @@ sns.distplot(
     gene_corr["spearmanr"],
     hist=False,
     kde_kws=dict(cut=0, shade=True),
-    color=CrispyPlot.PAL_DBGD[2],
+    color=CrispyPlot.PAL_DBGD[0],
     label="all",
 )
 sns.distplot(
-    gene_corr.loc[drive_genes["gene_symbol"]]["spearmanr"].dropna(),
+    gene_corr.reindex(drive_genes["gene_symbol"])["spearmanr_rand"].dropna(),
+    hist=False,
+    kde_kws=dict(cut=0, shade=True),
+    color=CrispyPlot.PAL_DBGD[2],
+    label="Random",
+)
+sns.distplot(
+    gene_corr.reindex(drive_genes["gene_symbol"])["spearmanr"].dropna(),
     hist=False,
     kde_kws=dict(cut=0, shade=True),
     color=CrispyPlot.PAL_DBGD[1],
