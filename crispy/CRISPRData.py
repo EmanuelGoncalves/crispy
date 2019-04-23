@@ -180,20 +180,32 @@ class ReadCounts(DataFrame):
 
 
 class CRISPRDataSet:
-    def __init__(self, dataset_name):
-        self.name = dataset_name
+    def __init__(self, dataset, ddir=None, exclude_samples=None):
+        # Load data-set dict
+        if type(dataset) is dict:
+            self.dataset_dict = dataset
 
-        assert (
-            self.name in DATASETS
-        ), f"CRISPR data-set {self.name} not supported: {DATASETS}"
+        else:
+            assert (
+                dataset in DATASETS
+            ), f"CRISPR data-set {dataset} not supported: {DATASETS}"
 
-        self.plasmids = DATASETS[self.name]["plasmids"]
+            self.dataset_dict = DATASETS[dataset]
 
-        self.lib = Library.load_library(DATASETS[self.name]["library"])
+        self.ddir = DATA_DIR if ddir is None else ddir
+
+        # Build object arguments
+        self.plasmids = self.dataset_dict["plasmids"]
+
+        self.lib = Library.load_library(self.dataset_dict["library"])
 
         data = pd.read_csv(
-            f"{DATA_DIR}/{DATASETS[self.name]['read_counts']}", index_col=0
+            f"{self.ddir}/{self.dataset_dict['read_counts']}", index_col=0
         )
+
+        if exclude_samples is not None:
+            data = data.drop(exclude_samples, axis=1, errors="ignore")
+
         self.counts = ReadCounts(data=data)
 
         LOG.info(f"#(sgRNAs)={self.lib.shape[0]}")
