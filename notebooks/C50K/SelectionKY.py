@@ -132,17 +132,21 @@ def random_guides_aroc(sgrna_fc, sgrna_lib, n_guides=1, n_iterations=10):
     return scores
 
 
-def guides_aroc_benchmark(fc_sgrna, ks_sgrna, metrics=["jacks", "ks_control"], nguides_thres=5, rand_iterations=10):
+def guides_aroc_benchmark(fc_sgrna, ks_sgrna, nguides_thres=5, rand_iterations=10):
     guides = ks_sgrna.dropna()
 
     gene_nguides = guides["gene"].value_counts()
-    guides = guides[~guides["gene"].isin(gene_nguides[gene_nguides < nguides_thres].index)]
+    guides = guides[
+        ~guides["gene"].isin(gene_nguides[gene_nguides < nguides_thres].index)
+    ]
 
     # Random
     print(f"Metric = Random")
     aroc_scores_rand = pd.concat(
         [
-            random_guides_aroc(fc_sgrna, guides, n_guides=n, n_iterations=rand_iterations)
+            random_guides_aroc(
+                fc_sgrna, guides, n_guides=n, n_iterations=rand_iterations
+            )
             for n in range(1, (nguides_thres + 1))
         ]
     )
@@ -158,9 +162,9 @@ def guides_aroc_benchmark(fc_sgrna, ks_sgrna, metrics=["jacks", "ks_control"], n
     jacks_metric = guides.loc[abs(guides["jacks"] - 1).sort_values().index]
     aroc_scores_jacks = pd.concat(
         [
-            guides_aroc(
-                fc_sgrna, jacks_metric.groupby("gene").head(n=n)
-            ).assign(n_guides=n)
+            guides_aroc(fc_sgrna, jacks_metric.groupby("gene").head(n=n)).assign(
+                n_guides=n
+            )
             for n in range(1, (nguides_thres + 1))
         ]
     ).assign(dtype="jacks")
@@ -170,50 +174,84 @@ def guides_aroc_benchmark(fc_sgrna, ks_sgrna, metrics=["jacks", "ks_control"], n
     ks_control_metric = guides.sort_values("ks_control", ascending=False)
     aroc_scores_ks_control = pd.concat(
         [
-            guides_aroc(
-                fc_sgrna, ks_control_metric.groupby("gene").head(n=n)
-            ).assign(n_guides=n)
+            guides_aroc(fc_sgrna, ks_control_metric.groupby("gene").head(n=n)).assign(
+                n_guides=n
+            )
             for n in range(1, (nguides_thres + 1))
         ]
     ).assign(dtype="ks_control")
 
     # Combined metric
     print(f"Metric = Combined")
-    comb_metric = guides.apply(lambda v: v["ks_control"] if 0 < v["jacks"] < 2 else v["ks_control"] - 0.5, axis=1)
+    comb_metric = guides.apply(
+        lambda v: v["ks_control"] if 0.5 < v["jacks"] < 1.5 else v["ks_control"] - 0.5,
+        axis=1,
+    )
     comb_metric = guides.loc[comb_metric.sort_values(ascending=False).index]
     aroc_scores_comb = pd.concat(
         [
-            guides_aroc(
-                fc_sgrna, comb_metric.groupby("gene").head(n=n)
-            ).assign(n_guides=n)
+            guides_aroc(fc_sgrna, comb_metric.groupby("gene").head(n=n)).assign(
+                n_guides=n
+            )
             for n in range(1, (nguides_thres + 1))
         ]
     ).assign(dtype="combined")
 
     # Combined metric
-    print(f"Metric = Combined 2")
-    comb2_metric = guides["ks_control"] + guides["jacks"].apply(lambda v: (1 - v) + 1 if v > 1 else v)
-    comb2_metric = guides.loc[comb2_metric.sort_values(ascending=False).index]
+    print(f"Metric = KS inverse")
+    ks_control_inverse_metric = guides.sort_values("ks_control", ascending=True)
 
-    aroc_scores_comb2 = pd.concat(
+    aroc_scores_ksinv = pd.concat(
         [
             guides_aroc(
-                fc_sgrna, comb2_metric.groupby("gene").head(n=n)
+                fc_sgrna, ks_control_inverse_metric.groupby("gene").head(n=n)
             ).assign(n_guides=n)
             for n in range(1, (nguides_thres + 1))
         ]
-    ).assign(dtype="combined_2")
+    ).assign(dtype="ks_control_inverse")
 
     # Merge
-    aroc_scores = pd.concat([
-        aroc_scores_jacks,
-        aroc_scores_ks_control,
-        aroc_scores_rand,
-        aroc_scores_comb,
-        aroc_scores_comb2,
-    ], sort=False)
+    aroc_scores = pd.concat(
+        [
+            aroc_scores_rand,
+            aroc_scores_jacks,
+            aroc_scores_ks_control,
+            aroc_scores_comb,
+            aroc_scores_ksinv,
+        ],
+        sort=False,
+    )
 
     return aroc_scores
+
+
+def replicates_correlation(fc_sgrna, guides=None):
+    if guides is not None:
+        df = fc_sgrna.reindex(guides)
+    else:
+        df = fc_sgrna.copy()
+
+    df.columns = [c.split("_")[0] for c in df]
+
+    df_corr = df.corr()
+    df_corr = df_corr.where(np.triu(np.ones(df_corr.shape), 1).astype(np.bool))
+    df_corr = df_corr.unstack().dropna().reset_index()
+    df_corr.columns = ["sample_1", "sample_2", "corr"]
+
+    df_corr["replicate"] = (
+        (df_corr["sample_1"] == df_corr["sample_2"])
+        .replace({True: "Yes", False: "No"})
+        .values
+    )
+
+    return df_corr
+
+
+def guide_metric(ks_sgrna, alpha=0.5, beta=0.5):
+    comb_metric = alpha * (1 - ks_sgrna["ks_control"]) + beta * (
+        np.abs(ks_sgrna["jacks"] - 1)
+    )
+    return ks_sgrna.loc[comb_metric.sort_values().index]
 
 
 if __name__ == "__main__":
@@ -251,7 +289,9 @@ if __name__ == "__main__":
     ks_sgrna["median_fc"] = fc_sgrna.loc[ks_sgrna.index].median(1).values
     ks_sgrna["jacks"] = jacks.reindex(ks_sgrna.index)["X1"].values
     ks_sgrna["doenchroot"] = doenchroot.reindex(ks_sgrna.index)["score_with_ppi"].values
-    ks_sgrna["forecast"] = forecast.reindex(ks_sgrna.index)["In Frame Percentage"].values
+    ks_sgrna["forecast"] = forecast.reindex(ks_sgrna.index)[
+        "In Frame Percentage"
+    ].values
     ks_sgrna["gene"] = data.lib.reindex(ks_sgrna.index)["GENES"].values
 
     # - Plot scores scatters
@@ -274,19 +314,42 @@ if __name__ == "__main__":
     aroc_scores = guides_aroc_benchmark(fc_sgrna, ks_sgrna, nguides_thres=nguides_thres)
 
     # Plot
-    x_feature, y_features = "ks_control", ["jacks", "random", "combined", "combined_2"]
+    x_feature, y_features = (
+        "ks_control",
+        ["jacks", "random", "combined", "ks_control_inverse"],
+    )
 
-    f, axs = plt.subplots(4, nguides_thres, sharex="all", sharey="all", figsize=(6, len(y_features)), dpi=600)
+    f, axs = plt.subplots(
+        4,
+        nguides_thres,
+        sharex="all",
+        sharey="all",
+        figsize=(6, len(y_features)),
+        dpi=600,
+    )
 
     x_min, x_max = aroc_scores["auc"].min(), aroc_scores["auc"].max()
 
     for i in range(nguides_thres):
         plot_df = aroc_scores.query(f"(n_guides == {(i+1)})")
 
-        plot_df = pd.concat([
-            plot_df.query("dtype == 'ks_control'").set_index("index")["auc"].rename("x"),
-            pd.concat([plot_df.query(f"dtype == '{f}'").set_index("index")["auc"].rename(f"y{i+1}") for i, f in enumerate(y_features)], axis=1)
-        ], axis=1)
+        plot_df = pd.concat(
+            [
+                plot_df.query("dtype == 'ks_control'")
+                .set_index("index")["auc"]
+                .rename("x"),
+                pd.concat(
+                    [
+                        plot_df.query(f"dtype == '{f}'")
+                        .set_index("index")["auc"]
+                        .rename(f"y{i+1}")
+                        for i, f in enumerate(y_features)
+                    ],
+                    axis=1,
+                ),
+            ],
+            axis=1,
+        )
 
         for j in range(len(y_features)):
             data, x_e, y_e = np.histogram2d(plot_df["x"], plot_df[f"y{j+1}"], bins=20)
@@ -306,11 +369,11 @@ if __name__ == "__main__":
                 edgecolor="",
                 cmap="Spectral_r",
                 s=3,
-                alpha=0.7
+                alpha=0.7,
             )
 
             lims = [x_max, x_min]
-            axs[j][i].plot(lims, lims, 'k-', lw=.3, zorder=0)
+            axs[j][i].plot(lims, lims, "k-", lw=0.3, zorder=0)
 
         axs[0][i].set_title(f"#(guides) = {i+1}")
 
@@ -322,4 +385,131 @@ if __name__ == "__main__":
 
     plt.subplots_adjust(hspace=0.05, wspace=0.05)
     plt.savefig(f"{rpath}/KY_guides_benchmark.png", bbox_inches="tight")
+    plt.close("all")
+
+    # - Jacks metric distribution
+    f, axs = plt.subplots(1, 2, sharey="all", figsize=(4, 1.5), dpi=600)
+
+    sns.distplot(
+        ks_sgrna["jacks"],
+        kde=False,
+        hist_kws=dict(linewidth=0),
+        color=CrispyPlot.PAL_DBGD[0],
+        ax=axs[0],
+        bins=50,
+    )
+    axs[0].set_xlabel("JACKS")
+    axs[0].axvline(1, ls="-", lw=0.1, color="k")
+
+    sns.distplot(
+        np.abs(ks_sgrna["jacks"] - 1),
+        kde=False,
+        hist_kws=dict(linewidth=0),
+        color=CrispyPlot.PAL_DBGD[0],
+        ax=axs[1],
+        bins=50,
+    )
+    axs[1].set_xlabel("|JACKS - 1|")
+    axs[1].axvline(0, ls="-", lw=0.1, color="k")
+
+    plt.subplots_adjust(hspace=0.05, wspace=0.1)
+    plt.savefig(f"{rpath}/KY_jacks_distribution.png", bbox_inches="tight")
+    plt.close("all")
+
+    # - KS-control metric distribution
+    f, axs = plt.subplots(1, 2, sharey="all", figsize=(3, 1.5), dpi=600)
+
+    sns.distplot(
+        ks_sgrna["ks_control"],
+        kde=False,
+        hist_kws=dict(linewidth=0),
+        color=CrispyPlot.PAL_DBGD[0],
+        ax=axs[0],
+        bins=50,
+    )
+    axs[0].set_xlabel("KS control")
+    axs[0].axvline(1, ls="-", lw=0.1, color="k")
+
+    sns.distplot(
+        1 - df["ks_control"],
+        kde=False,
+        hist_kws=dict(linewidth=0),
+        color=CrispyPlot.PAL_DBGD[0],
+        ax=axs[1],
+        bins=50,
+    )
+    axs[1].set_xlabel("1 - KS control")
+    axs[1].axvline(0, ls="-", lw=0.1, color="k")
+
+    plt.subplots_adjust(hspace=0.05, wspace=0.1)
+    plt.savefig(f"{rpath}/KY_ks_distribution.png", bbox_inches="tight")
+    plt.close("all")
+
+    # -
+    guides_all = ks_sgrna.dropna(subset=["ks_control", "jacks"])
+
+    guides_selected = guides_all.apply(
+        lambda v: v["ks_control"] if 0 < v["jacks"] < 2 else v["ks_control"] - 0.5,
+        axis=1,
+    )
+    guides_selected = guides_all.loc[guides_selected.sort_values(ascending=False).index]
+    guides_selected = guides_selected.groupby("gene").head(n=2)
+
+    corr_all = replicates_correlation(fc_sgrna, guides=list(guides_all.index))
+    corr_selected = replicates_correlation(fc_sgrna, guides=list(guides_selected.index))
+
+    #
+    palette = dict(Yes=CrispyPlot.PAL_DBGD[1], No=CrispyPlot.PAL_DBGD[0])
+
+    f, axs = plt.subplots(2, 1, sharex="all", sharey="all", figsize=(2.5, 1.5), dpi=600)
+
+    for i, (n, df) in enumerate([("all", corr_all), ("selected n=2", corr_selected)]):
+        ax = axs[i]
+
+        sns.boxplot(
+            "corr",
+            "replicate",
+            orient="h",
+            data=df,
+            palette=palette,
+            saturation=1,
+            showcaps=False,
+            flierprops=CrispyPlot.FLIERPROPS,
+            notch=True,
+            ax=ax,
+        )
+        ax.axvline(0, ls="-", lw=0.05, zorder=0, c="#484848")
+        ax.set_ylabel("Replicate")
+
+        ax_twin = ax.twinx()
+        ax_twin.set_ylabel(n.capitalize())
+        ax_twin.axes.get_yaxis().set_ticks([])
+
+    ax.set_xlabel("Pearson R")
+
+    plt.subplots_adjust(hspace=0.05, wspace=0.05)
+    plt.savefig(f"{rpath}/KY_replicates_correlation_boxplots.png", bbox_inches="tight")
+    plt.close("all")
+
+    # -
+    guides = guides.dropna(subset=["jacks", "ks_control"])
+
+    guides_arocs = pd.concat(
+        [
+            guides_aroc(fc_sgrna, guide_metric(guides, a, b).groupby("gene").head(n=2))
+            .assign(alpha=a)
+            .assign(beta=b)
+            for a in np.arange(0, 1.1, 0.1)
+            for b in np.arange(0, 1.1, 0.1)
+        ]
+    )
+
+    #
+    plot_df = pd.pivot_table(guides_arocs, index="alpha", columns="beta")
+
+    plt.figure(figsize=(2.5, 2.5), dpi=600)
+
+    sns.heatmap(plot_df, annot=True, cbar=False, fmt=".0f", cmap="Greys")
+
+    plt.savefig(f"{rpath}/KY_metrics_heatmap_arocs.png", bbox_inches="tight")
     plt.close("all")
