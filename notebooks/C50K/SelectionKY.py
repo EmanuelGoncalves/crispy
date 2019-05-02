@@ -26,18 +26,17 @@ import matplotlib.pyplot as plt
 from crispy.Utils import Utils
 from crispy.QCPlot import QCplot
 from scipy.stats import pearsonr
+from crispy.DataImporter import Mobem
 from scipy.interpolate import interpn
 from crispy.CrispyPlot import CrispyPlot
 from crispy.CRISPRData import CRISPRDataSet
 from scipy.stats import ks_2samp, spearmanr
+from sklearn.preprocessing import MinMaxScaler
 
 
 def define_sgrnas_sets(counts, fc):
     # sgRNA essential
-    sgrnas_essential = Utils.get_sanger_essential()
-    sgrnas_essential = set(
-        sgrnas_essential[sgrnas_essential["ADM_PanCancer_CF"]]["Gene"]
-    )
+    sgrnas_essential = Utils.get_essential_genes(return_series=False)
     sgrnas_essential = set(counts.lib[data.lib["GENES"].isin(sgrnas_essential)].index)
     sgrnas_essential_fc = fc.reindex(sgrnas_essential).median(1).dropna()
 
@@ -247,11 +246,16 @@ def replicates_correlation(fc_sgrna, guides=None):
     return df_corr
 
 
-def guide_metric(ks_sgrna, alpha=0.5, beta=0.5):
-    comb_metric = alpha * (1 - ks_sgrna["ks_control"]) + beta * (
-        np.abs(ks_sgrna["jacks"] - 1)
+def guide_metric(ks_sgrna, alpha=0.5, beta=0.5, invert=False):
+    ks_metric = (1 - ks_sgrna["ks_control"])
+    jacks_metric = pd.Series(
+        MinMaxScaler().fit_transform(np.abs(ks_sgrna[["jacks"]] - 1))[:, 0], index=ks_sgrna.index
     )
-    return ks_sgrna.loc[comb_metric.sort_values().index]
+
+    comb_metric = alpha * ks_metric + beta * jacks_metric
+
+    sorted_guides = ks_sgrna.loc[comb_metric.sort_values(ascending=not invert).index]
+    return sorted_guides
 
 
 if __name__ == "__main__":
@@ -269,6 +273,26 @@ if __name__ == "__main__":
 
     # - Sets of sgRNAs
     sgrna_sets = define_sgrnas_sets(data, fc_sgrna)
+
+    # - Guide sets distributions
+    plt.figure(figsize=(2.5, 2), dpi=600)
+
+    for c in sgrna_sets:
+        sns.distplot(
+            sgrna_sets[c]["fc"],
+            hist=False,
+            label=c,
+            kde_kws={"cut": 0},
+            color=sgrna_sets[c]["color"],
+        )
+
+    plt.xlabel("Fold-change")
+    plt.legend(frameon=False)
+
+    plt.savefig(
+        f"{rpath}/KY_sgrnas_fc_distplot.png", bbox_inches="tight", dpi=600
+    )
+    plt.close("all")
 
     # - JACKS efficiency scores
     jacks = pd.read_csv(f"{dpath}/jacks/Yusa_v1.0.csv", index_col=0)
@@ -402,7 +426,7 @@ if __name__ == "__main__":
     axs[0].axvline(1, ls="-", lw=0.1, color="k")
 
     sns.distplot(
-        np.abs(ks_sgrna["jacks"] - 1),
+        MinMaxScaler().fit_transform(np.abs(ks_sgrna[["jacks"]] - 1)),
         kde=False,
         hist_kws=dict(linewidth=0),
         color=CrispyPlot.PAL_DBGD[0],
@@ -431,7 +455,7 @@ if __name__ == "__main__":
     axs[0].axvline(1, ls="-", lw=0.1, color="k")
 
     sns.distplot(
-        1 - df["ks_control"],
+        1 - ks_sgrna["ks_control"],
         kde=False,
         hist_kws=dict(linewidth=0),
         color=CrispyPlot.PAL_DBGD[0],
@@ -494,22 +518,59 @@ if __name__ == "__main__":
     # -
     guides = guides.dropna(subset=["jacks", "ks_control"])
 
-    guides_arocs = pd.concat(
-        [
-            guides_aroc(fc_sgrna, guide_metric(guides, a, b).groupby("gene").head(n=2))
-            .assign(alpha=a)
-            .assign(beta=b)
-            for a in np.arange(0, 1.1, 0.1)
-            for b in np.arange(0, 1.1, 0.1)
-        ]
+    for metric_invert in [False, True]:
+        for n_guides in [1]:
+            guides_arocs = pd.concat(
+                [
+                    guides_aroc(fc_sgrna, guide_metric(guides, a, b, invert=metric_invert).groupby("gene").head(n=n_guides))
+                    .assign(alpha=a)
+                    .assign(beta=b)
+                    for a in np.arange(0, 1.2, 0.2)
+                    for b in np.arange(0, 1.2, 0.2)
+                ]
+            )
+
+            #
+            plot_df = pd.pivot_table(guides_arocs, index="alpha", columns="beta", values="auc")
+            plot_df.index = [f"{i:.1f}" for i in plot_df.index]
+            plot_df.columns = [f"{i:.1f}" for i in plot_df.columns]
+
+            plt.figure(figsize=(3.0, 2.5), dpi=600)
+
+            sns.heatmap(plot_df, annot=True, cbar=True, fmt=".2f", cmap="Spectral_r", annot_kws=dict(size=4))
+
+            plt.xlabel("beta (JACKS)")
+            plt.ylabel("alpha (RS control)")
+
+            plt.savefig(f"{rpath}/KY_metrics_heatmap_nguides{n_guides}_invert{metric_invert}.png", bbox_inches="tight")
+            plt.close("all")
+
+    # - Guide sets distributions smaller library
+    n_guides = 2
+
+    plt.figure(figsize=(2.5, 2), dpi=600)
+
+    guides_smaller = list(guides.sort_values("ks_control", ascending=False).groupby("gene").head(n=n_guides).index)
+
+    for c in sgrna_sets:
+        sns.distplot(
+            sgrna_sets[c]["fc"].reindex(guides_smaller).dropna(),
+            hist=False,
+            label=c,
+            kde_kws={"cut": 0},
+            color=sgrna_sets[c]["color"],
+        )
+
+    plt.xlabel("Fold-change")
+    plt.legend(frameon=False)
+
+    plt.savefig(
+        f"{rpath}/KY_sgrnas_fc_distplot_nguides{n_guides}.png", bbox_inches="tight", dpi=600
     )
-
-    #
-    plot_df = pd.pivot_table(guides_arocs, index="alpha", columns="beta")
-
-    plt.figure(figsize=(2.5, 2.5), dpi=600)
-
-    sns.heatmap(plot_df, annot=True, cbar=False, fmt=".0f", cmap="Greys")
-
-    plt.savefig(f"{rpath}/KY_metrics_heatmap_arocs.png", bbox_inches="tight")
     plt.close("all")
+
+
+    # -
+    mobem = Mobem()
+
+
