@@ -132,7 +132,7 @@ def random_guides_aroc(sgrna_fc, sgrna_lib, n_guides=1, n_iterations=10):
 
 
 def guides_aroc_benchmark(fc_sgrna, ks_sgrna, nguides_thres=5, rand_iterations=10):
-    guides = ks_sgrna.dropna()
+    guides = ks_sgrna.dropna(subset=["jacks", "ks_control"])
 
     gene_nguides = guides["gene"].value_counts()
     guides = guides[
@@ -183,7 +183,7 @@ def guides_aroc_benchmark(fc_sgrna, ks_sgrna, nguides_thres=5, rand_iterations=1
     # Combined metric
     print(f"Metric = Combined")
     comb_metric = guides.apply(
-        lambda v: v["ks_control"] if 0.5 < v["jacks"] < 1.5 else v["ks_control"] - 0.5,
+        lambda v: v["ks_control"] if 0 < v["jacks"] < 2 else 0,
         axis=1,
     )
     comb_metric = guides.loc[comb_metric.sort_values(ascending=False).index]
@@ -295,7 +295,7 @@ if __name__ == "__main__":
     plt.close("all")
 
     # - JACKS efficiency scores
-    jacks = pd.read_csv(f"{dpath}/jacks/Yusa_v1.0.csv", index_col=0)
+    jacks = pd.read_csv(f"{dpath}/jacks/Yusa_v1.1.csv", index_col=0)
     doenchroot = pd.read_csv(f"{dpath}/jacks/Yusa_v1.0_DoenchRoot.csv", index_col=0)
     forecast = pd.read_csv(
         f"{dpath}/jacks/Yusa_v1.0_ForecastFrameshift.csv", index_col=0
@@ -472,22 +472,24 @@ if __name__ == "__main__":
     # -
     guides_all = ks_sgrna.dropna(subset=["ks_control", "jacks"])
 
-    guides_selected = guides_all.apply(
-        lambda v: v["ks_control"] if 0 < v["jacks"] < 2 else v["ks_control"] - 0.5,
-        axis=1,
-    )
-    guides_selected = guides_all.loc[guides_selected.sort_values(ascending=False).index]
-    guides_selected = guides_selected.groupby("gene").head(n=2)
+    guides_best = guides_all.apply(lambda v: v["ks_control"] if 0 < v["jacks"] < 2 else 0, axis=1)
+    guides_best = guides_all.loc[guides_best.sort_values(ascending=False).index]
+    guides_best = guides_best.groupby("gene").head(n=2)
+
+    guides_worst = guides_all.apply(lambda v: v["ks_control"] if 0 < v["jacks"] < 2 else 0, axis=1)
+    guides_worst = guides_all.loc[guides_worst.sort_values(ascending=True).index]
+    guides_worst = guides_worst.groupby("gene").head(n=2)
 
     corr_all = replicates_correlation(fc_sgrna, guides=list(guides_all.index))
-    corr_selected = replicates_correlation(fc_sgrna, guides=list(guides_selected.index))
+    corr_best = replicates_correlation(fc_sgrna, guides=list(guides_best.index))
+    corr_worst = replicates_correlation(fc_sgrna, guides=list(guides_worst.index))
 
     #
     palette = dict(Yes=CrispyPlot.PAL_DBGD[1], No=CrispyPlot.PAL_DBGD[0])
 
-    f, axs = plt.subplots(2, 1, sharex="all", sharey="all", figsize=(2.5, 1.5), dpi=600)
+    f, axs = plt.subplots(3, 1, sharex="all", sharey="all", figsize=(2, 2), dpi=600)
 
-    for i, (n, df) in enumerate([("all", corr_all), ("selected n=2", corr_selected)]):
+    for i, (n, df) in enumerate([("all", corr_all), ("best n=2", corr_best), ("worst n=2", corr_worst)]):
         ax = axs[i]
 
         sns.boxplot(
@@ -545,16 +547,15 @@ if __name__ == "__main__":
             plt.savefig(f"{rpath}/KY_metrics_heatmap_nguides{n_guides}_invert{metric_invert}.png", bbox_inches="tight")
             plt.close("all")
 
-    # - Guide sets distributions smaller library
+    # -
     n_guides = 2
+    smaller_lib = guides.sort_values("ks_control", ascending=False).groupby("gene").head(n=n_guides)
 
+    # - Guide sets distributions smaller library
     plt.figure(figsize=(2.5, 2), dpi=600)
-
-    guides_smaller = list(guides.sort_values("ks_control", ascending=False).groupby("gene").head(n=n_guides).index)
-
     for c in sgrna_sets:
         sns.distplot(
-            sgrna_sets[c]["fc"].reindex(guides_smaller).dropna(),
+            sgrna_sets[c]["fc"].reindex(list(smaller_lib.index)).dropna(),
             hist=False,
             label=c,
             kde_kws={"cut": 0},
@@ -569,8 +570,5 @@ if __name__ == "__main__":
     )
     plt.close("all")
 
-
     # -
-    mobem = Mobem()
-
-
+    smaller_lib

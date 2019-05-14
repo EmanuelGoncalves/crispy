@@ -57,8 +57,13 @@ import matplotlib.pyplot as plt
 
 class GuideDesign:
     BUILD = "Grch38"
+
     EXON_SEARCH = "https://www.sanger.ac.uk/htgt/wge/api/exon_search"
     CRISPR_SEARCH = "http://www.sanger.ac.uk/htgt/wge/api/crispr_search"
+    CRISPR_BY_ID = "https://www.sanger.ac.uk/htgt/wge/api/crispr_by_id"
+    SEARCH_BY_SEQ = "https://www.sanger.ac.uk/htgt/wge/api/search_by_seq"
+    OFFTARGETS_BY_SEQ = "https://www.sanger.ac.uk/htgt/wge/api/off_targets_by_seq"
+    INDIVIDUAL_OFF_TARGET_SEARCH="https://www.sanger.ac.uk/htgt/wge/api/individual_off_target_search"
 
     RESTRICTION_SITES = dict(
         BsmBI="CGTCTC",
@@ -69,19 +74,59 @@ class GuideDesign:
         BsmI="GAATGC",
     )
 
-    def __init__(self):
+    def __init__(self, load_gencode=False):
         self.log = logging.getLogger("Crispy")
 
         self.dpath = pkg_resources.resource_filename("crispy", "data/")
 
-        # GENCODE: evidence based annotation of the human genome (GRCh38), version 29 (Ensembl 94)
-        self.gencode = pd.read_csv(
-            f"{self.dpath}/gencode.v29.annotation.gtf.gz",
-            skiprows=5,
-            sep="\t",
-            header=None,
+        if load_gencode:
+            # GENCODE: evidence based annotation of the human genome (GRCh38), version 29 (Ensembl 94)
+            self.gencode = pd.read_csv(
+                f"{self.dpath}/gencode.v29.annotation.gtf.gz",
+                skiprows=5,
+                sep="\t",
+                header=None,
+            )
+            self.log.info(f"GENCODE annotation loaded: {self.gencode.shape}")
+
+    @classmethod
+    def individual_offtarget_search(cls, guide_id):
+        offtargets = pd.read_json(
+            f"{cls.INDIVIDUAL_OFF_TARGET_SEARCH}?ids[]={guide_id}&species={cls.BUILD}"
         )
-        self.log.info(f"GENCODE annotation loaded: {self.gencode.shape}")
+        return offtargets
+
+    @classmethod
+    def offtargets_by_seq(cls, sequence, pam_right="false"):
+        offtargets = pd.read_json(
+            f"{cls.OFFTARGETS_BY_SEQ}?pam_right={pam_right}&species=human&seq={sequence}"
+        )
+        return offtargets
+
+    @classmethod
+    def search_by_seq(cls, seq, pam_right="2", get_db_data="1"):
+        """
+
+        :param seq:
+        :param pam_right:
+            2 - Default (search in both orientations);
+            0 - only find crisprs on the global negative strand
+            1 - only find crisprs on the global positive strand
+        :param get_db_data:
+            1 to return the crispr data for each ID found
+        :return:
+        """
+        transcripts = pd.read_json(
+            f"{cls.SEARCH_BY_SEQ}?seq={seq}&pam_right={pam_right}&get_db_data={get_db_data}&species={cls.BUILD}"
+        )
+        return transcripts
+
+    @classmethod
+    def search_by_id(cls, sgrna_id):
+        transcripts = pd.read_json(
+            f"{cls.CRISPR_BY_ID}?species={cls.BUILD}&id={sgrna_id}"
+        )
+        return transcripts
 
     @classmethod
     def get_wes_transcripts(cls, gene_symbol):
