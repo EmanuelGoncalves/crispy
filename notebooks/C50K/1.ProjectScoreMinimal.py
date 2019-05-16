@@ -25,6 +25,7 @@ import pkg_resources
 import seaborn as sns
 import matplotlib.pyplot as plt
 from scipy.interpolate import interpn
+from crispy.CrispyPlot import CrispyPlot
 from crispy.CRISPRData import CRISPRDataSet
 from C50K import (
     clib_palette,
@@ -241,10 +242,10 @@ plt.savefig(f"{rpath}/ky_v11_ks_scatter_metrics.png", bbox_inches="tight")
 plt.close("all")
 
 
-#
+# Benchmark AROC
 
 x_feature = "ks"
-y_features = ["jacks", "doenchroot", "median_fc", "ks_inverse"]
+y_features = ["jacks", "doenchroot", "median_fc", "ks_inverse", "random"]
 
 f, axs = plt.subplots(
     len(y_features),
@@ -308,4 +309,71 @@ for i in range(nguides_thres):
 
 plt.subplots_adjust(hspace=0.05, wspace=0.05)
 plt.savefig(f"{rpath}/ky_v11_ks_guides_benchmark_scatter.png", bbox_inches="tight")
+plt.close("all")
+
+
+# Replicates correlation
+
+def replicates_correlation(fc_sgrna, guides=None):
+    if guides is not None:
+        df = fc_sgrna.reindex(guides)
+    else:
+        df = fc_sgrna.copy()
+
+    df.columns = [c.split("_")[0] for c in df]
+
+    df_corr = df.corr()
+    df_corr = df_corr.where(np.triu(np.ones(df_corr.shape), 1).astype(np.bool))
+    df_corr = df_corr.unstack().dropna().reset_index()
+    df_corr.columns = ["sample_1", "sample_2", "corr"]
+
+    df_corr["replicate"] = (
+        (df_corr["sample_1"] == df_corr["sample_2"])
+        .replace({True: "Yes", False: "No"})
+        .values
+    )
+
+    return df_corr
+
+
+guides_all = ky_v11_ks.dropna(subset=["ks_control"])
+
+guides_best = guides_all.sort_values("ks_control", ascending=False).groupby("Gene").head(n=2)
+guides_worst = guides_all.sort_values("ks_control", ascending=True).groupby("Gene").head(n=2)
+
+corr_all = replicates_correlation(ky_v11_fc, guides=list(guides_all.index))
+corr_best = replicates_correlation(ky_v11_fc, guides=list(guides_best.index))
+corr_worst = replicates_correlation(ky_v11_fc, guides=list(guides_worst.index))
+
+#
+palette = dict(Yes="#d62728", No="#E1E1E1")
+
+f, axs = plt.subplots(3, 1, sharex="all", sharey="all", figsize=(2, 2), dpi=600)
+
+for i, (n, df) in enumerate([("all", corr_all), ("best n=2", corr_best), ("worst n=2", corr_worst)]):
+    ax = axs[i]
+
+    sns.boxplot(
+        "corr",
+        "replicate",
+        orient="h",
+        data=df,
+        palette=palette,
+        saturation=1,
+        showcaps=False,
+        flierprops=CrispyPlot.FLIERPROPS,
+        notch=True,
+        ax=ax,
+    )
+    ax.axvline(0, ls="-", lw=0.05, zorder=0, c="#484848")
+    ax.set_ylabel("Replicate")
+
+    ax_twin = ax.twinx()
+    ax_twin.set_ylabel(n.capitalize())
+    ax_twin.axes.get_yaxis().set_ticks([])
+
+ax.set_xlabel("Pearson R")
+
+plt.subplots_adjust(hspace=0.05, wspace=0.05)
+plt.savefig(f"{rpath}/ky_v11_rep_corrs.pdf", bbox_inches="tight")
 plt.close("all")

@@ -247,7 +247,13 @@ def guides_aroc_benchmark(
             rand_aroc.append(
                 random_guides_aroc(sgrna_fc, guides, n_guides=n, n_iterations=rand_iterations).assign(n_guides=n)
             )
-        rand_aroc = pd.concat(rand_aroc).assign(dtype="random")
+        rand_aroc = pd.concat(rand_aroc)
+        rand_aroc = (
+            rand_aroc.groupby(["index", "n_guides"])
+                .mean()
+                .assign(dtype="random")
+                .reset_index()
+        )
 
         aroc_scores.append(rand_aroc)
 
