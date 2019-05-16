@@ -65,7 +65,7 @@ def define_sgrnas_sets(counts, fc):
     return sgrna_sets
 
 
-def sgrnas_scores_scatter(df, x="ks_control", y="jacks", z=None):
+def sgrnas_scores_scatter(df, x="ks_control", y="jacks", z=None, z_color="#F2C500"):
     highlight_guides = False
 
     df = df.dropna(subset=[x, y])
@@ -90,20 +90,31 @@ def sgrnas_scores_scatter(df, x="ks_control", y="jacks", z=None):
     else:
         assert True, f"z type {type(z)} is not supported, user String, Set or List"
 
-
     x_var, y_var = df[x], df[y]
 
     plt.figure(figsize=(2.5, 2), dpi=600)
     g = plt.scatter(
         x_var,
         y_var,
-        c=z_var,
+        c="#E1E1E1" if highlight_guides else z_var,
         marker="o",
         edgecolor="",
-        cmap="Spectral_r",
+        cmap=None if highlight_guides else "Spectral_r",
         s=1,
         alpha=0.85,
     )
+
+    if highlight_guides:
+        plt.scatter(
+            x_var.reindex(z),
+            x_var.reindex(z),
+            c="#E1E1E1" if highlight_guides else z_var,
+            marker="o",
+            edgecolor="",
+            cmap=None if highlight_guides else "Spectral_r",
+            s=1,
+            alpha=0.85,
+        )
 
     cbar = plt.colorbar(g, spacing="uniform", extend="max")
     cbar.ax.set_ylabel("Density" if z is None else z)

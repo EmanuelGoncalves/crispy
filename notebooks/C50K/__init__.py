@@ -100,7 +100,9 @@ def estimate_ks(fc, control_guides_fc, verbose=0):
     return ks_sgrna
 
 
-def sgrnas_scores_scatter(df_ks, x="ks_control", y="median_fc", z=None):
+def sgrnas_scores_scatter(df_ks, x="ks_control", y="median_fc", z=None, z_color="#F2C500", ax=None):
+    highlight_guides = False
+
     df = df_ks.dropna(subset=[x, y])
 
     if z is None:
@@ -113,26 +115,49 @@ def sgrnas_scores_scatter(df_ks, x="ks_control", y="median_fc", z=None):
             bounds_error=False,
         )
 
-    else:
+    elif type(z) is str:
         df = df.dropna(subset=[z])
         z_var = df[z]
 
+    elif (type(z) is set) or (type(z) is list):
+        highlight_guides = True
+
+    else:
+        assert True, f"z type {type(z)} is not supported, user String, Set or List"
+
+    if ax is None:
+        plt.figure(figsize=(2.5, 2), dpi=600)
+        ax = plt.gca()
+
     x_var, y_var = df[x], df[y]
 
-    plt.figure(figsize=(2.5, 2), dpi=600)
-    g = plt.scatter(
+    g = ax.scatter(
         x_var,
         y_var,
-        c=z_var,
+        c="#E1E1E1" if highlight_guides else z_var,
         marker="o",
         edgecolor="",
-        cmap="Spectral_r",
+        cmap=None if highlight_guides else "Spectral_r",
         s=1,
         alpha=0.85,
     )
 
-    cbar = plt.colorbar(g, spacing="uniform", extend="max")
-    cbar.ax.set_ylabel("Density" if z is None else z)
+    if highlight_guides:
+        ax.scatter(
+            x_var.reindex(z),
+            y_var.reindex(z),
+            c=z_color,
+            marker="o",
+            edgecolor="",
+            s=2,
+            alpha=0.85,
+        )
 
-    plt.xlabel(x)
-    plt.ylabel(y)
+    if not highlight_guides:
+        cbar = plt.colorbar(g, spacing="uniform", extend="max")
+        cbar.ax.set_ylabel("Density" if z is None else z)
+
+    ax.set_xlabel(x)
+    ax.set_ylabel(y)
+
+    return ax

@@ -25,7 +25,13 @@ import pkg_resources
 import seaborn as sns
 import matplotlib.pyplot as plt
 from crispy.CRISPRData import CRISPRDataSet
-from C50K import clib_palette, clib_order, define_sgrnas_sets, estimate_ks, sgrnas_scores_scatter
+from C50K import (
+    clib_palette,
+    clib_order,
+    define_sgrnas_sets,
+    estimate_ks,
+    sgrnas_scores_scatter,
+)
 
 
 rpath = pkg_resources.resource_filename("notebooks", "C50K/reports/")
@@ -92,16 +98,51 @@ plt.close("all")
 
 # K-S metric
 
-plt.figure(figsize=(2.5, 2), dpi=600)
-
 sgrnas_scores_scatter(ky_v11_ks)
 
 for gset in sgrna_sets:
-    plt.axhline(sgrna_sets[gset]["fc"].median(), ls="-", lw=1, c=sgrna_sets[gset]["color"], zorder=0)
+    plt.axhline(
+        sgrna_sets[gset]["fc"].median(),
+        ls="-",
+        lw=1,
+        c=sgrna_sets[gset]["color"],
+        zorder=0,
+    )
 
 plt.grid(True, ls=":", lw=0.1, alpha=1.0, zorder=0)
 plt.xlabel("sgRNA Kolmogorov-Smirnov (non-targeting)")
 plt.ylabel("sgRNA median Fold-change")
 plt.title("Project Score - KY v1.1")
 plt.savefig(f"{rpath}/ky_v11_ks_scatter_median.png", bbox_inches="tight")
+plt.close("all")
+
+
+#
+
+f, axs = plt.subplots(1, 3, sharex="all", sharey="all", figsize=(4.5, 1.5), dpi=600)
+
+for i, gset in enumerate(sgrna_sets):
+    ax = axs[i]
+    sgrnas_scores_scatter(
+        ky_v11_ks,
+        z=sgrna_sets[gset]["sgrnas"],
+        z_color=sgrna_sets[gset]["color"],
+        ax=ax,
+    )
+    for gset in sgrna_sets:
+        ax.axhline(
+            sgrna_sets[gset]["fc"].median(),
+            ls="-",
+            lw=1,
+            c=sgrna_sets[gset]["color"],
+            zorder=0,
+        )
+    ax.grid(True, ls=":", lw=0.1, alpha=1.0, zorder=0)
+    ax.set_title(gset)
+    ax.set_xlabel("sgRNA KS\n(non-targeting)")
+    ax.set_ylabel("sgRNAs fold-change\n(median)" if i == 0 else None)
+
+plt.suptitle("Project Score - KY v1.1", y=1.07)
+plt.subplots_adjust(hspace=0.05, wspace=0.1)
+plt.savefig(f"{rpath}/ky_v11_ks_scatter_median_guides.png", bbox_inches="tight")
 plt.close("all")
