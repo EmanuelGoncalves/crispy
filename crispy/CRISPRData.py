@@ -17,6 +17,7 @@ LOG = logging.getLogger("Crispy")
 
 DATA_DIR = pkg_resources.resource_filename("crispy", "data/crispr_rawcounts/")
 LIBS_DIR = pkg_resources.resource_filename("crispy", "data/crispr_libs/")
+MANIFESTS_DIR = pkg_resources.resource_filename("crispy", "data/crispr_manifests/")
 
 DATASETS = {
     "Yusa_v1": dict(
@@ -69,6 +70,18 @@ DATASETS = {
             "Avana4pDNA20160601-311cas9 RepG11_batch2",
             "Avana4pDNA20160601-311cas9 RepG12_batch2",
         ],
+    ),
+    "Brunello_A375": dict(
+        name="Brunello A375",
+        read_counts="Brunello_A375_readcount.csv.gz",
+        library="Brunello_v1.csv.gz",
+        plasmids={
+            "orig_tracr_A375_RepA": ["orig_tracr_A375_pDNA"],
+            "orig_tracr_A375_RepB": ["orig_tracr_A375_pDNA"],
+            "mod_tracr_A375_RepA": ["mod_tracr_A375_pDNA"],
+            "mod_tracr_A375_RepB": ["mod_tracr_A375_pDNA"],
+            "mod_tracr_A375_RepC": ["mod_tracr_A375_pDNA"],
+        },
     ),
 }
 

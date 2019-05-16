@@ -66,6 +66,8 @@ def define_sgrnas_sets(counts, fc):
 
 
 def sgrnas_scores_scatter(df, x="ks_control", y="jacks", z=None):
+    highlight_guides = False
+
     df = df.dropna(subset=[x, y])
 
     if z is None:
@@ -78,9 +80,16 @@ def sgrnas_scores_scatter(df, x="ks_control", y="jacks", z=None):
             bounds_error=False,
         )
 
-    else:
+    elif type(z) is str:
         df = ks_sgrna.dropna(subset=[x, y, z])
         z_var = df[z]
+
+    elif (type(z) is set) or (type(z) is list):
+        highlight_guides = True
+
+    else:
+        assert True, f"z type {type(z)} is not supported, user String, Set or List"
+
 
     x_var, y_var = df[x], df[y]
 
