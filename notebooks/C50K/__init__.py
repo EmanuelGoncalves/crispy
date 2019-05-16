@@ -7,6 +7,7 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 from crispy.Utils import Utils
+from crispy.QCPlot import QCplot
 from scipy.stats import ks_2samp
 from scipy.interpolate import interpn
 
@@ -51,23 +52,27 @@ def define_sgrnas_sets(clib, fc=None, add_controls=True):
     # sgRNA essential
     sgrnas_essential = Utils.get_essential_genes(return_series=False)
     sgrnas_essential = set(clib[clib["Gene"].isin(sgrnas_essential)].index)
-    sgrnas_essential_fc = None if add_controls is None else fc.reindex(sgrnas_essential).median(1).dropna()
+    sgrnas_essential_fc = (
+        None
+        if add_controls is None
+        else fc.reindex(sgrnas_essential).median(1).dropna()
+    )
 
     sgrna_sets["essential"] = dict(
-        color="#e6550d",
-        sgrnas=sgrnas_essential,
-        fc=sgrnas_essential_fc,
+        color="#e6550d", sgrnas=sgrnas_essential, fc=sgrnas_essential_fc
     )
 
     # sgRNA non-essential
     sgrnas_nonessential = Utils.get_non_essential_genes(return_series=False)
     sgrnas_nonessential = set(clib[clib["Gene"].isin(sgrnas_nonessential)].index)
-    sgrnas_nonessential_fc = None if add_controls is None else fc.reindex(sgrnas_nonessential).median(1).dropna()
+    sgrnas_nonessential_fc = (
+        None
+        if add_controls is None
+        else fc.reindex(sgrnas_nonessential).median(1).dropna()
+    )
 
     sgrna_sets["nonessential"] = dict(
-        color="#3182bd",
-        sgrnas=sgrnas_nonessential,
-        fc=sgrnas_nonessential_fc,
+        color="#3182bd", sgrnas=sgrnas_nonessential, fc=sgrnas_nonessential_fc
     )
 
     # sgRNA non-targeting
@@ -100,7 +105,15 @@ def estimate_ks(fc, control_guides_fc, verbose=0):
     return ks_sgrna
 
 
-def sgrnas_scores_scatter(df_ks, x="ks_control", y="median_fc", z=None, z_color="#F2C500", ax=None):
+def sgrnas_scores_scatter(
+    df_ks,
+    x="ks_control",
+    y="median_fc",
+    z=None,
+    z_color="#F2C500",
+    add_cbar=True,
+    ax=None,
+):
     highlight_guides = False
 
     df = df_ks.dropna(subset=[x, y])
@@ -153,7 +166,7 @@ def sgrnas_scores_scatter(df_ks, x="ks_control", y="median_fc", z=None, z_color=
             alpha=0.85,
         )
 
-    if not highlight_guides:
+    if (not highlight_guides) and add_cbar:
         cbar = plt.colorbar(g, spacing="uniform", extend="max")
         cbar.ax.set_ylabel("Density" if z is None else z)
 
@@ -161,3 +174,84 @@ def sgrnas_scores_scatter(df_ks, x="ks_control", y="median_fc", z=None, z_color=
     ax.set_ylabel(y)
 
     return ax
+
+
+def random_guides_aroc(sgrna_fc, sgrna_metric, n_guides=1, n_iterations=10):
+    scores = []
+
+    for i in range(n_iterations):
+        sgrnas = sgrna_metric.groupby(sgrna_metric).apply(lambda x: x.sample(n=n_guides))
+        sgrnas = sgrnas.rename("x").reset_index().drop("x", axis=1).set_index("sgRNA")
+
+        res = guides_aroc(sgrna_fc, sgrnas).assign(n_guides=n_guides)
+
+        scores.append(res)
+
+    scores = pd.concat(scores)
+
+    return scores
+
+
+def guides_aroc(sgrna_fc, sgrna_metric):
+    sg_fc_sgrna = sgrna_fc.loc[sgrna_metric.index]
+    sg_fc_genes = sg_fc_sgrna.groupby(sgrna_metric["Gene"]).mean()
+    LOG.info(f"#(sgRNAs)={sg_fc_sgrna.shape[0]}; #(Genes)={sg_fc_genes.shape[0]}")
+
+    ess_aroc = dict(auc={s: QCplot.pr_curve(sg_fc_genes[s]) for s in sg_fc_genes})
+
+    res = pd.DataFrame(ess_aroc).reset_index()
+
+    return res
+
+
+def guides_aroc_benchmark(
+    metrics, sgrna_fc, nguides_thres=5, rand_iterations=10, guide_set=None
+):
+    # Define set of guides
+    guides = metrics.reindex(sgrna_fc.index)["Gene"].dropna()
+
+    if guide_set is not None:
+        guides = guides.reindex(guide_set).dropna()
+
+    gene_nguides = guides.value_counts()
+    gene_nguides = gene_nguides[gene_nguides >= nguides_thres]
+
+    guides = guides[guides.isin(gene_nguides.index)]
+    LOG.info(f"#(sgRNAs)={guides.shape[0]}; #(genes)={gene_nguides.shape[0]}")
+
+    # Benchmark guides: AROC
+    aroc_scores = []
+    for m in metrics:
+        if m != "Gene":
+            LOG.info(f"Metric = {m}")
+
+            guides_metric = metrics[[m, "Gene"]].sort_values(m)
+            guides_metric = guides_metric.groupby("Gene")
+
+            metric_aroc = []
+            for n in range(1, (nguides_thres + 1)):
+                guides_metric_topn = guides_metric.head(n=n)
+
+                metric_aroc.append(
+                    guides_aroc(sgrna_fc, guides_metric_topn).assign(n_guides=n)
+                )
+
+            metric_aroc = pd.concat(metric_aroc).assign(dtype=m)
+
+            aroc_scores.append(metric_aroc)
+
+    # Randomised benchmark
+    if rand_iterations is not None:
+        rand_aroc = []
+        for n in range(1, (nguides_thres + 1)):
+            rand_aroc.append(
+                random_guides_aroc(sgrna_fc, guides, n_guides=n, n_iterations=rand_iterations).assign(n_guides=n)
+            )
+        rand_aroc = pd.concat(rand_aroc).assign(dtype="random")
+
+        aroc_scores.append(rand_aroc)
+
+    # Merge
+    aroc_scores = pd.concat(aroc_scores, sort=False)
+
+    return aroc_scores
