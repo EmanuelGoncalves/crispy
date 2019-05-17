@@ -25,9 +25,10 @@ import pkg_resources
 import seaborn as sns
 import matplotlib.pyplot as plt
 from math import sqrt
-from scipy.stats import spearmanr
+from crispy.Utils import Utils
 from scipy.interpolate import interpn
 from sklearn.metrics import mean_squared_error
+from scipy.stats import spearmanr, mannwhitneyu
 from crispy.CrispyPlot import CrispyPlot
 from crispy.CRISPRData import CRISPRDataSet
 from crispy.DataImporter import Mobem
@@ -123,6 +124,33 @@ ky_v11_arocs = guides_aroc_benchmark(
 )
 
 ky_v11_arocs.to_excel(f"{rpath}/KosukeYusa_v1.1_benchmark_aroc.xlsx", index=False)
+
+
+# Biomarker
+
+metrics_fc = {
+    m: ky_v11_calculate_gene_fc(
+        ky_v11_fc, ky_v11_metrics.sort_values(m).groupby("Gene").head(n=2)
+    )
+    for m in ky_v11_metrics
+    if m != "Gene"
+}
+metrics_fc["all"] = ky_v11_calculate_gene_fc(ky_v11_fc, ky_v11_metrics)
+
+samples = list(set(metrics_fc["all"]).intersection(mobem.get_data()))
+genes = list(pd.read_excel(f"{dpath}/ssd_genes.xls")["CancerGenes"])
+
+x_mobem = mobem.get_data()[samples].T
+x_mobem = x_mobem.loc[:, x_mobem.sum() > 3]
+
+lm_assocs = pd.concat(
+    [
+        lm_associations(metrics_fc[m].loc[genes, samples].T, x_mobem).assign(metric=m)
+        for m in metrics_fc
+    ],
+    sort=False,
+)
+
 
 
 # - Plot
@@ -402,31 +430,6 @@ plt.close("all")
 
 #
 
-metrics_fc = {
-    m: ky_v11_calculate_gene_fc(
-        ky_v11_fc, ky_v11_metrics.sort_values(m).groupby("Gene").head(n=2)
-    )
-    for m in ky_v11_metrics
-    if m != "Gene"
-}
-metrics_fc["all"] = ky_v11_calculate_gene_fc(ky_v11_fc, ky_v11_metrics)
-
-samples = list(set(metrics_fc["all"]).intersection(mobem.get_data()))
-genes = list(pd.read_excel(f"{dpath}/ssd_genes.xls")["CancerGenes"])
-
-x = mobem.get_data()[samples].T
-x = x.loc[:, x.sum() > 3]
-
-lm_assocs = pd.concat(
-    [
-        lm_associations(metrics_fc[m].loc[genes, samples].T, x).assign(metric=m)
-        for m in metrics_fc
-    ],
-    sort=False,
-)
-
-#
-
 metrics = list(metrics_fc)[:-1]
 
 f, axs = plt.subplots(
@@ -514,4 +517,173 @@ ax.legend(loc="center left", bbox_to_anchor=(1, 0.5), frameon=False, prop={"size
 
 plt.subplots_adjust(hspace=0.05, wspace=0.05)
 plt.savefig(f"{rpath}/ky_v11_anova.png", bbox_inches="tight")
+plt.close("all")
+
+
+#
+
+plot_df = pd.concat(
+    [
+        lm_assocs.query(f"metric == '{m}'")
+        .set_index(["gene", "phenotype"])
+        .add_prefix(f"{m}_")
+        for m in ["all", "ks"]
+    ],
+    axis=1,
+    sort=False,
+)
+plot_df = plot_df[(plot_df[["all_fdr", "ks_fdr"]] < 0.1).sum(1) == 1]
+plot_df["delta_beta_abs"] = plot_df.eval("all_beta - ks_beta").abs()
+
+n_top = 10
+
+plot_df = [
+    (
+        "Top missed associations",
+        "top_missed",
+        plot_df.query("all_fdr < 0.1")
+        .sort_values("delta_beta_abs", ascending=False)
+        .head(n_top),
+    ),
+    (
+        "Top found associations",
+        "top_found",
+        plot_df.query("ks_fdr < 0.1")
+        .sort_values("delta_beta_abs", ascending=False)
+        .head(n_top),
+    ),
+]
+
+for (assoc_name, assoc_file, assoc_top) in plot_df:
+    n_cols = 5
+    n_rows = int(np.ceil(n_top / n_cols))
+
+    f, axs = plt.subplots(
+        n_rows,
+        n_cols,
+        sharex="all",
+        sharey="all",
+        figsize=(n_cols * 1.5, n_rows * 1.5),
+        dpi=600,
+    )
+
+    for i, ((feature, phenotype), row) in enumerate(assoc_top.iterrows()):
+        df = pd.concat(
+            [
+                x_mobem.loc[samples, feature].rename("feature"),
+                metrics_fc["ks"].loc[phenotype, samples].rename("ks"),
+                metrics_fc["all"].loc[phenotype, samples].rename("all"),
+            ],
+            axis=1,
+            sort=False,
+        )
+        df = pd.melt(df, id_vars="feature", value_vars=["ks", "all"])
+
+        row_i = int(np.floor(i / n_cols))
+        col_i = i % n_cols
+        ax = axs[row_i][col_i]
+
+        sns.boxplot(
+            "variable",
+            "value",
+            "feature",
+            data=df,
+            order=["all", "ks"],
+            palette={1: "#d62728", 0: "#E1E1E1"},
+            saturation=1,
+            showcaps=False,
+            showfliers=False,
+            ax=ax,
+        )
+        sns.stripplot(
+            "variable",
+            "value",
+            "feature",
+            data=df,
+            order=["all", "ks"],
+            split=True,
+            edgecolor="white",
+            linewidth=0.1,
+            size=2,
+            palette={1: "#d62728", 0: "#E1E1E1"},
+            ax=ax,
+        )
+
+        for g in sgrna_sets:
+            ax.axhline(
+                sgrna_sets[g]["fc"].median(),
+                ls="-",
+                lw=0.3,
+                c=sgrna_sets[g]["color"],
+                zorder=0,
+            )
+
+        ax.grid(True, ls=":", lw=0.1, alpha=1.0, zorder=0)
+        ax.set_xlabel("Guide selection" if row_i == (n_rows - 1) else None)
+        ax.set_ylabel(f"Fold-change" if col_i == 0 else None)
+        ax.set_title(f"{feature} ~ {phenotype}")
+        ax.get_legend().remove()
+
+        all_annot_text = f"beta={row['all_beta']:.1f}\nFDR={row['all_fdr']:.2g}"
+        ax.text(
+            0.3, 0.1, all_annot_text, fontsize=4, transform=ax.transAxes, ha="center"
+        )
+
+        ks_annot_text = f"beta={row['ks_beta']:.1f}\nFDR={row['ks_fdr']:.2g}"
+        ax.text(
+            0.8, 0.1, ks_annot_text, fontsize=4, transform=ax.transAxes, ha="center"
+        )
+
+    plt.suptitle(assoc_name, y=1.05)
+    plt.subplots_adjust(hspace=0.25, wspace=0.05)
+    plt.savefig(f"{rpath}/ky_v11_anova_examples_{assoc_file}.png", bbox_inches="tight")
+    plt.close("all")
+
+
+# Gene sets distributions
+
+genesets = {
+    "essential": Utils.get_essential_genes(return_series=False),
+    "nonessential": Utils.get_non_essential_genes(return_series=False),
+}
+
+genesets = {
+    m: {g: metrics_fc[m].reindex(genesets[g]).median(1).dropna() for g in genesets}
+    for m in metrics_fc
+}
+
+
+f, axs = plt.subplots(
+    1,
+    len(metrics_fc),
+    sharex="all",
+    sharey="all",
+    figsize=(len(metrics_fc) * 1.5, 1.5),
+    dpi=600,
+)
+
+for i, m in enumerate(genesets):
+    ax = axs[i]
+
+    s, p = mannwhitneyu(genesets[m]["essential"], genesets[m]["nonessential"])
+
+    for n in genesets[m]:
+        sns.distplot(
+            genesets[m][n],
+            hist=False,
+            label=n,
+            kde_kws={"cut": 0, "shade": True},
+            color=sgrna_sets[n]["color"],
+            ax=ax,
+        )
+        ax.grid(True, ls=":", lw=0.1, alpha=1.0, zorder=0, axis="x")
+        ax.set_title(f"{m}")
+        ax.set_xlabel("sgRNAs fold-change")
+        ax.text(
+            0.05, 0.9, "Mann-Whitney p-val={p: .2g}", fontsize=4, transform=ax.transAxes, ha="left"
+        )
+        ax.legend(frameon=False, prop={"size": 4}, loc=1)
+
+plt.subplots_adjust(hspace=0.05, wspace=0.05)
+plt.savefig(f"{rpath}/ky_v11_metrics_gene_distributions.png", bbox_inches="tight")
 plt.close("all")
