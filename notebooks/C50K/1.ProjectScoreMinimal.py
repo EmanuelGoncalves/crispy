@@ -24,9 +24,13 @@ import pandas as pd
 import pkg_resources
 import seaborn as sns
 import matplotlib.pyplot as plt
+from math import sqrt
+from scipy.stats import spearmanr
 from scipy.interpolate import interpn
+from sklearn.metrics import mean_squared_error
 from crispy.CrispyPlot import CrispyPlot
 from crispy.CRISPRData import CRISPRDataSet
+from crispy.DataImporter import Mobem
 from C50K import (
     clib_palette,
     clib_order,
@@ -34,12 +38,20 @@ from C50K import (
     estimate_ks,
     sgrnas_scores_scatter,
     guides_aroc_benchmark,
+    ky_v11_calculate_gene_fc,
+    lm_associations,
 )
 
 
 # -
 dpath = pkg_resources.resource_filename("crispy", "data/")
 rpath = pkg_resources.resource_filename("notebooks", "C50K/reports/")
+
+
+# MOBEM
+
+mobem = Mobem()
+
 
 # CRISPR libraries size
 
@@ -107,7 +119,7 @@ ky_v11_arocs = guides_aroc_benchmark(
     ky_v11_fc,
     nguides_thres=nguides_thres,
     guide_set=set(ky_v11_metrics.index),
-    rand_iterations=10
+    rand_iterations=10,
 )
 
 ky_v11_arocs.to_excel(f"{rpath}/KosukeYusa_v1.1_benchmark_aroc.xlsx", index=False)
@@ -132,7 +144,7 @@ plt.xlim(datetime.date(2013, 11, 1), datetime.date(2020, 3, 1))
 plt.legend(loc="center left", bbox_to_anchor=(1, 0.5), frameon=False, prop={"size": 4})
 plt.title("CRISPR-Cas9 libraries")
 plt.subplots_adjust(hspace=0.05, wspace=0.1)
-plt.savefig(f"{rpath}/crispr_libraries_coverage.pdf", bbox_inches="tight")
+plt.savefig(f"{rpath}/crispr_libraries_coverage.png", bbox_inches="tight")
 plt.close("all")
 
 
@@ -151,7 +163,7 @@ plt.grid(True, ls=":", lw=0.1, alpha=1.0, zorder=0, axis="x")
 plt.xlabel("sgRNAs fold-change")
 plt.legend(frameon=False)
 plt.title("Project Score - KY v1.1")
-plt.savefig(f"{rpath}/ky_v11_guides_distributions.pdf", bbox_inches="tight")
+plt.savefig(f"{rpath}/ky_v11_guides_distributions.png", bbox_inches="tight")
 plt.close("all")
 
 
@@ -314,6 +326,7 @@ plt.close("all")
 
 # Replicates correlation
 
+
 def replicates_correlation(fc_sgrna, guides=None):
     if guides is not None:
         df = fc_sgrna.reindex(guides)
@@ -336,27 +349,37 @@ def replicates_correlation(fc_sgrna, guides=None):
     return df_corr
 
 
-guides_all = ky_v11_ks.dropna(subset=["ks_control"])
+guides_opt = {
+    m: list(ky_v11_metrics.sort_values(m).groupby("Gene").head(n=2).index)
+    for m in ky_v11_metrics
+    if m != "Gene"
+}
+guides_opt["all"] = list(ky_v11_metrics.dropna(subset=["ks"]).index)
 
-guides_best = guides_all.sort_values("ks_control", ascending=False).groupby("Gene").head(n=2)
-guides_worst = guides_all.sort_values("ks_control", ascending=True).groupby("Gene").head(n=2)
-
-corr_all = replicates_correlation(ky_v11_fc, guides=list(guides_all.index))
-corr_best = replicates_correlation(ky_v11_fc, guides=list(guides_best.index))
-corr_worst = replicates_correlation(ky_v11_fc, guides=list(guides_worst.index))
+guides_opt_corr = {
+    m: replicates_correlation(ky_v11_fc, guides=guides_opt[m]) for m in guides_opt
+}
 
 #
 palette = dict(Yes="#d62728", No="#E1E1E1")
 
-f, axs = plt.subplots(3, 1, sharex="all", sharey="all", figsize=(2, 2), dpi=600)
+f, axs = plt.subplots(
+    1,
+    len(guides_opt_corr),
+    sharex="all",
+    sharey="all",
+    figsize=(len(guides_opt_corr) * 0.7, 1.5),
+    dpi=600,
+)
 
-for i, (n, df) in enumerate([("all", corr_all), ("best n=2", corr_best), ("worst n=2", corr_worst)]):
+all_rep_corr = guides_opt_corr["all"].query("replicate == 'Yes'")["corr"].median()
+
+for i, (n, df) in enumerate(guides_opt_corr.items()):
     ax = axs[i]
 
     sns.boxplot(
-        "corr",
         "replicate",
-        orient="h",
+        "corr",
         data=df,
         palette=palette,
         saturation=1,
@@ -365,15 +388,130 @@ for i, (n, df) in enumerate([("all", corr_all), ("best n=2", corr_best), ("worst
         notch=True,
         ax=ax,
     )
-    ax.axvline(0, ls="-", lw=0.05, zorder=0, c="#484848")
-    ax.set_ylabel("Replicate")
 
-    ax_twin = ax.twinx()
-    ax_twin.set_ylabel(n.capitalize())
-    ax_twin.axes.get_yaxis().set_ticks([])
+    ax.axhline(all_rep_corr, ls="-", lw=1.0, zorder=0, c="#484848")
 
-ax.set_xlabel("Pearson R")
+    ax.set_title(n)
+    ax.set_xlabel("Replicate")
+    ax.set_ylabel("Pearson R" if i == 0 else None)
+
+plt.subplots_adjust(hspace=0.05, wspace=0.1)
+plt.savefig(f"{rpath}/ky_v11_rep_corrs.png", bbox_inches="tight")
+plt.close("all")
+
+
+#
+
+metrics_fc = {
+    m: ky_v11_calculate_gene_fc(
+        ky_v11_fc, ky_v11_metrics.sort_values(m).groupby("Gene").head(n=2)
+    )
+    for m in ky_v11_metrics
+    if m != "Gene"
+}
+metrics_fc["all"] = ky_v11_calculate_gene_fc(ky_v11_fc, ky_v11_metrics)
+
+samples = list(set(metrics_fc["all"]).intersection(mobem.get_data()))
+genes = list(pd.read_excel(f"{dpath}/ssd_genes.xls")["CancerGenes"])
+
+x = mobem.get_data()[samples].T
+x = x.loc[:, x.sum() > 3]
+
+lm_assocs = pd.concat(
+    [
+        lm_associations(metrics_fc[m].loc[genes, samples].T, x).assign(metric=m)
+        for m in metrics_fc
+    ],
+    sort=False,
+)
+
+#
+
+metrics = list(metrics_fc)[:-1]
+
+f, axs = plt.subplots(
+    1,
+    len(metrics),
+    sharex="all",
+    sharey="all",
+    figsize=(len(metrics) * 1.5, 1.5),
+    dpi=600,
+)
+
+x_min, x_max = lm_assocs["beta"].min(), lm_assocs["beta"].max()
+
+y_var = lm_assocs.query(f"metric == 'all'").set_index(["gene", "phenotype"])
+
+for i, m in enumerate(metrics):
+    ax = axs[i]
+
+    x_var_m = lm_assocs.query(f"metric == '{m}'").set_index(["gene", "phenotype"])
+
+    var_fdr = pd.concat([x_var_m["fdr"].rename("x"), y_var["fdr"].rename("y")], axis=1)
+    var_fdr["signif"] = (var_fdr < 0.1).sum(1)
+    var_fdr["size"] = (var_fdr["signif"] + 1) * 3
+    var_fdr["color"] = var_fdr["signif"].replace(
+        {0: "#e1e1e1", 1: "#ffbb78", 2: "#ff7f0e"}
+    )
+    var_fdr["marker"] = [
+        "o" if s != 1 else ("v" if x < 0.1 else "<")
+        for x, y, s in var_fdr[["x", "y", "signif"]].values
+    ]
+
+    data, x_e, y_e = np.histogram2d(
+        x_var_m["beta"], y_var.loc[x_var_m.index, "beta"], bins=20
+    )
+    z_var = interpn(
+        (0.5 * (x_e[1:] + x_e[:-1]), 0.5 * (y_e[1:] + y_e[:-1])),
+        data,
+        np.vstack([x_var_m["beta"], y_var.loc[x_var_m.index, "beta"]]).T,
+        method="splinef2d",
+        bounds_error=False,
+    )
+
+    ax.scatter(
+        x_var_m["beta"],
+        y_var.loc[x_var_m.index, "beta"],
+        c=z_var,
+        marker="o",
+        edgecolor="",
+        cmap="Spectral_r",
+        s=var_fdr.loc[x_var_m.index, "size"],
+        alpha=0.3,
+    )
+
+    for n, df in var_fdr.groupby("signif"):
+        if n == 1:
+            for marker, df_m in df.groupby("marker"):
+                ax.scatter(
+                    x_var_m.loc[df_m.index, "beta"],
+                    y_var.loc[df_m.index, "beta"],
+                    c=df_m.iloc[0]["color"],
+                    marker=marker,
+                    edgecolor="white",
+                    lw=0.3,
+                    s=df_m.iloc[0]["size"],
+                    alpha=1,
+                    zorder=2,
+                    label="Partial" if n == 1 else "Both",
+                )
+
+    rmse = sqrt(mean_squared_error(x_var_m["beta"], y_var.loc[x_var_m.index, "beta"]))
+    cor, _ = spearmanr(x_var_m["beta"], y_var.loc[x_var_m.index, "beta"])
+    annot_text = f"Spearman's R={cor:.2g}; RMSE={rmse:.2f}"
+
+    ax.text(0.95, 0.05, annot_text, fontsize=4, transform=axs[i].transAxes, ha="right")
+
+    lims = [x_max, x_min]
+    ax.plot(lims, lims, "k-", lw=0.3, zorder=0)
+    ax.grid(True, ls=":", lw=0.1, alpha=1.0, zorder=0)
+
+    ax.set_title(m)
+    ax.set_xlabel("Effect size (beta)")
+    ax.set_ylabel("All Guides\nEffect size (beta)" if i == 0 else None)
+
+ax.legend(loc="center left", bbox_to_anchor=(1, 0.5), frameon=False, prop={"size": 4})
 
 plt.subplots_adjust(hspace=0.05, wspace=0.05)
-plt.savefig(f"{rpath}/ky_v11_rep_corrs.pdf", bbox_inches="tight")
+plt.savefig(f"{rpath}/ky_v11_anova.png", bbox_inches="tight")
 plt.close("all")

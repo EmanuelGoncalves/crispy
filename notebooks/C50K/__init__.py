@@ -5,13 +5,19 @@ import logging
 import numpy as np
 import pandas as pd
 import seaborn as sns
+import pkg_resources
 import matplotlib.pyplot as plt
+from limix.qtl import st_scan
 from crispy.Utils import Utils
 from crispy.QCPlot import QCplot
 from scipy.stats import ks_2samp
 from scipy.interpolate import interpn
+from crispy.DataImporter import Sample
+from sklearn.preprocessing import StandardScaler
+from statsmodels.stats.multitest import multipletests
 
 LOG = logging.getLogger("Crispy")
+dpath = pkg_resources.resource_filename("crispy", "data/")
 
 clib_palette = {
     "Yusa_v1.1": "#3182bd",
@@ -180,7 +186,9 @@ def random_guides_aroc(sgrna_fc, sgrna_metric, n_guides=1, n_iterations=10):
     scores = []
 
     for i in range(n_iterations):
-        sgrnas = sgrna_metric.groupby(sgrna_metric).apply(lambda x: x.sample(n=n_guides))
+        sgrnas = sgrna_metric.groupby(sgrna_metric).apply(
+            lambda x: x.sample(n=n_guides)
+        )
         sgrnas = sgrnas.rename("x").reset_index().drop("x", axis=1).set_index("sgRNA")
 
         res = guides_aroc(sgrna_fc, sgrnas).assign(n_guides=n_guides)
@@ -245,14 +253,16 @@ def guides_aroc_benchmark(
         rand_aroc = []
         for n in range(1, (nguides_thres + 1)):
             rand_aroc.append(
-                random_guides_aroc(sgrna_fc, guides, n_guides=n, n_iterations=rand_iterations).assign(n_guides=n)
+                random_guides_aroc(
+                    sgrna_fc, guides, n_guides=n, n_iterations=rand_iterations
+                ).assign(n_guides=n)
             )
         rand_aroc = pd.concat(rand_aroc)
         rand_aroc = (
             rand_aroc.groupby(["index", "n_guides"])
-                .mean()
-                .assign(dtype="random")
-                .reset_index()
+            .mean()
+            .assign(dtype="random")
+            .reset_index()
         )
 
         aroc_scores.append(rand_aroc)
@@ -261,3 +271,78 @@ def guides_aroc_benchmark(
     aroc_scores = pd.concat(aroc_scores, sort=False)
 
     return aroc_scores
+
+
+def project_score_sample_map(lib_version="V1.1"):
+    ky_v11_manifest = pd.read_csv(
+        f"{dpath}/crispr_manifests/project_score_manifest.csv.gz"
+    )
+
+    s_map = []
+    for i in ky_v11_manifest.index:
+        s_map.append(
+            pd.DataFrame(
+                dict(
+                    model_id=ky_v11_manifest.iloc[i]["model_id"],
+                    s_ids=ky_v11_manifest.iloc[i]["library"].split(", "),
+                    s_lib=ky_v11_manifest.iloc[i]["experiment_identifier"].split(", "),
+                )
+            )
+        )
+    s_map = pd.concat(s_map).set_index("s_lib")
+    s_map = s_map.query(f"s_ids == '{lib_version}'")
+
+    return s_map
+
+
+def ky_v11_calculate_gene_fc(sgrna_fc, guides):
+    s_map = project_score_sample_map()
+
+    # Subset sgRNA matrix
+    fc_all = sgrna_fc.loc[guides.index, sgrna_fc.columns.isin(s_map.index)]
+
+    # Average guides across genes
+    fc_all = fc_all.groupby(guides.loc[fc_all.index, "Gene"]).mean()
+
+    # Average genes across samples
+    fc_all = fc_all.groupby(s_map.loc[fc_all.columns]["model_id"], axis=1).mean()
+
+    return fc_all
+
+
+def lm_limix(y, x):
+    # Build matrices
+    Y = y.dropna()
+
+    Y = pd.DataFrame(
+        StandardScaler().fit_transform(Y), index=Y.index, columns=Y.columns
+    )
+
+    X = x.loc[Y.index]
+
+    m = Sample().get_covariates().loc[Y.index]
+    m["intercept"] = 1
+
+    # Linear Mixed Model
+    lmm = st_scan(X, Y, M=m, lik="normal", verbose=False)
+
+    res = pd.DataFrame(
+        dict(
+            beta=lmm.variant_effsizes.values,
+            pval=lmm.variant_pvalues.values,
+            gene=X.columns,
+        )
+    )
+
+    res = res.assign(phenotype=y.columns[0])
+    res = res.assign(samples=Y.shape[0])
+
+    return res
+
+
+def lm_associations(Y, X):
+    assocs = pd.concat([lm_limix(Y[[g]], X) for g in Y], sort=False).reset_index(
+        drop=True
+    )
+    assocs = assocs.assign(fdr=multipletests(assocs["pval"], method="fdr_bh")[1])
+    return assocs
