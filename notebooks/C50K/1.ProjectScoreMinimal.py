@@ -90,8 +90,10 @@ ky_v11_ks["doenchroot"] = doenchroot.reindex(ky_v11_ks.index)["score_with_ppi"].
 ky_v11_ks["forecast"] = forecast.reindex(ky_v11_ks.index)["In Frame Percentage"].values
 ky_v11_ks["Gene"] = ky_v11_data.lib.reindex(ky_v11_ks.index)["Gene"].values
 
+ky_v11_ks.to_excel(f"{rpath}/KosukeYusa_v1.1_sgRNA_metrics.xlsx", index=False)
 
-# Benchmark
+
+# Metrics benchmark: Essential/non-essential AROC
 
 nguides_thres = 5
 
@@ -126,7 +128,21 @@ ky_v11_arocs = guides_aroc_benchmark(
 ky_v11_arocs.to_excel(f"{rpath}/KosukeYusa_v1.1_benchmark_aroc.xlsx", index=False)
 
 
-# Biomarker
+# Metrics sgRNA-level fold-change
+metrics_sgrna_fc = {
+    m: ky_v11_fc.loc[ky_v11_metrics.sort_values(m).groupby("Gene").head(n=2).index]
+    for m in ky_v11_metrics
+    if m != "Gene"
+}
+metrics_sgrna_fc["all"] = ky_v11_fc.loc[ky_v11_metrics.index]
+
+for m in metrics_sgrna_fc:
+    metrics_sgrna_fc[m].to_csv(
+        f"{rpath}/KosukeYusa_v1.1_sgrna_fc_{m}.csv.gz", compression="gzip"
+    )
+
+
+# Metrics gene-level fold-change
 
 metrics_fc = {
     m: ky_v11_calculate_gene_fc(
@@ -136,6 +152,51 @@ metrics_fc = {
     if m != "Gene"
 }
 metrics_fc["all"] = ky_v11_calculate_gene_fc(ky_v11_fc, ky_v11_metrics)
+
+for m in metrics_fc:
+    metrics_fc[m].to_csv(
+        f"{rpath}/KosukeYusa_v1.1_gene_fc_{m}.csv.gz", compression="gzip"
+    )
+
+
+# Metrics benchmark: Replicates correlation
+
+
+def replicates_correlation(fc_sgrna, guides=None):
+    if guides is not None:
+        df = fc_sgrna.reindex(guides)
+    else:
+        df = fc_sgrna.copy()
+
+    df.columns = [c.split("_")[0] for c in df]
+
+    df_corr = df.corr()
+    df_corr = df_corr.where(np.triu(np.ones(df_corr.shape), 1).astype(np.bool))
+    df_corr = df_corr.unstack().dropna().reset_index()
+    df_corr.columns = ["sample_1", "sample_2", "corr"]
+
+    df_corr["replicate"] = (
+        (df_corr["sample_1"] == df_corr["sample_2"])
+        .replace({True: "Yes", False: "No"})
+        .values
+    )
+
+    return df_corr
+
+
+guides_opt = {
+    m: list(ky_v11_metrics.sort_values(m).groupby("Gene").head(n=2).index)
+    for m in ky_v11_metrics
+    if m != "Gene"
+}
+guides_opt["all"] = list(ky_v11_metrics.dropna(subset=["ks"]).index)
+
+guides_opt_corr = {
+    m: replicates_correlation(ky_v11_fc, guides=guides_opt[m]) for m in guides_opt
+}
+
+
+# Metrics benchmark biomarker discovery
 
 samples = list(set(metrics_fc["all"]).intersection(mobem.get_data()))
 genes = list(pd.read_excel(f"{dpath}/ssd_genes.xls")["CancerGenes"])
@@ -151,6 +212,20 @@ lm_assocs = pd.concat(
     sort=False,
 )
 
+ky_v11_arocs.to_excel(f"{rpath}/KosukeYusa_v1.1_benchmark_biomarker.xlsx", index=False)
+
+
+# Gene sets fold-change distributions
+
+genesets = {
+    "essential": Utils.get_essential_genes(return_series=False),
+    "nonessential": Utils.get_non_essential_genes(return_series=False),
+}
+
+genesets = {
+    m: {g: metrics_fc[m].reindex(genesets[g]).median(1).dropna() for g in genesets}
+    for m in metrics_fc
+}
 
 
 # - Plot
@@ -354,41 +429,6 @@ plt.close("all")
 
 # Replicates correlation
 
-
-def replicates_correlation(fc_sgrna, guides=None):
-    if guides is not None:
-        df = fc_sgrna.reindex(guides)
-    else:
-        df = fc_sgrna.copy()
-
-    df.columns = [c.split("_")[0] for c in df]
-
-    df_corr = df.corr()
-    df_corr = df_corr.where(np.triu(np.ones(df_corr.shape), 1).astype(np.bool))
-    df_corr = df_corr.unstack().dropna().reset_index()
-    df_corr.columns = ["sample_1", "sample_2", "corr"]
-
-    df_corr["replicate"] = (
-        (df_corr["sample_1"] == df_corr["sample_2"])
-        .replace({True: "Yes", False: "No"})
-        .values
-    )
-
-    return df_corr
-
-
-guides_opt = {
-    m: list(ky_v11_metrics.sort_values(m).groupby("Gene").head(n=2).index)
-    for m in ky_v11_metrics
-    if m != "Gene"
-}
-guides_opt["all"] = list(ky_v11_metrics.dropna(subset=["ks"]).index)
-
-guides_opt_corr = {
-    m: replicates_correlation(ky_v11_fc, guides=guides_opt[m]) for m in guides_opt
-}
-
-#
 palette = dict(Yes="#d62728", No="#E1E1E1")
 
 f, axs = plt.subplots(
@@ -428,7 +468,7 @@ plt.savefig(f"{rpath}/ky_v11_rep_corrs.png", bbox_inches="tight")
 plt.close("all")
 
 
-#
+# ANOVA scatter plots
 
 metrics = list(metrics_fc)[:-1]
 
@@ -520,7 +560,7 @@ plt.savefig(f"{rpath}/ky_v11_anova.png", bbox_inches="tight")
 plt.close("all")
 
 
-#
+# ANOVA top missed/found biormarker associations
 
 plot_df = pd.concat(
     [
@@ -642,17 +682,6 @@ for (assoc_name, assoc_file, assoc_top) in plot_df:
 
 # Gene sets distributions
 
-genesets = {
-    "essential": Utils.get_essential_genes(return_series=False),
-    "nonessential": Utils.get_non_essential_genes(return_series=False),
-}
-
-genesets = {
-    m: {g: metrics_fc[m].reindex(genesets[g]).median(1).dropna() for g in genesets}
-    for m in metrics_fc
-}
-
-
 f, axs = plt.subplots(
     1,
     len(metrics_fc),
@@ -680,9 +709,14 @@ for i, m in enumerate(genesets):
         ax.set_title(f"{m}")
         ax.set_xlabel("sgRNAs fold-change")
         ax.text(
-            0.05, 0.9, "Mann-Whitney p-val={p: .2g}", fontsize=4, transform=ax.transAxes, ha="left"
+            0.05,
+            0.75,
+            f"Mann-Whitney p-val={p:.2g}",
+            fontsize=4,
+            transform=ax.transAxes,
+            ha="left",
         )
-        ax.legend(frameon=False, prop={"size": 4}, loc=1)
+        ax.legend(frameon=False, prop={"size": 4}, loc=2)
 
 plt.subplots_adjust(hspace=0.05, wspace=0.05)
 plt.savefig(f"{rpath}/ky_v11_metrics_gene_distributions.png", bbox_inches="tight")
