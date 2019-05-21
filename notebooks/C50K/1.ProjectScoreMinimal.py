@@ -25,13 +25,15 @@ import pkg_resources
 import seaborn as sns
 import matplotlib.pyplot as plt
 from math import sqrt
+from crispy.QCPlot import QCplot
 from crispy.Utils import Utils
 from scipy.interpolate import interpn
 from sklearn.metrics import mean_squared_error
+from crispy.CopyNumberCorrection import Crispy
 from scipy.stats import spearmanr, mannwhitneyu
 from crispy.CrispyPlot import CrispyPlot
 from crispy.CRISPRData import CRISPRDataSet
-from crispy.DataImporter import Mobem
+from crispy.DataImporter import Mobem, CopyNumber, CopyNumberSegmentation
 from C50K import (
     clib_palette,
     clib_order,
@@ -41,6 +43,9 @@ from C50K import (
     guides_aroc_benchmark,
     ky_v11_calculate_gene_fc,
     lm_associations,
+    project_score_sample_map,
+    assemble_crisprcleanr,
+    assemble_crispy,
 )
 
 
@@ -52,6 +57,7 @@ rpath = pkg_resources.resource_filename("notebooks", "C50K/reports/")
 # MOBEM
 
 mobem = Mobem()
+cn = CopyNumber()
 
 
 # CRISPR libraries size
@@ -126,6 +132,16 @@ ky_v11_arocs = guides_aroc_benchmark(
 )
 
 ky_v11_arocs.to_excel(f"{rpath}/KosukeYusa_v1.1_benchmark_aroc.xlsx", index=False)
+
+
+# Project score sample map
+
+smap = project_score_sample_map()
+smap = smap[smap.index.isin(ky_v11_fc.columns)]
+smap.to_csv(
+    f"{dpath}/crispr_manifests/project_score_sample_map_KosukeYusa_v1.1.csv.gz",
+    compression="gzip",
+)
 
 
 # Metrics sgRNA-level fold-change
@@ -226,6 +242,93 @@ genesets = {
     m: {g: metrics_fc[m].reindex(genesets[g]).median(1).dropna() for g in genesets}
     for m in metrics_fc
 }
+
+
+# CRISPRcleanR corrected fold-changes (sgRNA and gene level)
+
+dfolder = f"{rpath}/KosukeYusa_v1.1_crisprcleanr/"
+ky_v11_sgrna_cc = {m: assemble_crisprcleanr(dfolder, m) for m in ["all", "ks"]}
+
+ky_v11_genes_cc = {
+    m: ky_v11_sgrna_cc[m]
+    .groupby(ky_v11_data.lib.loc[ky_v11_sgrna_cc[m].index, "Gene"])
+    .mean()
+    for m in ky_v11_sgrna_cc
+}
+
+
+# Crispy fold-change correction
+
+cn_seg = CopyNumberSegmentation()
+copy_number = cn_seg.get_data()
+library = ky_v11_data.lib.reset_index().rename(
+    columns={"sgRNA_ID": "sgrna", "Gene": "gene"}
+)
+
+samples = list(set(smap["model_id"]).intersection(set(copy_number["model_id"])))
+
+for m in ["ks", "all"]:
+    for s in samples:
+        print(f"{m} - {s}")
+        sgrna_fc = metrics_sgrna_fc[m][smap.query(f"model_id == '{s}'").index].mean(1)
+
+        m_cy = Crispy(
+            sgrna_fc=sgrna_fc,
+            library=library,
+            copy_number=copy_number.query(f"model_id == '{s}'"),
+        )
+        m_cy = m_cy.correct()
+        m_cy.to_csv(f"{rpath}/KosukeYusa_v1.1_crispy/{s}_{m}_corrected_fc.csv.gz", index=False, compression="gzip")
+
+dfolder = f"{rpath}/KosukeYusa_v1.1_crispy/"
+ky_v11_sgrna_crispy = {m: assemble_crispy(dfolder, m) for m in ["all", "ks"]}
+
+ky_v11_genes_crispy = {
+    m: ky_v11_sgrna_crispy[m]
+    .groupby(ky_v11_data.lib.loc[ky_v11_sgrna_crispy[m].index, "Gene"])
+    .mean()
+    for m in ky_v11_sgrna_crispy
+}
+
+
+# Copy-number benchmark
+
+samples = list(set(cn.get_data()).intersection(ky_v11_genes_cc["all"]).intersection(ky_v11_sgrna_crispy["all"]))
+
+fc_datasets = [
+    ("original", metrics_fc),
+    ("ccleanr", ky_v11_genes_cc),
+    ("crispy", ky_v11_genes_crispy),
+]
+
+ky_v11_cn_auc = []
+for dtype, dtype_df in fc_datasets:
+    for m in ["ks", "all"]:
+        m_cn_df = pd.concat(
+            [
+                cn.get_data()[samples].unstack().rename("cn"),
+                dtype_df[m][samples].unstack().rename("fc"),
+            ],
+            axis=1,
+            sort=False,
+        ).dropna()
+        m_cn_df = m_cn_df.reset_index().rename(
+            columns={"level_0": "sample", "level_1": "gene"}
+        )
+
+        m_cn_aucs_df = pd.concat(
+            [
+                QCplot.recall_curve_discretise(df["fc"], df["cn"], 10)
+                .assign(sample=s)
+                .assign(dtype=dtype)
+                .assign(metric=m)
+                for s, df in m_cn_df.groupby("sample")
+            ]
+        )
+
+        ky_v11_cn_auc.append(m_cn_aucs_df)
+ky_v11_cn_auc = pd.concat(ky_v11_cn_auc).reset_index(drop=True)
+ky_v11_cn_auc.to_excel(f"{rpath}/KosukeYusa_v1.1_benchmark_cn.xlsx", index=False)
 
 
 # - Plot
@@ -720,4 +823,32 @@ for i, m in enumerate(genesets):
 
 plt.subplots_adjust(hspace=0.05, wspace=0.05)
 plt.savefig(f"{rpath}/ky_v11_metrics_gene_distributions.png", bbox_inches="tight")
+plt.close("all")
+
+
+# Copy-number benchmark
+
+f, axs = plt.subplots(2, 3, sharex="all", sharey="all", figsize=(7, 4.5), dpi=600)
+
+for i, d in enumerate(["all", "ks"]):
+    for j, m in enumerate(["original", "ccleanr", "crispy"]):
+        d_m_df = ky_v11_cn_auc.query(f"(metric == '{d}') & (dtype == '{m}')")
+
+        ax = axs[i, j]
+
+        QCplot.bias_boxplot(
+            d_m_df, x="cn", notch=True, add_n=True, n_text_y=0.05, ax=ax
+        )
+
+        ax.set_ylim(0, 1)
+        ax.axhline(0.5, lw=0.3, c=QCplot.PAL_DBGD[0], ls=":", zorder=0)
+
+        ax.set_xlabel("Copy-number" if i == 1 else None)
+        ax.set_ylabel(f"AURC" if j == 0 else None)
+        ax.set_title(f"{m} - {d}")
+
+plt.subplots_adjust(hspace=0.25, wspace=0.05)
+plt.savefig(
+    f"{rpath}/ky_v11_ccleanr_metrics_aucs_boxplots.png", bbox_inches="tight", dpi=600
+)
 plt.close("all")

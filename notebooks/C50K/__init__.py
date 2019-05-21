@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # Copyright (C) 2019 Emanuel Goncalves
 
+import os
 import logging
 import numpy as np
 import pandas as pd
@@ -308,6 +309,42 @@ def ky_v11_calculate_gene_fc(sgrna_fc, guides):
     fc_all = fc_all.groupby(s_map.loc[fc_all.columns]["model_id"], axis=1).mean()
 
     return fc_all
+
+
+def assemble_crisprcleanr(dfolder, metric, dtype="fc"):
+    files = [f for f in os.listdir(dfolder) if f.endswith(".csv")]
+    files = [f for f in files if f.split("_")[1] == metric]
+
+    if dtype == "fc":
+        files = [f for f in files if f.split("_")[2] == "corrected"]
+        res = pd.concat(
+            [
+                pd.read_csv(f"{dfolder}/{f}")["correctedFC"].rename(f.split("_")[0])
+                for f in files
+            ],
+            axis=1,
+            sort=False,
+        )
+
+    return res
+
+
+def assemble_crispy(dfolder, metric, dtype="fc"):
+    files = [f for f in os.listdir(dfolder) if f.endswith(".csv.gz")]
+    files = [f for f in files if f.split("_")[1] == metric]
+
+    if dtype == "fc":
+        files = [f for f in files if f.split("_")[2] == "corrected"]
+        res = pd.concat(
+            [
+                pd.read_csv(f"{dfolder}/{f}", index_col="sgrna")["corrected"].rename(f.split("_")[0])
+                for f in files
+            ],
+            axis=1,
+            sort=False,
+        )
+
+    return res
 
 
 def lm_limix(y, x):

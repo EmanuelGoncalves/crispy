@@ -35,7 +35,7 @@ BED_COLUMNS = [
 
 # TODO: add check for minimum number of reads 15M
 class Crispy:
-    def __init__(self, raw_counts, library=None, copy_number=None, plasmid=None):
+    def __init__(self, raw_counts=None, sgrna_fc=None, library=None, copy_number=None, plasmid=None):
         f"""
         Initialise a Crispy processing pipeline object
 
@@ -57,9 +57,14 @@ class Crispy:
 
         self.copy_number = copy_number
 
+        self.sgrna_fc = sgrna_fc
+
         self.library = cy.Utils.get_crispr_lib() if library is None else library
 
-        if plasmid is None:
+        if plasmid is None and raw_counts is None:
+            self.plasmid = None
+
+        elif plasmid is None:
             self.plasmid = [self.raw_counts.columns[-1]]
 
         elif type(plasmid) == str:
@@ -110,7 +115,7 @@ class Crispy:
             x_features = x_features
 
         # - Estimate fold-changes from raw counts
-        fc = self.fold_changes(qc_replicates_thres=qc_replicates_thres)
+        fc = self.sgrna_fc if self.sgrna_fc is not None else self.fold_changes(qc_replicates_thres=qc_replicates_thres)
 
         if fc is None:
             return fc
