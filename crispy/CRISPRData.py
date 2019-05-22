@@ -32,6 +32,17 @@ DATASETS = {
         library="Yusa_v1.1.csv.gz",
         plasmids=["CRISPR_C6596666.sample"],
     ),
+    "Avana": dict(
+        name="Avana DepMap19Q2",
+        read_counts="Avana_DepMap19Q2_readcount.csv.gz",
+        library="Avana_v1.csv.gz",
+        plasmids=pd.read_csv(
+            f"{MANIFESTS_DIR}/Avana_DepMap19Q2_sample_map.csv.gz", index_col="sample"
+        )["controls"]
+        .apply(lambda v: v.split(";"))
+        .to_dict(),
+        exclude_guides=set(pd.read_csv(f"{MANIFESTS_DIR}/Avana_DepMap19Q2_dropped_guides.csv.gz")["guide"])
+    ),
     "Sabatini_Lander_AML": dict(
         name="Sabatini Lander AML",
         read_counts="Sabatini_Lander_v2_AML_readcounts.csv.gz",
@@ -193,7 +204,7 @@ class ReadCounts(DataFrame):
 
 
 class CRISPRDataSet:
-    def __init__(self, dataset, ddir=None, exclude_samples=None):
+    def __init__(self, dataset, ddir=None, exclude_samples=None, exclude_guides=None):
         # Load data-set dict
         if type(dataset) is dict:
             self.dataset_dict = dataset
@@ -216,8 +227,18 @@ class CRISPRDataSet:
             f"{self.ddir}/{self.dataset_dict['read_counts']}", index_col=0
         )
 
+        # Drop excluded samples
         if exclude_samples is not None:
             data = data.drop(exclude_samples, axis=1, errors="ignore")
+
+        # Drop excluded guides
+        if exclude_guides is not None:
+            data = data.drop(exclude_guides, axis=0, errors="ignore")
+            self.lib = self.lib.drop(exclude_guides, axis=0, errors="ignore")
+
+        elif "exclude_guides" in self.dataset_dict:
+            data = data.drop(self.dataset_dict["exclude_guides"], axis=0, errors="ignore")
+            self.lib = self.lib.drop(self.dataset_dict["exclude_guides"], axis=0, errors="ignore")
 
         self.counts = ReadCounts(data=data)
 

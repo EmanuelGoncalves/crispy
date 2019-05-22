@@ -53,7 +53,7 @@ clib_order = [
 ]
 
 
-def define_sgrnas_sets(clib, fc=None, add_controls=True):
+def define_sgrnas_sets(clib, fc=None, add_controls=True, dataset_name="Yusa_v1"):
     sgrna_sets = dict()
 
     # sgRNA essential
@@ -84,7 +84,11 @@ def define_sgrnas_sets(clib, fc=None, add_controls=True):
 
     # sgRNA non-targeting
     if add_controls:
-        sgrnas_control = {i for i in clib.index if i.startswith("CTRL0")}
+        if dataset_name in ["Yusa_v1", "Yusa_v1.1", "Sabatini_Lander_AML"]:
+            sgrnas_control = {i for i in clib.index if i.startswith("CTRL0")}
+        else:
+            sgrnas_control = set(clib[[i.startswith("NO_CURRENT_") for i in clib["Gene"]]].index)
+
         sgrnas_control_fc = fc.reindex(sgrnas_control).median(1).dropna()
 
         sgrna_sets["nontargeting"] = dict(
