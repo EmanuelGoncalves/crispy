@@ -46,7 +46,9 @@ ky_v11_fc = (
     .norm_rpm()
     .foldchange(ky_v11_data.plasmids)
 )
-ky_v11_sgrna_set = define_sgrnas_sets(ky_v11_data.lib, ky_v11_fc, add_controls=True, dataset_name="Yusa_v1.1")
+ky_v11_sgrna_set = define_sgrnas_sets(
+    ky_v11_data.lib, ky_v11_fc, add_controls=True, dataset_name="Yusa_v1.1"
+)
 
 
 # Broad DepMap19Q2 - Avana
@@ -57,7 +59,9 @@ avana_fc = (
     .norm_rpm()
     .foldchange(avana_data.plasmids)
 )
-avana_sgrna_set = define_sgrnas_sets(avana_data.lib, avana_fc, add_controls=True, dataset_name="Avana")
+avana_sgrna_set = define_sgrnas_sets(
+    avana_data.lib, avana_fc, add_controls=True, dataset_name="Avana"
+)
 
 
 # sgRNAs JACKS efficiency scores
@@ -73,16 +77,26 @@ ky_v11_ks["Gene"] = ky_v11_data.lib.reindex(ky_v11_ks.index)["Gene"].values
 ky_v11_ks["jacks"] = ky_v11_jacks.reindex(ky_v11_ks.index)["X1"].values
 
 avana_ks = estimate_ks(avana_fc, avana_sgrna_set["nontargeting"]["fc"])
-avana_ks["Gene"] = avana_data.lib.drop_duplicates(subset=["sgRNA"], keep=False).reindex(avana_ks.index)["Gene"].values
+avana_ks["Gene"] = (
+    avana_data.lib.drop_duplicates(subset=["sgRNA"], keep=False)
+    .reindex(avana_ks.index)["Gene"]
+    .values
+)
 avana_ks["jacks"] = avana_jacks.reindex(avana_ks.index)["X1"].values
 
 
 # Libraries aggregated ks scores
 
-ks_genes = pd.concat([
-    ky_v11_ks.groupby("Gene")["ks_control"].mean().rename("ky_v11"),
-    avana_ks.groupby("Gene")["ks_control"].mean().rename("avana"),
-], axis=1, sort=False)
+ks_genes = pd.concat(
+    [
+        ky_v11_ks.groupby("Gene")["ks_control"].mean().rename("ky_v11"),
+        avana_ks.groupby("Gene")["ks_control"].mean().rename("avana"),
+    ],
+    axis=1,
+    sort=False,
+)
+
+ks_genes.to_excel(f"{rpath}/Libraries_KS_scores.xlsx", index=False)
 
 
 # - Plot
@@ -111,9 +125,7 @@ plot_df = ks_genes.dropna()
 
 grid = sns.JointGrid("ky_v11", "avana", data=plot_df, space=0)
 
-data, x_e, y_e = np.histogram2d(
-    plot_df["ky_v11"], plot_df["avana"], bins=20
-)
+data, x_e, y_e = np.histogram2d(plot_df["ky_v11"], plot_df["avana"], bins=20)
 z_var = interpn(
     (0.5 * (x_e[1:] + x_e[:-1]), 0.5 * (y_e[1:] + y_e[:-1])),
     data,
@@ -138,12 +150,7 @@ cor, _ = spearmanr(plot_df["ky_v11"], plot_df["avana"])
 annot_text = f"Spearman's R={cor:.2g}; RMSE={rmse:.2f}"
 
 grid.ax_joint.text(
-    0.95,
-    0.05,
-    annot_text,
-    fontsize=4,
-    transform=grid.ax_joint.transAxes,
-    ha="right",
+    0.95, 0.05, annot_text, fontsize=4, transform=grid.ax_joint.transAxes, ha="right"
 )
 
 grid.plot_marginals(
@@ -158,7 +165,5 @@ grid.ax_joint.set_xlabel("Kosuke v1.1\nGene mean KS non-targeting")
 grid.ax_joint.set_ylabel("Avana\nGene mean KS non-targeting")
 
 plt.gcf().set_size_inches(2.5, 2.5)
-plt.savefig(
-    f"{rpath}/ks_scatter_kyv11_avana.png", bbox_inches="tight", dpi=600
-)
+plt.savefig(f"{rpath}/ks_scatter_kyv11_avana.png", bbox_inches="tight", dpi=600)
 plt.close("all")

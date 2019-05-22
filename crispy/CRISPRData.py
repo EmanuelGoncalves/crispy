@@ -32,6 +32,17 @@ DATASETS = {
         library="Yusa_v1.1.csv.gz",
         plasmids=["CRISPR_C6596666.sample"],
     ),
+    "GeCKOv2": dict(
+        name="GeCKO v2",
+        read_counts="GeCKO2_Achilles_v3.3.8_readcounts.csv.gz",
+        library="GeCKO_v2.csv.gz",
+        plasmids=["pDNA_pXPR003_120K_20140624"],
+        exclude_guides=set(
+            pd.read_csv(
+                f"{MANIFESTS_DIR}/GeCKO2_Achilles_v3.3.8_dropped_guides.csv.gz"
+            )["sgRNA"]
+        ),
+    ),
     "Avana": dict(
         name="Avana DepMap19Q2",
         read_counts="Avana_DepMap19Q2_readcount.csv.gz",
@@ -41,7 +52,11 @@ DATASETS = {
         )["controls"]
         .apply(lambda v: v.split(";"))
         .to_dict(),
-        exclude_guides=set(pd.read_csv(f"{MANIFESTS_DIR}/Avana_DepMap19Q2_dropped_guides.csv.gz")["guide"])
+        exclude_guides=set(
+            pd.read_csv(f"{MANIFESTS_DIR}/Avana_DepMap19Q2_dropped_guides.csv.gz")[
+                "guide"
+            ]
+        ),
     ),
     "Sabatini_Lander_AML": dict(
         name="Sabatini Lander AML",
@@ -237,8 +252,12 @@ class CRISPRDataSet:
             self.lib = self.lib.drop(exclude_guides, axis=0, errors="ignore")
 
         elif "exclude_guides" in self.dataset_dict:
-            data = data.drop(self.dataset_dict["exclude_guides"], axis=0, errors="ignore")
-            self.lib = self.lib.drop(self.dataset_dict["exclude_guides"], axis=0, errors="ignore")
+            data = data.drop(
+                self.dataset_dict["exclude_guides"], axis=0, errors="ignore"
+            )
+            self.lib = self.lib.drop(
+                self.dataset_dict["exclude_guides"], axis=0, errors="ignore"
+            )
 
         self.counts = ReadCounts(data=data)
 

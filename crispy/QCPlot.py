@@ -19,7 +19,7 @@ from sklearn.metrics import roc_auc_score
 
 class QCplot(CrispyPlot):
     @staticmethod
-    def recall_curve(rank, index_set, min_events=None):
+    def recall_curve(rank, index_set=None, min_events=None):
         """
         Calculate x and y of recall curve.
 
@@ -36,6 +36,9 @@ class QCplot(CrispyPlot):
         x = rank.sort_values().dropna()
 
         # Observed cumsum
+        if index_set is None:
+            index_set = Utils.get_essential_genes(return_series=False)
+
         y = x.index.isin(index_set)
 
         if (min_events is not None) and (sum(y) < min_events):

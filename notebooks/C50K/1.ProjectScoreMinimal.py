@@ -96,7 +96,7 @@ ky_v11_ks["doenchroot"] = doenchroot.reindex(ky_v11_ks.index)["score_with_ppi"].
 ky_v11_ks["forecast"] = forecast.reindex(ky_v11_ks.index)["In Frame Percentage"].values
 ky_v11_ks["Gene"] = ky_v11_data.lib.reindex(ky_v11_ks.index)["Gene"].values
 
-ky_v11_ks.to_excel(f"{rpath}/KosukeYusa_v1.1_sgRNA_metrics.xlsx", index=False)
+ky_v11_ks.to_excel(f"{rpath}/KosukeYusa_v1.1_sgRNA_metrics.xlsx")
 
 
 # Metrics benchmark: Essential/non-essential AROC
