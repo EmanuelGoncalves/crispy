@@ -72,11 +72,9 @@ gecko_A375 = (
     .foldchange(gecko_data.plasmids)
 )
 gecko_A375 = gecko_A375[[c for c in gecko_A375 if c.startswith("A375")]]
-gecko_library = gecko_data.lib[gecko_data.lib.index.isin(gecko_A375.index)]
-gecko_library = gecko_library[
-    [not v.startswith("NonTargeting") for v in gecko_library["Gene"]]
-]
-gecko_library = gecko_library[[not v.startswith("hsa-") for v in gecko_library["Gene"]]]
+gecko_library = gecko_data.lib[gecko_data.lib.index.isin(gecko_A375.index)]["Gene"]
+gecko_library = gecko_library[[not v.startswith("NonTargeting") for v in gecko_library]]
+gecko_library = gecko_library[[not v.startswith("hsa-") for v in gecko_library]]
 
 
 #
@@ -108,6 +106,12 @@ datasets = [
         library=brunello_library,
     ),
 ]
+
+
+#
+
+ky_v11_ks = pd.read_excel(f"{rpath}/KosukeYusa_v1.1_sgRNA_metrics.xlsx", index_col=0)
+ky_v11_ks_lib = ky_v11_ks.sort_values("ks_control", ascending=False).groupby("Gene").head(n=2)
 
 
 #
@@ -160,7 +164,7 @@ for dset in datasets:
                         n_samples=len(ss),
                         nguides=nguides,
                         aroc=QCplot.pr_curve(ss_fc),
-                        aupr=QCplot.recall_curve(ss_fc),
+                        aupr=QCplot.recall_curve(ss_fc)[2],
                     )
                 )
 
@@ -193,7 +197,7 @@ for j, metric in enumerate(["aroc", "aupr"]):
 
         sns.boxplot(
             "nguides",
-            "aroc",
+            "aroc" if j == 0 else "aupr",
             "n_samples",
             df,
             ax=ax,
@@ -205,6 +209,19 @@ for j, metric in enumerate(["aroc", "aupr"]):
             flierprops=CrispyPlot.FLIERPROPS,
             notch=True,
         )
+
+        if dset["name"] == "Yusa_v1":
+            ks_metric = dset["dataset"].reindex(ky_v11_ks_lib.index)
+            ks_metric = ks_metric.groupby(ky_v11_ks_lib["Gene"]).mean().mean(1).dropna()
+            ks_metric = QCplot.pr_curve(ks_metric) if j == 0 else QCplot.recall_curve(ks_metric)[2]
+
+            ax.axhline(
+                ks_metric,
+                ls="-",
+                lw=1,
+                c=clib_palette["minimal"],
+                zorder=0,
+            )
 
         ax.grid(True, ls=":", lw=0.1, alpha=1.0, zorder=0)
 
