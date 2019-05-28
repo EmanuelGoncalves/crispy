@@ -18,7 +18,9 @@ from sklearn.preprocessing import StandardScaler
 from statsmodels.stats.multitest import multipletests
 
 LOG = logging.getLogger("Crispy")
+
 dpath = pkg_resources.resource_filename("crispy", "data/")
+rpath = pkg_resources.resource_filename("notebooks", "C50K/reports/")
 
 clib_palette = {
     "Yusa_v1.1": "#3182bd",
@@ -87,7 +89,9 @@ def define_sgrnas_sets(clib, fc=None, add_controls=True, dataset_name="Yusa_v1")
         if dataset_name in ["Yusa_v1", "Yusa_v1.1", "Sabatini_Lander_AML"]:
             sgrnas_control = {i for i in clib.index if i.startswith("CTRL0")}
         else:
-            sgrnas_control = set(clib[[i.startswith("NO_CURRENT_") for i in clib["Gene"]]].index)
+            sgrnas_control = set(
+                clib[[i.startswith("NO_CURRENT_") for i in clib["Gene"]]].index
+            )
 
         sgrnas_control_fc = fc.reindex(sgrnas_control).median(1).dropna()
 
@@ -218,10 +222,12 @@ def guides_aroc(sgrna_fc, sgrna_metric):
 
 
 def guides_aroc_benchmark(
-    metrics, sgrna_fc, nguides_thres=5, rand_iterations=10, guide_set=None
+    metrics, sgrna_counts, nguides_thres=5, rand_iterations=10, guide_set=None
 ):
+    sgrna_counts_all = sgrna_counts.counts.remove_low_counts(sgrna_counts.plasmids)
+
     # Define set of guides
-    guides = metrics.reindex(sgrna_fc.index)["Gene"].dropna()
+    guides = metrics.reindex(sgrna_counts_all.index)["Gene"].dropna()
 
     if guide_set is not None:
         guides = guides.reindex(guide_set).dropna()
@@ -244,6 +250,13 @@ def guides_aroc_benchmark(
             metric_aroc = []
             for n in range(1, (nguides_thres + 1)):
                 guides_metric_topn = guides_metric.head(n=n)
+
+                # Calculate fold-changes on subset
+                sgrna_fc = (
+                    sgrna_counts_all.loc[guides_metric_topn.index]
+                    .norm_rpm()
+                    .foldchange(sgrna_counts.plasmids)
+                )
 
                 metric_aroc.append(
                     guides_aroc(sgrna_fc, guides_metric_topn).assign(n_guides=n)
@@ -341,7 +354,9 @@ def assemble_crispy(dfolder, metric, dtype="fc"):
         files = [f for f in files if f.split("_")[2] == "corrected"]
         res = pd.concat(
             [
-                pd.read_csv(f"{dfolder}/{f}", index_col="sgrna")["corrected"].rename(f.split("_")[0])
+                pd.read_csv(f"{dfolder}/{f}", index_col="sgrna")["corrected"].rename(
+                    f.split("_")[0]
+                )
                 for f in files
             ],
             axis=1,
