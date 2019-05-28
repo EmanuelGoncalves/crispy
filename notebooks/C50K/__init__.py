@@ -191,14 +191,21 @@ def sgrnas_scores_scatter(
     return ax
 
 
-def random_guides_aroc(sgrna_fc, sgrna_metric, n_guides=1, n_iterations=10):
-    scores = []
+def random_guides_aroc(sgrna_counts, sgrna_metric, n_guides=1, n_iterations=10):
+    sgrna_counts_all = sgrna_counts.counts.remove_low_counts(sgrna_counts.plasmids)
 
+    scores = []
     for i in range(n_iterations):
         sgrnas = sgrna_metric.groupby(sgrna_metric).apply(
             lambda x: x.sample(n=n_guides)
         )
         sgrnas = sgrnas.rename("x").reset_index().drop("x", axis=1).set_index("sgRNA")
+
+        sgrna_fc = (
+            sgrna_counts_all.loc[sgrnas.index]
+            .norm_rpm()
+            .foldchange(sgrna_counts.plasmids)
+        )
 
         res = guides_aroc(sgrna_fc, sgrnas).assign(n_guides=n_guides)
 
@@ -244,7 +251,7 @@ def guides_aroc_benchmark(
         if m != "Gene":
             LOG.info(f"Metric = {m}")
 
-            guides_metric = metrics[[m, "Gene"]].sort_values(m)
+            guides_metric = metrics.loc[guides.index, [m, "Gene"]].sort_values(m)
             guides_metric = guides_metric.groupby("Gene")
 
             metric_aroc = []
@@ -272,7 +279,7 @@ def guides_aroc_benchmark(
         for n in range(1, (nguides_thres + 1)):
             rand_aroc.append(
                 random_guides_aroc(
-                    sgrna_fc, guides, n_guides=n, n_iterations=rand_iterations
+                    sgrna_counts, guides, n_guides=n, n_iterations=rand_iterations
                 ).assign(n_guides=n)
             )
         rand_aroc = pd.concat(rand_aroc)

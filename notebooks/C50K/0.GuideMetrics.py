@@ -57,6 +57,7 @@ ky_v11_ks["jacks_min"] = abs(ky_v11_ks["jacks"] - 1)
 
 doenchroot = pd.read_csv(f"{dpath}/jacks/Yusa_v1.0_DoenchRoot.csv", index_col=0)
 ky_v11_ks["doenchroot"] = doenchroot.reindex(ky_v11_ks.index)["score_with_ppi"].values
+ky_v11_ks["doenchroot_min"] = 1 - ky_v11_ks["doenchroot"]
 
 
 # FORECAST In Frame Percentage

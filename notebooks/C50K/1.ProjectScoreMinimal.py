@@ -60,11 +60,6 @@ mobem = Mobem()
 cn = CopyNumber()
 
 
-# CRISPR libraries size
-
-clib_size = pd.read_excel(f"{rpath}/Human CRISPR-Cas9 dropout libraries.xlsx")
-
-
 # Project score sample map
 
 smap = project_score_sample_map()
@@ -73,93 +68,6 @@ smap.to_csv(
     f"{dpath}/crispr_manifests/project_score_sample_map_KosukeYusa_v1.1.csv.gz",
     compression="gzip",
 )
-
-
-# Metrics sgRNA-level fold-change
-metrics_sgrna_fc = {
-    m: ky_v11_fc.loc[ky_v11_metrics.sort_values(m).groupby("Gene").head(n=2).index]
-    for m in ky_v11_metrics
-    if m != "Gene"
-}
-metrics_sgrna_fc["all"] = ky_v11_fc.loc[ky_v11_metrics.index]
-
-for m in metrics_sgrna_fc:
-    metrics_sgrna_fc[m].to_csv(
-        f"{rpath}/KosukeYusa_v1.1_sgrna_fc_{m}.csv.gz", compression="gzip"
-    )
-
-
-# Metrics gene-level fold-change
-
-metrics_fc = {
-    m: ky_v11_calculate_gene_fc(
-        ky_v11_fc, ky_v11_metrics.sort_values(m).groupby("Gene").head(n=2)
-    )
-    for m in ky_v11_metrics
-    if m != "Gene"
-}
-metrics_fc["all"] = ky_v11_calculate_gene_fc(ky_v11_fc, ky_v11_metrics)
-
-for m in metrics_fc:
-    metrics_fc[m].to_csv(
-        f"{rpath}/KosukeYusa_v1.1_gene_fc_{m}.csv.gz", compression="gzip"
-    )
-
-
-# Metrics benchmark: Replicates correlation
-
-
-def replicates_correlation(fc_sgrna, guides=None):
-    if guides is not None:
-        df = fc_sgrna.reindex(guides)
-    else:
-        df = fc_sgrna.copy()
-
-    df.columns = [c.split("_")[0] for c in df]
-
-    df_corr = df.corr()
-    df_corr = df_corr.where(np.triu(np.ones(df_corr.shape), 1).astype(np.bool))
-    df_corr = df_corr.unstack().dropna().reset_index()
-    df_corr.columns = ["sample_1", "sample_2", "corr"]
-
-    df_corr["replicate"] = (
-        (df_corr["sample_1"] == df_corr["sample_2"])
-        .replace({True: "Yes", False: "No"})
-        .values
-    )
-
-    return df_corr
-
-
-guides_opt = {
-    m: list(ky_v11_metrics.sort_values(m).groupby("Gene").head(n=2).index)
-    for m in ky_v11_metrics
-    if m != "Gene"
-}
-guides_opt["all"] = list(ky_v11_metrics.dropna(subset=["ks"]).index)
-
-guides_opt_corr = {
-    m: replicates_correlation(ky_v11_fc, guides=guides_opt[m]) for m in guides_opt
-}
-
-
-# Metrics benchmark biomarker discovery
-
-samples = list(set(metrics_fc["all"]).intersection(mobem.get_data()))
-genes = list(pd.read_excel(f"{dpath}/ssd_genes.xls")["CancerGenes"])
-
-x_mobem = mobem.get_data()[samples].T
-x_mobem = x_mobem.loc[:, x_mobem.sum() > 3]
-
-lm_assocs = pd.concat(
-    [
-        lm_associations(metrics_fc[m].loc[genes, samples].T, x_mobem).assign(metric=m)
-        for m in metrics_fc
-    ],
-    sort=False,
-)
-
-ky_v11_arocs.to_excel(f"{rpath}/KosukeYusa_v1.1_benchmark_biomarker.xlsx", index=False)
 
 
 # Gene sets fold-change distributions
