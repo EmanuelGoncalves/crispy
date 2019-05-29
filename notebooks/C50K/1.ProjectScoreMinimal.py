@@ -60,16 +60,6 @@ mobem = Mobem()
 cn = CopyNumber()
 
 
-# Project score sample map
-
-smap = project_score_sample_map()
-smap = smap[smap.index.isin(ky_v11_fc.columns)]
-smap.to_csv(
-    f"{dpath}/crispr_manifests/project_score_sample_map_KosukeYusa_v1.1.csv.gz",
-    compression="gzip",
-)
-
-
 # Gene sets fold-change distributions
 
 genesets = {
@@ -81,54 +71,6 @@ genesets = {
     m: {g: metrics_fc[m].reindex(genesets[g]).median(1).dropna() for g in genesets}
     for m in metrics_fc
 }
-
-
-# CRISPRcleanR corrected fold-changes (sgRNA and gene level)
-
-dfolder = f"{rpath}/KosukeYusa_v1.1_crisprcleanr/"
-ky_v11_sgrna_cc = {m: assemble_crisprcleanr(dfolder, m) for m in ["all", "ks"]}
-
-ky_v11_genes_cc = {
-    m: ky_v11_sgrna_cc[m]
-    .groupby(ky_v11_data.lib.loc[ky_v11_sgrna_cc[m].index, "Gene"])
-    .mean()
-    for m in ky_v11_sgrna_cc
-}
-
-
-# Crispy fold-change correction
-
-cn_seg = CopyNumberSegmentation()
-copy_number = cn_seg.get_data()
-library = ky_v11_data.lib.reset_index().rename(
-    columns={"sgRNA_ID": "sgrna", "Gene": "gene"}
-)
-
-samples = list(set(smap["model_id"]).intersection(set(copy_number["model_id"])))
-
-for m in ["ks", "all"]:
-    for s in samples:
-        print(f"{m} - {s}")
-        sgrna_fc = metrics_sgrna_fc[m][smap.query(f"model_id == '{s}'").index].mean(1)
-
-        m_cy = Crispy(
-            sgrna_fc=sgrna_fc,
-            library=library,
-            copy_number=copy_number.query(f"model_id == '{s}'"),
-        )
-        m_cy = m_cy.correct()
-        m_cy.to_csv(f"{rpath}/KosukeYusa_v1.1_crispy/{s}_{m}_corrected_fc.csv.gz", index=False, compression="gzip")
-
-dfolder = f"{rpath}/KosukeYusa_v1.1_crispy/"
-ky_v11_sgrna_crispy = {m: assemble_crispy(dfolder, m) for m in ["all", "ks"]}
-
-ky_v11_genes_crispy = {
-    m: ky_v11_sgrna_crispy[m]
-    .groupby(ky_v11_data.lib.loc[ky_v11_sgrna_crispy[m].index, "Gene"])
-    .mean()
-    for m in ky_v11_sgrna_crispy
-}
-
 
 # Copy-number benchmark
 
@@ -688,6 +630,6 @@ for i, d in enumerate(["all", "ks"]):
 
 plt.subplots_adjust(hspace=0.25, wspace=0.05)
 plt.savefig(
-    f"{rpath}/ky_v11_ccleanr_metrics_aucs_boxplots.png", bbox_inches="tight", dpi=600
+    f"{rpath}/ky_v11_metrics_cn_aucs_boxplots.png", bbox_inches="tight", dpi=600
 )
 plt.close("all")

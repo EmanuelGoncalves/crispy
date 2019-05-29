@@ -18,9 +18,8 @@
 # %load_ext autoreload
 # %autoreload 2
 
-import numpy as np
 import pandas as pd
-from crispy.DataImporter import Mobem, CopyNumber
+from crispy.DataImporter import Mobem
 from crispy.CRISPRData import CRISPRDataSet, ReadCounts
 from C50K import rpath, dpath, LOG, ky_v11_calculate_gene_fc, lm_associations
 
@@ -55,12 +54,19 @@ metrics = [
 lm_assocs = []
 for n_guides in [2, 3]:
     for m in metrics:
-        m_counts = ReadCounts(
-            pd.read_csv(
-                f"{rpath}/KosukeYusa_v1.1_sgrna_counts_{m}_top{n_guides}.csv.gz",
-                index_col=0,
+        if m == "Gene":
+            m_counts = pd.read_excel(
+                f"{rpath}/KosukeYusa_v1.1_sgRNA_metrics.xlsx", index_col=0
+            )[metrics].dropna()
+            m_counts = ky_v11_data.counts.loc[m_counts.index]
+
+        else:
+            m_counts = ReadCounts(
+                pd.read_csv(
+                    f"{rpath}/KosukeYusa_v1.1_sgrna_counts_{m}_top{n_guides}.csv.gz",
+                    index_col=0,
+                )
             )
-        )
 
         m_fc = m_counts.norm_rpm().foldchange(ky_v11_data.plasmids)
 

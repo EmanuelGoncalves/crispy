@@ -335,40 +335,36 @@ def ky_v11_calculate_gene_fc(sgrna_fc, guides):
     return fc_all
 
 
-def assemble_crisprcleanr(dfolder, metric, dtype="fc"):
-    files = [f for f in os.listdir(dfolder) if f.endswith(".csv")]
-    files = [f for f in files if f.split("_")[1] == metric]
+def assemble_corrected_fc(
+    dfolder, metric, n_guides, method="crispy", dtype="corrected_fc", lib=None, fextension=".csv.gz"
+):
+    LOG.info(f"metric={metric}; n_guides={n_guides}")
 
-    if dtype == "fc":
-        files = [f for f in files if f.split("_")[2] == "corrected"]
-        res = pd.concat(
-            [
-                pd.read_csv(f"{dfolder}/{f}")["correctedFC"].rename(f.split("_")[0])
-                for f in files
-            ],
-            axis=1,
-            sort=False,
-        )
+    def read_fc(fpath):
+        if method == "crisprcleanr":
+            return pd.read_csv(fpath, index_col=0)["correctedFC"]
+        else:
+            return pd.read_csv(fpath, index_col="sgrna")["corrected"]
 
-    return res
+    files = [f for f in os.listdir(dfolder) if f.endswith(fextension)]
+    files = [f for f in files if f"_{metric}_" in f]
+    files = [f for f in files if f.endswith(f"{dtype}{fextension}")]
 
+    if metric != "all":
+        files = [f for f in files if f"_top{n_guides}_" in f]
 
-def assemble_crispy(dfolder, metric, dtype="fc"):
-    files = [f for f in os.listdir(dfolder) if f.endswith(".csv.gz")]
-    files = [f for f in files if f.split("_")[1] == metric]
+    if len(files) == 0:
+        LOG.warning(f"No file selected: metric={metric}, n_guides={n_guides}")
+        return None
 
-    if dtype == "fc":
-        files = [f for f in files if f.split("_")[2] == "corrected"]
-        res = pd.concat(
-            [
-                pd.read_csv(f"{dfolder}/{f}", index_col="sgrna")["corrected"].rename(
-                    f.split("_")[0]
-                )
-                for f in files
-            ],
-            axis=1,
-            sort=False,
-        )
+    res = pd.concat(
+        [read_fc(f"{dfolder}/{f}").rename(f.split("_")[0]) for f in files],
+        axis=1,
+        sort=False,
+    )
+
+    if lib is not None:
+        res = res.groupby(lib.loc[res.index, "Gene"]).mean()
 
     return res
 
