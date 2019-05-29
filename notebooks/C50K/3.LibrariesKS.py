@@ -100,26 +100,7 @@ ks_genes.to_excel(f"{rpath}/Libraries_KS_scores.xlsx", index=False)
 
 
 # - Plot
-# Guide sets distributions
 
-plt.figure(figsize=(2.5, 2), dpi=600)
-for c in avana_sgrna_set:
-    sns.distplot(
-        avana_sgrna_set[c]["fc"],
-        hist=False,
-        label=c,
-        kde_kws={"cut": 0, "shade": True},
-        color=avana_sgrna_set[c]["color"],
-    )
-plt.grid(True, ls=":", lw=0.1, alpha=1.0, zorder=0, axis="x")
-plt.xlabel("sgRNAs fold-change")
-plt.legend(frameon=False)
-plt.title("Project Score - Avana DepMap19Q2")
-plt.savefig(f"{rpath}/avana_guides_distributions.png", bbox_inches="tight")
-plt.close("all")
-
-
-#
 
 plot_df = ks_genes.dropna()
 

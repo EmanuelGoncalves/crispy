@@ -63,7 +63,7 @@ def define_sgrnas_sets(clib, fc=None, add_controls=True, dataset_name="Yusa_v1")
     sgrnas_essential = set(clib[clib["Gene"].isin(sgrnas_essential)].index)
     sgrnas_essential_fc = (
         None
-        if add_controls is None
+        if fc is None
         else fc.reindex(sgrnas_essential).median(1).dropna()
     )
 
@@ -76,7 +76,7 @@ def define_sgrnas_sets(clib, fc=None, add_controls=True, dataset_name="Yusa_v1")
     sgrnas_nonessential = set(clib[clib["Gene"].isin(sgrnas_nonessential)].index)
     sgrnas_nonessential_fc = (
         None
-        if add_controls is None
+        if fc is None
         else fc.reindex(sgrnas_nonessential).median(1).dropna()
     )
 
@@ -98,7 +98,7 @@ def define_sgrnas_sets(clib, fc=None, add_controls=True, dataset_name="Yusa_v1")
         sgrna_sets["nontargeting"] = dict(
             color="#31a354",
             sgrnas=sgrnas_control,
-            fc=None if add_controls is None else sgrnas_control_fc,
+            fc=None if fc is None else sgrnas_control_fc,
         )
 
     return sgrna_sets

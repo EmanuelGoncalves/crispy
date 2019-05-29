@@ -24,7 +24,7 @@ from crispy.CRISPRData import CRISPRDataSet
 from C50K import dpath, rpath, define_sgrnas_sets, estimate_ks
 
 
-# Import Project Score samples acquired with Kosuke_Yusa v1.1 library
+# Project Score samples acquired with Kosuke_Yusa v1.1 library
 
 ky_v11_count = CRISPRDataSet("Yusa_v1.1")
 ky_v11_fc = (
@@ -48,7 +48,6 @@ ky_v11_ks["ks_control_min"] = 1 - ky_v11_ks["ks_control"]
 # JACKS guide efficacy scores
 
 jacks = pd.read_csv(f"{dpath}/jacks/Yusa_v1.0.csv", index_col=0)
-
 ky_v11_ks["jacks"] = jacks.reindex(ky_v11_ks.index)["X1"].values
 ky_v11_ks["jacks_min"] = abs(ky_v11_ks["jacks"] - 1)
 
@@ -64,11 +63,6 @@ ky_v11_ks["doenchroot_min"] = 1 - ky_v11_ks["doenchroot"]
 
 forecast = pd.read_csv(f"{dpath}/jacks/Yusa_v1.0_ForecastFrameshift.csv", index_col=0)
 ky_v11_ks["forecast"] = forecast.reindex(ky_v11_ks.index)["In Frame Percentage"].values
-
-
-# Overall sgRNA median fold-change
-
-ky_v11_ks["median_fc"] = ky_v11_ks["median_fc"] - ky_v11_ks["median_fc"].min()
 
 
 # Gene target annotation

@@ -54,12 +54,6 @@ dpath = pkg_resources.resource_filename("crispy", "data/")
 rpath = pkg_resources.resource_filename("notebooks", "C50K/reports/")
 
 
-# MOBEM
-
-mobem = Mobem()
-cn = CopyNumber()
-
-
 # Gene sets fold-change distributions
 
 genesets = {
@@ -71,87 +65,6 @@ genesets = {
     m: {g: metrics_fc[m].reindex(genesets[g]).median(1).dropna() for g in genesets}
     for m in metrics_fc
 }
-
-# Copy-number benchmark
-
-samples = list(set(cn.get_data()).intersection(ky_v11_genes_cc["all"]).intersection(ky_v11_sgrna_crispy["all"]))
-
-fc_datasets = [
-    ("original", metrics_fc),
-    ("ccleanr", ky_v11_genes_cc),
-    ("crispy", ky_v11_genes_crispy),
-]
-
-ky_v11_cn_auc = []
-for dtype, dtype_df in fc_datasets:
-    for m in ["ks", "all"]:
-        m_cn_df = pd.concat(
-            [
-                cn.get_data()[samples].unstack().rename("cn"),
-                dtype_df[m][samples].unstack().rename("fc"),
-            ],
-            axis=1,
-            sort=False,
-        ).dropna()
-        m_cn_df = m_cn_df.reset_index().rename(
-            columns={"level_0": "sample", "level_1": "gene"}
-        )
-
-        m_cn_aucs_df = pd.concat(
-            [
-                QCplot.recall_curve_discretise(df["fc"], df["cn"], 10)
-                .assign(sample=s)
-                .assign(dtype=dtype)
-                .assign(metric=m)
-                for s, df in m_cn_df.groupby("sample")
-            ]
-        )
-
-        ky_v11_cn_auc.append(m_cn_aucs_df)
-ky_v11_cn_auc = pd.concat(ky_v11_cn_auc).reset_index(drop=True)
-ky_v11_cn_auc.to_excel(f"{rpath}/KosukeYusa_v1.1_benchmark_cn.xlsx", index=False)
-
-
-# - Plot
-# CRISPR Library sizes
-
-plt.figure(figsize=(2.5, 2), dpi=600)
-sns.scatterplot(
-    "Date",
-    "Number of guides",
-    "Library ID",
-    data=clib_size,
-    size="sgRNAs per Gene",
-    palette=clib_palette,
-    hue_order=clib_order,
-    sizes=(10, 50),
-)
-plt.grid(True, ls=":", lw=0.1, alpha=1.0, zorder=0)
-plt.xlim(datetime.date(2013, 11, 1), datetime.date(2020, 3, 1))
-plt.legend(loc="center left", bbox_to_anchor=(1, 0.5), frameon=False, prop={"size": 4})
-plt.title("CRISPR-Cas9 libraries")
-plt.subplots_adjust(hspace=0.05, wspace=0.1)
-plt.savefig(f"{rpath}/crispr_libraries_coverage.png", bbox_inches="tight")
-plt.close("all")
-
-
-# Guide sets distributions
-
-plt.figure(figsize=(2.5, 2), dpi=600)
-for c in sgrna_sets:
-    sns.distplot(
-        sgrna_sets[c]["fc"],
-        hist=False,
-        label=c,
-        kde_kws={"cut": 0, "shade": True},
-        color=sgrna_sets[c]["color"],
-    )
-plt.grid(True, ls=":", lw=0.1, alpha=1.0, zorder=0, axis="x")
-plt.xlabel("sgRNAs fold-change")
-plt.legend(frameon=False)
-plt.title("Project Score - KY v1.1")
-plt.savefig(f"{rpath}/ky_v11_guides_distributions.png", bbox_inches="tight")
-plt.close("all")
 
 
 # K-S metric
@@ -606,30 +519,3 @@ plt.subplots_adjust(hspace=0.05, wspace=0.05)
 plt.savefig(f"{rpath}/ky_v11_metrics_gene_distributions.png", bbox_inches="tight")
 plt.close("all")
 
-
-# Copy-number benchmark
-
-f, axs = plt.subplots(2, 3, sharex="all", sharey="all", figsize=(7, 4.5), dpi=600)
-
-for i, d in enumerate(["all", "ks"]):
-    for j, m in enumerate(["original", "ccleanr", "crispy"]):
-        d_m_df = ky_v11_cn_auc.query(f"(metric == '{d}') & (dtype == '{m}')")
-
-        ax = axs[i, j]
-
-        QCplot.bias_boxplot(
-            d_m_df, x="cn", notch=True, add_n=True, n_text_y=0.05, ax=ax
-        )
-
-        ax.set_ylim(0, 1)
-        ax.axhline(0.5, lw=0.3, c=QCplot.PAL_DBGD[0], ls=":", zorder=0)
-
-        ax.set_xlabel("Copy-number" if i == 1 else None)
-        ax.set_ylabel(f"AURC" if j == 0 else None)
-        ax.set_title(f"{m} - {d}")
-
-plt.subplots_adjust(hspace=0.25, wspace=0.05)
-plt.savefig(
-    f"{rpath}/ky_v11_metrics_cn_aucs_boxplots.png", bbox_inches="tight", dpi=600
-)
-plt.close("all")
