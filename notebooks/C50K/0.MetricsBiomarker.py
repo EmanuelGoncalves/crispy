@@ -24,12 +24,12 @@ from crispy.CRISPRData import CRISPRDataSet, ReadCounts
 from C50K import rpath, dpath, LOG, ky_v11_calculate_gene_fc, lm_associations
 
 
-# Import genomic data
+# Genomic data
 
 mobem = Mobem()
 
 
-# Import Project Score samples acquired with Kosuke_Yusa v1.1 library
+# Project Score samples acquired with Kosuke_Yusa v1.1 library
 
 ky_v11_data = CRISPRDataSet("Yusa_v1.1")
 
