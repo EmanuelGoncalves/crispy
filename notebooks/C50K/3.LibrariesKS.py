@@ -18,10 +18,8 @@
 # %load_ext autoreload
 # %autoreload 2
 
-import datetime
 import numpy as np
 import pandas as pd
-import pkg_resources
 import seaborn as sns
 from math import sqrt
 import matplotlib.pyplot as plt
@@ -29,13 +27,7 @@ from scipy.stats import spearmanr
 from scipy.interpolate import interpn
 from crispy.CRISPRData import CRISPRDataSet
 from sklearn.metrics import mean_squared_error
-from C50K import define_sgrnas_sets, estimate_ks
-
-
-# -
-
-dpath = pkg_resources.resource_filename("crispy", "data/")
-rpath = pkg_resources.resource_filename("notebooks", "C50K/reports/")
+from C50K import dpath, rpath, define_sgrnas_sets, estimate_ks
 
 
 # CRISPR Project Score - Kosuke Yusa v1.1
@@ -99,8 +91,7 @@ ks_genes = pd.concat(
 ks_genes.to_excel(f"{rpath}/Libraries_KS_scores.xlsx", index=False)
 
 
-# - Plot
-
+# Plot
 
 plot_df = ks_genes.dropna()
 

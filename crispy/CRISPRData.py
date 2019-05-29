@@ -178,7 +178,7 @@ class ReadCounts(DataFrame):
         if type(controls) == dict:
             fc = self.add(self.PSEUDO_COUNT)
             fc = pd.DataFrame(
-                {c: fc[c].divide(fc[controls[c]].mean(1), axis=0) for c in controls}
+                {c: fc[c].divide(fc[controls[c]].mean(1), axis=0) for c in controls if c in fc}
             )
             fc = fc.apply(np.log2)
 

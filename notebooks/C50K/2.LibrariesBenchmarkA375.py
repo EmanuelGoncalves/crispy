@@ -18,46 +18,36 @@
 # %load_ext autoreload
 # %autoreload 2
 
-import logging
 import numpy as np
 import pandas as pd
-import pkg_resources
 import seaborn as sns
 import matplotlib.pyplot as plt
-from C50K import clib_palette
 from crispy.QCPlot import QCplot
 from itertools import combinations
 from crispy.CrispyPlot import CrispyPlot
-from crispy.CRISPRData import CRISPRDataSet, Library
+from C50K import clib_palette, LOG, rpath
+from crispy.CRISPRData import CRISPRDataSet
 
 
-# -
-log = logging.getLogger("Crispy")
-dpath = pkg_resources.resource_filename("crispy", "data/")
-rpath = pkg_resources.resource_filename("notebooks", "C50K/reports/")
-
-
-# CRISPR Project Score - Kosuke Yusa v1.1
+# Kosuke Yusa v1.0
 
 ky_v1_data = CRISPRDataSet("Yusa_v1")
-ky_v1_fc = (
-    ky_v1_data.counts.remove_low_counts(ky_v1_data.plasmids)
-    .norm_rpm()
-    .foldchange(ky_v1_data.plasmids)
-)
-ky_v1_A375 = ky_v1_fc[[c for c in ky_v1_fc if c.startswith("A375")]]
-ky_v1_library = ky_v1_data.lib.loc[ky_v1_A375.index, "Gene"]
+
+ky_v1_count = ky_v1_data.counts.remove_low_counts(ky_v1_data.plasmids)
+ky_v1_count = ky_v1_count[
+    [c for c in ky_v1_count if c.startswith("A375")] + ky_v1_data.plasmids
+]
+
+ky_v1_library = ky_v1_data.lib.loc[ky_v1_count.index, "Gene"]
 
 
 # Brunello
 
 brunello_data = CRISPRDataSet("Brunello_A375")
-brunello_A375 = (
-    brunello_data.counts.remove_low_counts(brunello_data.plasmids)
-    .norm_rpm()
-    .foldchange(brunello_data.plasmids)
-)
-brunello_library = brunello_data.lib.loc[brunello_A375.index, "Gene"]
+
+brunello_count = brunello_data.counts.remove_low_counts(brunello_data.plasmids)
+
+brunello_library = brunello_data.lib.loc[brunello_count.index, "Gene"]
 brunello_library = brunello_library[
     [not v.startswith("NO_CURRENT_") for v in brunello_library]
 ]
@@ -66,55 +56,59 @@ brunello_library = brunello_library[
 # GeCKO v2
 
 gecko_data = CRISPRDataSet("GeCKOv2")
-gecko_A375 = (
-    gecko_data.counts.remove_low_counts(gecko_data.plasmids)
-    .norm_rpm()
-    .foldchange(gecko_data.plasmids)
-)
-gecko_A375 = gecko_A375[[c for c in gecko_A375 if c.startswith("A375")]]
-gecko_library = gecko_data.lib[gecko_data.lib.index.isin(gecko_A375.index)]["Gene"]
+
+gecko_count = gecko_data.counts.remove_low_counts(gecko_data.plasmids)
+gecko_count = gecko_count[
+    [c for c in gecko_count if c.startswith("A375")] + gecko_data.plasmids
+]
+
+gecko_library = gecko_data.lib[gecko_data.lib.index.isin(gecko_count.index)]["Gene"]
 gecko_library = gecko_library[[not v.startswith("NonTargeting") for v in gecko_library]]
 gecko_library = gecko_library[[not v.startswith("hsa-") for v in gecko_library]]
 
 
-#
+# Assemble CRISPR data-sets
 
 datasets = [
-    dict(name="GeCKOv2", description="v2", dataset=gecko_A375, library=gecko_library),
+    dict(
+        name="GeCKOv2",
+        description="v2",
+        dataset=gecko_count,
+        library=gecko_library,
+        plasmids=gecko_data.plasmids,
+    ),
     dict(
         name="Yusa_v1",
         description="Day 14",
-        dataset=ky_v1_A375[ky_v1_A375.columns[:3]],
+        dataset=ky_v1_count[list(ky_v1_count.columns[:3]) + ky_v1_data.plasmids],
         library=ky_v1_library,
+        plasmids=ky_v1_data.plasmids,
     ),
     dict(
         name="Yusa_v1",
         description="Score",
-        dataset=ky_v1_A375[ky_v1_A375.columns[-3:]],
+        dataset=ky_v1_count[list(ky_v1_count.columns[-4:-1]) + ky_v1_data.plasmids],
         library=ky_v1_library,
+        plasmids=ky_v1_data.plasmids,
     ),
     dict(
         name="Brunello",
         description="Original tracrRNA",
-        dataset=brunello_A375[brunello_A375.columns[:2]],
+        dataset=brunello_count[brunello_count.columns[:3]],
         library=brunello_library,
+        plasmids=brunello_data.plasmids,
     ),
     dict(
         name="Brunello",
         description="Modified tracrRNA",
-        dataset=brunello_A375[brunello_A375.columns[-3:]],
+        dataset=brunello_count[brunello_count.columns[3:]],
         library=brunello_library,
+        plasmids=brunello_data.plasmids,
     ),
 ]
 
 
-#
-
-ky_v11_ks = pd.read_excel(f"{rpath}/KosukeYusa_v1.1_sgRNA_metrics.xlsx", index_col=0)
-ky_v11_ks_lib = ky_v11_ks.sort_values("ks_control", ascending=False).groupby("Gene").head(n=2)
-
-
-#
+# Benchmark subsample of library
 
 arocs = []
 n_iterations = 10
@@ -133,28 +127,29 @@ for dset in datasets:
 
         # Bootstrap
         for i in range(n_iterations):
-            log.info(
+            LOG.info(
                 f"{dset['name']} - {dset['description']} - #(guides) = {nguides} : iteration {i}"
             )
-
-            # Samples
-            nsamples = dset["dataset"].shape[1]
-            samples = [
-                s
-                for n in np.arange(1, nsamples + 1)
-                for s in combinations(dset["dataset"], n)
-            ]
 
             # Guides
             guides_rand = guides.groupby(guides).apply(lambda x: x.sample(n=nguides))
             guides_rand.index = guides_rand.index.droplevel()
 
+            nguides_count = dset["dataset"].loc[guides_rand.index]
+            nguides_fc = nguides_count.norm_rpm().foldchange(dset["plasmids"])
+
+            # Samples
+            nsamples = nguides_fc.shape[1]
+            samples = [
+                s
+                for n in np.arange(1, nsamples + 1)
+                for s in combinations(nguides_fc, n)
+            ]
+
             # Essential/Non-essential benchmark
             for ss in samples:
-                ss_fc = (
-                    dset["dataset"].loc[guides_rand.index].groupby(guides_rand).mean()
-                )
-                ss_fc = ss_fc[list(ss)].mean(1)
+                ss_fc = nguides_fc.loc[guides_rand.index, ss]
+                ss_fc = ss_fc.groupby(guides_rand).mean().mean(1)
 
                 arocs.append(
                     dict(
@@ -172,7 +167,20 @@ arocs = pd.DataFrame(arocs)
 arocs.to_excel(f"{rpath}/Libraries_guides_subsample.xlsx", index=False)
 
 
-#
+# KS optimal library Top 2 and Top 3
+
+lib_metrics = pd.read_excel(f"{rpath}/KosukeYusa_v1.1_sgRNA_metrics.xlsx", index_col=0)
+lib_metrics = lib_metrics[lib_metrics.index.isin(ky_v1_count.index)]
+
+lib_ks = {
+    n: lib_metrics.sort_values("ks_control_min", ascending=False)
+    .groupby("Gene")
+    .head(n=n)
+    for n in [2, 3]
+}
+
+
+# Plot subsample of replicates and sgRNAs on A375 cell line across GeCKOv2, Brunello and KosukeYusa V1.0
 
 f, axs = plt.subplots(
     2,
@@ -211,17 +219,19 @@ for j, metric in enumerate(["aroc", "aupr"]):
         )
 
         if dset["name"] == "Yusa_v1":
-            ks_metric = dset["dataset"].reindex(ky_v11_ks_lib.index)
-            ks_metric = ks_metric.groupby(ky_v11_ks_lib["Gene"]).mean().mean(1).dropna()
-            ks_metric = QCplot.pr_curve(ks_metric) if j == 0 else QCplot.recall_curve(ks_metric)[2]
+            n_pal = {2: "#e6550d", 3: "#fdae6b"}
+            for n in lib_ks:
+                ks_count = dset["dataset"].loc[lib_ks[n].index]
+                ks_fc = ks_count.norm_rpm().foldchange(dset["plasmids"])
+                ks_fc = ks_fc.loc[lib_ks[n].index].groupby(dset["library"].loc[lib_ks[n].index]).mean().mean(1)
 
-            ax.axhline(
-                ks_metric,
-                ls="-",
-                lw=1,
-                c=clib_palette["minimal"],
-                zorder=0,
-            )
+                ks_metric = (
+                    QCplot.pr_curve(ks_fc)
+                    if j == 0
+                    else QCplot.recall_curve(ks_fc)[2]
+                )
+
+                ax.axhline(ks_metric, ls="-", lw=.5, c=n_pal[n], zorder=0, label=f"Top {n}")
 
         ax.grid(True, ls=":", lw=0.1, alpha=1.0, zorder=0)
 
@@ -234,5 +244,5 @@ for j, metric in enumerate(["aroc", "aupr"]):
         ).get_title().set_fontsize("4")
 
 plt.subplots_adjust(hspace=0, wspace=0)
-plt.savefig(f"{rpath}/guides_libraries_benchmark.png", bbox_inches="tight")
+plt.savefig(f"{rpath}/guides_libraries_benchmark.pdf", bbox_inches="tight")
 plt.close("all")
