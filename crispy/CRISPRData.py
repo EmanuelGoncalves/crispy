@@ -109,6 +109,18 @@ DATASETS = {
             "mod_tracr_A375_RepC": ["mod_tracr_A375_pDNA"],
         },
     ),
+    "HT29_Dabraf": dict(
+        name="HT-29 Dabrafenib CRISPR",
+        read_counts="Yusa_v1.1_HT29_dabraf.csv.gz",
+        library="Yusa_v1.1.csv.gz",
+        plasmids=["Plasmid_v1.1"],
+        exclude_guides={
+            "DHRSX_CCDS35195.1_ex1_X:2161152-2161175:+_3-1",
+            "DHRSX_CCDS35195.1_ex6_Y:2368915-2368938:+_3-3",
+            "DHRSX_CCDS35195.1_ex4_X:2326777-2326800:+_3-2",
+            "sgPOLR2K_1",
+        },
+    ),
 }
 
 
@@ -178,7 +190,11 @@ class ReadCounts(DataFrame):
         if type(controls) == dict:
             fc = self.add(self.PSEUDO_COUNT)
             fc = pd.DataFrame(
-                {c: fc[c].divide(fc[controls[c]].mean(1), axis=0) for c in controls if c in fc}
+                {
+                    c: fc[c].divide(fc[controls[c]].mean(1), axis=0)
+                    for c in controls
+                    if c in fc
+                }
             )
             fc = fc.apply(np.log2)
 
