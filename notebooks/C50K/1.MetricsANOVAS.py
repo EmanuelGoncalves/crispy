@@ -150,6 +150,7 @@ for j, n_guides in enumerate([2, 3]):
         ax.set_title(m if j == 0 else "")
         ax.set_xlabel("Effect size (beta)")
         ax.set_ylabel("All Guides\nEffect size (beta)" if i == 0 else None)
+
         ax_inv = ax.twinx()
         ax_inv.set_ylabel(f"Top {n_guides} sgRNAs" if i == 5 else None)
         ax_inv.get_yaxis().set_ticks([])

@@ -62,11 +62,14 @@ ky_v11_jacks = pd.read_csv(f"{dpath}/jacks/Yusa_v1.0.csv", index_col=0)
 avana_jacks = pd.read_csv(f"{dpath}/jacks/Avana_v1.csv", index_col=0)
 
 
-# Kolmogorov-Smirnov statistic guide comparison
+# Kolmogorov-Smirnov statistic KY V1.1
 
 ky_v11_ks = estimate_ks(ky_v11_fc, ky_v11_sgrna_set["nontargeting"]["fc"])
 ky_v11_ks["Gene"] = ky_v11_data.lib.reindex(ky_v11_ks.index)["Gene"].values
 ky_v11_ks["jacks"] = ky_v11_jacks.reindex(ky_v11_ks.index)["X1"].values
+
+
+# Kolmogorov-Smirnov statistic Avana
 
 avana_ks = estimate_ks(avana_fc, avana_sgrna_set["nontargeting"]["fc"])
 avana_ks["Gene"] = (
@@ -74,7 +77,13 @@ avana_ks["Gene"] = (
     .reindex(avana_ks.index)["Gene"]
     .values
 )
+
+avana_ks["ks_control_min"] = 1 - avana_ks["ks_control"]
+
 avana_ks["jacks"] = avana_jacks.reindex(avana_ks.index)["X1"].values
+avana_ks["jacks_min"] = abs(avana_ks["jacks"] - 1)
+
+avana_ks.to_excel(f"{rpath}/Avana_sgRNA_metrics.xlsx")
 
 
 # Libraries aggregated ks scores

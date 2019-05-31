@@ -24,10 +24,10 @@ import seaborn as sns
 from math import sqrt
 import matplotlib.pyplot as plt
 from scipy.stats import spearmanr
+from C50K import dpath, rpath, LOG
 from scipy.interpolate import interpn
 from crispy.CRISPRData import CRISPRDataSet
 from sklearn.metrics import mean_squared_error
-from C50K import dpath, rpath, LOG, define_sgrnas_sets, estimate_ks
 
 
 # KY v1.0 & v1.1 sgRNA metrics
@@ -168,7 +168,6 @@ for i, m in enumerate(["top2", "top3"]):
     rmse = sqrt(mean_squared_error(x, y))
     cor, _ = spearmanr(x, y)
     annot_text = f"Spearman's R={cor:.2g}; RMSE={rmse:.2f}"
-
     ax.text(0.95, 0.05, annot_text, fontsize=4, transform=ax.transAxes, ha="right")
 
     lims = [x_max, x_min]
