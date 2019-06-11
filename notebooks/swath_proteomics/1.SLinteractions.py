@@ -33,13 +33,18 @@ from notebooks.swath_proteomics.SLethal import SLethal
 
 
 logger = logging.getLogger("Crispy")
-dpath = pkg_resources.resource_filename("crispy", "data/sl")
+dpath = pkg_resources.resource_filename("crispy", "data")
 rpath = pkg_resources.resource_filename("notebooks", "swath_proteomics/reports/")
+
+
+#
+
+cgenes = pd.read_csv(f"{dpath}/cancer_genes_latest.csv.gz")
 
 
 # # Import data-sets
 
-slethal = SLethal(use_wes=False)
+slethal = SLethal()
 
 
 #
@@ -67,7 +72,7 @@ gis = pd.concat(
     axis=1,
     sort=False,
 )
-gis.to_csv(f"{dpath}/gis_gexp_prot.csv.gz", compression="gzip")
+gis.to_csv(f"{dpath}/sl/gis_gexp_prot.csv.gz", compression="gzip")
 
 
 #

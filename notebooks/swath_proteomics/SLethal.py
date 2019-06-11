@@ -4,8 +4,6 @@
 import logging
 import numpy as np
 import pandas as pd
-import seaborn as sns
-import matplotlib.pyplot as plt
 from limix.qtl import st_scan
 from sklearn.preprocessing import StandardScaler
 from statsmodels.stats.multitest import multipletests
@@ -18,6 +16,7 @@ class SLethal:
         pvaladj_method="bonferroni",
         min_events=5,
         verbose=1,
+        use_crispr=True,
         use_wes=True,
         use_proteomics=True,
         use_transcriptomics=True,
@@ -38,18 +37,14 @@ class SLethal:
         self.wes_obj = WES()
 
         # Samples overlap
-        self.samples = set(self.crispr_obj.get_data().columns)
-
-        if use_transcriptomics:
-            self.samples = self.samples.intersection(self.gexp_obj.get_data().columns)
-
-        if use_proteomics:
-            self.samples = self.samples.intersection(self.prot_obj.get_data().columns)
-
-        if use_wes:
-            self.samples = self.samples.intersection(
-                self.wes_obj.get_data(as_matrix=True).columns
-            )
+        set_samples = [
+            (self.crispr_obj, use_crispr),
+            (self.gexp_obj, use_transcriptomics),
+            (self.prot_obj, use_proteomics),
+            (self.wes_obj, use_wes),
+        ]
+        set_samples = [list(o.get_data().columns) for o, f in set_samples if f]
+        self.samples = set.intersection(*map(set, set_samples))
 
         # Get logger
         self.logger = logging.getLogger("Crispy")
@@ -69,7 +64,7 @@ class SLethal:
         self.filter_gexp_kws["subset"] = self.samples
 
         self.filter_prot_kws = (
-            dict(dtype="imputed") if filter_prot_kws is None else filter_prot_kws
+            dict(dtype="noimputed") if filter_prot_kws is None else filter_prot_kws
         )
         self.filter_prot_kws["subset"] = self.samples
 
@@ -92,6 +87,12 @@ class SLethal:
         self.logger.info(f"WES={self.wes.shape}")
 
     def get_covariates(self):
+        """
+        Add CRISPR institute of origin as covariate;
+        Add mutational burden and cancer type as covariate to remove potential superious associations (https://doi.org/10.1016/j.cell.2019.05.005)
+
+        """
+
         # CRISPR institute of origin
         crispr_insitute = pd.get_dummies(self.crispr_obj.institute)
 
@@ -100,10 +101,17 @@ class SLethal:
             columns=["Unknown"]
         )
 
+        # Cancer type
+        ctype = pd.get_dummies(self.ss_obj.samplesheet["cancer_type"])
+
+        # Mutation burden
+        m_burdern = self.ss_obj.samplesheet["mutational_burden"].copy()
+
         # Merge covariates
-        covariates = pd.concat([crispr_insitute, culture], axis=1, sort=False).loc[
-            self.samples
-        ]
+        covariates = pd.concat(
+            [crispr_insitute, culture, ctype, m_burdern], axis=1, sort=False
+        )
+        covariates = covariates.loc[self.samples]
 
         return covariates
 

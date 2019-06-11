@@ -19,16 +19,16 @@
 # %autoreload 2
 
 import logging
-import numpy as np
 import pandas as pd
 import pkg_resources
 import seaborn as sns
 import matplotlib.pyplot as plt
 from scipy.stats import spearmanr
 from crispy.CrispyPlot import CrispyPlot
-from crispy.DataImporter import Proteomics, GeneExpression, CRISPRComBat
+from crispy.DataImporter import Proteomics, GeneExpression, CRISPR
 
 
+dpath = pkg_resources.resource_filename("crispy", "data")
 rpath = pkg_resources.resource_filename("notebooks", "swath_proteomics/reports/")
 logger = logging.getLogger("Crispy")
 
@@ -37,13 +37,13 @@ logger = logging.getLogger("Crispy")
 
 prot_obj = Proteomics()
 gexp_obj = GeneExpression()
-crispr_obj = CRISPRComBat()
+crispr_obj = CRISPR()
 
 
 # Proteomics measurements
 
 prot = prot_obj.get_data("imputed", True, True)
-prot_ = prot_obj.get_data("protein", True, True)
+prot_ = prot_obj.get_data("noimputed", True, True)
 
 # Transcriptomics measurements
 
@@ -133,7 +133,8 @@ for dtype, dataset in [("imputation", prot), ("no_imputation", prot_)]:
         gene_corr.append(res)
 
 gene_corr = pd.DataFrame(gene_corr).sort_values("pval")
-print(gene_corr.groupby("dtype")["corr"].median())
+gene_corr.to_csv(f"{dpath}/sl/prot_gexp_corr.csv.gz", index=False)
+logger.info(gene_corr.groupby("dtype")["corr"].median())
 
 
 #

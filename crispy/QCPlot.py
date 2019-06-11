@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 # Copyright (C) 2019 Emanuel Goncalves
 
-import operator
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -9,11 +8,11 @@ import scipy.stats as st
 import matplotlib.pyplot as plt
 import matplotlib.ticker as plticker
 from natsort import natsorted
+from crispy.Utils import Utils
 from matplotlib.patches import Arc
 from collections import OrderedDict
-from crispy import Utils, CrispyPlot
 from sklearn.metrics.ranking import auc
-from matplotlib.gridspec import GridSpec
+from crispy.CrispyPlot import CrispyPlot
 from sklearn.metrics import roc_auc_score
 
 
@@ -437,51 +436,3 @@ class QCplot(CrispyPlot):
         plt.xlim(xlim[0] / scale, xlim[1] / scale)
 
         return ax1, ax2, ax3
-
-
-class GSEAplot(CrispyPlot):
-    @classmethod
-    def plot_gsea(cls, hits, running_hit, dataset=None, vertical_lines=False, shade=False):
-        x, y = np.array(range(len(hits))), np.array(running_hit)
-
-        if dataset is not None:
-            gs = GridSpec(2, 1, height_ratios=[3, 2], hspace=0.1)
-            axs = [plt.subplot(gs[0]), plt.subplot(gs[1])]
-
-        else:
-            axs = [plt.gca()]
-
-        # GSEA running hit
-        axs[0].plot(x, y, '-', c=cls.PAL_DBGD[0])
-
-        if shade:
-            axs[0].fill_between(x, 0, y, alpha=.5, color=cls.PAL_DBGD[2])
-
-        if vertical_lines:
-            for i in x[np.array(hits, dtype='bool')]:
-                axs[0].axvline(i, c=cls.PAL_DBGD[0], lw=.3, alpha=.2, zorder=0)
-
-        axs[0].axhline(0, c=cls.PAL_DBGD[0], lw=.1, ls='-')
-        axs[0].set_ylabel('Enrichment score')
-        axs[0].get_xaxis().set_visible(False)
-        axs[0].set_xlim([0, len(x)])
-
-        if dataset is not None:
-            dataset = list(zip(*sorted(dataset.items(), key=operator.itemgetter(1), reverse=False)))
-
-            # Data
-            axs[1].scatter(x, dataset[1], c=cls.PAL_DBGD[0], linewidths=0, s=2)
-
-            if shade:
-                axs[1].fill_between(x, 0, dataset[1], alpha=.5, color=cls.PAL_DBGD[2])
-
-            if vertical_lines:
-                for i in x[np.array(hits, dtype='bool')]:
-                    axs[1].axvline(i, c=cls.PAL_DBGD[0], lw=.3, alpha=.2, zorder=0)
-
-            axs[1].axhline(0, c='black', lw=.3, ls='-')
-            axs[1].set_ylabel('Data value')
-            axs[1].get_xaxis().set_visible(False)
-            axs[1].set_xlim([0, len(x)])
-
-        return axs[0] if dataset is None else axs

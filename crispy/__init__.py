@@ -4,9 +4,10 @@
 import sys
 import logging
 import seaborn as sns
-from crispy.Utils import Utils, SSGSEA
+from crispy.Utils import Utils
+from crispy.QCPlot import QCplot
 from crispy.CrispyPlot import CrispyPlot
-from crispy.QCPlot import QCplot, GSEAplot
+from crispy.Enrichment import SSGSEA, GSEAplot
 from crispy.CopyNumberCorrection import Crispy, CrispyGaussian
 
 
