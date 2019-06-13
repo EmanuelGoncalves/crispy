@@ -42,7 +42,7 @@ rpath = pkg_resources.resource_filename("notebooks", "swath_proteomics/reports/"
 cgenes = pd.read_csv(f"{dpath}/cancer_genes_latest.csv.gz")
 
 
-# # Import data-sets
+# Import data-sets
 
 slethal = SLethal()
 

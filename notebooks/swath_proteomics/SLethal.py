@@ -4,7 +4,7 @@
 import logging
 import numpy as np
 import pandas as pd
-from limix.qtl import st_scan
+from limix.qtl import scan
 from sklearn.preprocessing import StandardScaler
 from statsmodels.stats.multitest import multipletests
 from crispy.DataImporter import GeneExpression, CRISPR, Proteomics, WES, Sample
@@ -13,7 +13,7 @@ from crispy.DataImporter import GeneExpression, CRISPR, Proteomics, WES, Sample
 class SLethal:
     def __init__(
         self,
-        pvaladj_method="bonferroni",
+        pvaladj_method="fdr_bh",
         min_events=5,
         verbose=1,
         use_crispr=True,
@@ -64,7 +64,9 @@ class SLethal:
         self.filter_gexp_kws["subset"] = self.samples
 
         self.filter_prot_kws = (
-            dict(dtype="noimputed") if filter_prot_kws is None else filter_prot_kws
+            dict(dtype="noimputed", perc_measures=0.85)
+            if filter_prot_kws is None
+            else filter_prot_kws
         )
         self.filter_prot_kws["subset"] = self.samples
 
@@ -86,7 +88,7 @@ class SLethal:
         self.wes = self.wes_obj.filter(**self.filter_wes_kws)
         self.logger.info(f"WES={self.wes.shape}")
 
-    def get_covariates(self):
+    def get_covariates(self, std_filter=True):
         """
         Add CRISPR institute of origin as covariate;
         Add mutational burden and cancer type as covariate to remove potential superious associations (https://doi.org/10.1016/j.cell.2019.05.005)
@@ -94,32 +96,41 @@ class SLethal:
         """
 
         # CRISPR institute of origin
-        crispr_insitute = pd.get_dummies(self.crispr_obj.institute)
+        crispr_insitute = (
+            pd.get_dummies(self.crispr_obj.institute).astype(int).loc[self.samples]
+        )
 
         # Cell lines culture conditions
-        culture = pd.get_dummies(self.ss_obj.samplesheet["growth_properties"]).drop(
-            columns=["Unknown"]
+        culture = (
+            pd.get_dummies(self.ss_obj.samplesheet["growth_properties"])
+            .drop(columns=["Unknown"])
+            .loc[self.samples]
         )
 
         # Cancer type
-        ctype = pd.get_dummies(self.ss_obj.samplesheet["cancer_type"])
+        ctype = pd.get_dummies(self.ss_obj.samplesheet["cancer_type"]).loc[self.samples]
 
         # Mutation burden
-        m_burdern = self.ss_obj.samplesheet["mutational_burden"].copy()
+        m_burdern = (
+            self.ss_obj.samplesheet["mutational_burden"].round(3).loc[self.samples]
+        )
 
         # Merge covariates
         covariates = pd.concat(
             [crispr_insitute, culture, ctype, m_burdern], axis=1, sort=False
         )
-        covariates = covariates.loc[self.samples]
+
+        # Remove covariates with zero standard deviation
+        if std_filter:
+            covariates = covariates.loc[:, covariates.std() > 0]
 
         return covariates
 
     @staticmethod
     def multipletests_per_phenotype(associations, method):
-        phenotypes = set(associations["phenotype"])
+        phenotypes = set(associations["y_gene"])
 
-        df = associations.set_index("phenotype")
+        df = associations.set_index("y_gene")
 
         df = pd.concat(
             [
@@ -140,14 +151,7 @@ class SLethal:
 
     @staticmethod
     def lmm_limix(
-        y,
-        x,
-        m=None,
-        k=None,
-        add_intercept=True,
-        lik="normal",
-        scale_y=True,
-        scale_x=True,
+        y, x, m=None, k=None, lik="normal", scale_y=True, scale_x=True, filter_std=True
     ):
         # Build matrices
         Y = y.dropna()
@@ -174,42 +178,52 @@ class SLethal:
         # Covariates
         if m is not None:
             m = m.loc[Y.index]
+            m = m.assign(intercept=1)
 
-        # Add intercept
-        if add_intercept and (m is not None):
-            m["intercept"] = 1
-        elif add_intercept and (m is None):
-            m = pd.DataFrame(
-                np.ones((Y.shape[0], 1)), index=Y.index, columns=["intercept"]
-            )
-        else:
-            m = pd.DataFrame(
-                np.zeros((Y.shape[0], 1)), index=Y.index, columns=["zeros"]
-            )
+            if filter_std:
+                m = m.loc[:, m.std() > 0]
 
         # Linear Mixed Model
-        lmm = st_scan(X, Y, K=K, M=m, lik=lik, verbose=False)
+        lmm = scan(X, Y, K=K.values, M=m, lik=lik, verbose=False)
 
         return lmm, dict(x=X, y=Y, k=K, m=m)
 
     @staticmethod
     def lmm_single_phenotype(y, x, m=None, k=None):
+        cols_rename = dict(effect_name="x_gene", pv20="pval", effsize="beta", effsize_se="beta_se")
+
         lmm, params = SLethal.lmm_limix(y, x, m, k, scale_x=(x.dtypes[0] != np.int))
 
-        res = pd.DataFrame(
-            dict(
-                beta=lmm.variant_effsizes.values,
-                pval=lmm.variant_pvalues.values,
-                gene=params["x"].columns,
-            )
+        effect_sizes = lmm.effsizes["h2"].query("effect_type == 'candidate'")
+        effect_sizes = effect_sizes.set_index("test").drop(
+            columns=["trait", "effect_type"]
         )
+        pvalues = lmm.stats["pv20"]
 
-        res = res.assign(phenotype=y.columns[0])
+        res = (
+            pd.concat([effect_sizes, pvalues], axis=1, sort=False)
+            .reset_index(drop=True)
+            .rename(columns=cols_rename)
+        )
+        res = res.assign(y_gene=y.columns[0])
         res = res.assign(samples=params["y"].shape[0])
+        res = res.assign(ncovariates=params["m"].shape[1])
 
-        return res
+        return res.sort_values("pval")
 
-    def genetic_interactions(self, x, m=None, k=None):
+    def genetic_interactions(self, y, x, m=None, k=None, z=None):
+        """
+        Determine genetic interactions between gene-products in y and x considering covariates m and sample structure
+        defined in k. z can be provided to introduce an extra covariate of gene-product considered in y, e.g. predicting
+        protein abundance of Gene A using gene expression of as a covariate.
+
+        :param y: pandas.DataFrame
+        :param x: pandas.DataFrame
+        :param m: pandas.DataFrame
+        :param k: pandas.DataFrame
+        :param z: pandas.DataFrame
+        :return: pandas.DataFrame
+        """
         # - Kinship matrix (random effects)
         k = self.kinship(x.T) if k is None else k
         m = self.get_covariates() if m is None else m
@@ -218,11 +232,25 @@ class SLethal:
         # Association
         gi = []
 
-        for gene in self.crispr.index:
+        for gene in y.index:
             if self.verbose > 0:
                 self.logger.info(f"GIs LMM test of {gene}")
 
-            gis = self.lmm_single_phenotype(self.crispr.loc[[gene]].T, x.T, k=k, m=m)
+            if z is None:
+                m_gene = m.copy()
+            else:
+                m_gene = z.loc[[gene]].T
+                m_gene = pd.Series(
+                    StandardScaler().fit_transform(m_gene)[:, 0],
+                    index=m_gene.index,
+                    name="z_gene",
+                )
+                m_gene = pd.concat([m_gene, m], axis=1, sort=False)
+
+            gis = self.lmm_single_phenotype(y=y.loc[[gene]].T, x=x.T, k=k, m=m_gene)
+
+            # res = self.lmm_limix(y=y.loc[[gene]].T, x=x.T, k=k, m=m_gene)
+            # print(res[0])
 
             gi.append(gis)
 
