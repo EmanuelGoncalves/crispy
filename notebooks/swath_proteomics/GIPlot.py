@@ -5,12 +5,13 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
+from scipy.stats import spearmanr
 from crispy.CrispyPlot import CrispyPlot
 
 
 class GIPlot(CrispyPlot):
     @classmethod
-    def gi_regression(cls, x_gene, y_gene, plot_df):
+    def gi_regression(cls, x_gene, y_gene, plot_df, lowess=False):
         grid = sns.JointGrid(x_gene, y_gene, data=plot_df, space=0)
 
         grid.ax_joint.scatter(
@@ -23,11 +24,31 @@ class GIPlot(CrispyPlot):
             alpha=1.0,
         )
 
+        grid.plot_joint(
+            sns.regplot,
+            data=plot_df,
+            line_kws=dict(lw=1.0, color=cls.PAL_DBGD[1]),
+            marker="",
+            lowess=lowess,
+            truncate=True,
+        )
+
         grid.plot_marginals(
             sns.distplot, kde=False, hist_kws=dict(linewidth=0), color=cls.PAL_DBGD[0]
         )
 
         grid.ax_joint.grid(axis="both", lw=0.1, color="#e1e1e1", zorder=0)
+
+        cor, pval = spearmanr(plot_df[x_gene], plot_df[y_gene])
+        annot_text = f"R={cor:.2g}, p={pval:.1e}"
+        grid.ax_joint.text(
+            0.95,
+            0.05,
+            annot_text,
+            fontsize=4,
+            transform=grid.ax_joint.transAxes,
+            ha="right",
+        )
 
         plt.gcf().set_size_inches(1.5, 1.5)
 

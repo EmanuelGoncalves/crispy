@@ -156,6 +156,162 @@ class GeneExpression:
         return rpkm
 
 
+class Proteomics:
+    def __init__(
+        self,
+        protein_matrix="proteomics/Cosmic_Cell_Lines_Project_Batch2_protein_matrix.txt",
+        protein_matrix_noimputation="proteomics/Cosmic_Cell_Lines_Project_Batch2_protein_matrix_noImputation.tsv",
+        peptide_matrix="proteomics/Cosmic_Cell_Lines_Project_Batch2_raw_petide_matrix_afterQC.txt",
+        manifest="proteomics/Cosmic_Cell_Lines_Project_Batch2_sample_mapping_updated.txt",
+    ):
+        deprecated_ids = self.map_deprecated()
+
+        # Import imputed protein levels
+        self.imputed = pd.read_csv(f"{DPATH}/{protein_matrix}", sep="\t")
+        self.imputed["Protein"] = self.imputed["Protein"].replace(
+            deprecated_ids["Entry name"]
+        )
+        self.imputed = self.imputed.set_index("Protein")
+
+        # Import not imputed protein levels
+        self.noimputed = pd.read_csv(f"{DPATH}/{protein_matrix_noimputation}", sep="\t")
+        self.noimputed["Protein"] = self.noimputed["Protein"].replace(
+            deprecated_ids["Entry name"]
+        )
+        self.noimputed = self.noimputed.set_index("Protein")
+        self.noimputed = self.noimputed.drop(columns=["N.Pept", "Q.Pept", "S/N", "P(PECA)"])
+
+        # Import peptide levels
+        self.peptide = pd.read_csv(f"{DPATH}/{peptide_matrix}", sep="\t")
+        self.peptide["Protein"] = self.peptide["Protein"].replace(
+            deprecated_ids["Entry name"]
+        )
+        self.peptide = self.peptide.set_index(["Protein", "Peptide"])
+
+        # Import manifest
+        self.manifest = pd.read_csv(f"{DPATH}/{manifest}", index_col=0, sep="\t")
+
+    def get_peptides_abundance(self, intensities=None, map_ids=False):
+        intensities = (
+            np.log10(self.peptide.copy()) if intensities is None else intensities
+        )
+
+        peptides = (
+            intensities.mean(1)
+            .sort_values(ascending=False)
+            .rename("mean")
+            .dropna()
+            .reset_index()
+        )
+
+        if map_ids:
+            peptides["GeneSymbol"] = (
+                self.map_gene_name().loc[peptides["Protein"], "GeneSymbol"].values
+            )
+
+        return peptides
+
+    def count_peptides(self, groupby="GeneSymbol"):
+        peptides = self.get_peptides_abundance(map_ids=True)
+        return peptides.groupby(groupby)["Peptide"].count()
+
+    def from_peptide_to_protein(self, ptop=3):
+        intensities = np.log10(self.peptide.copy())
+
+        peptides = self.get_peptides_abundance()
+
+        protein_intensities = {
+            protein: intensities.loc[
+                [(protein, peptide) for peptide in df.head(ptop)["Peptide"]]
+            ].mean()
+            for protein, df in peptides.groupby("Protein")
+        }
+        protein_intensities = pd.DataFrame(protein_intensities).T
+
+        return protein_intensities
+
+    def get_data(self, dtype="protein", average_replicates=True, map_ids=True):
+        if dtype.lower() == "protein":
+            data = self.from_peptide_to_protein()
+
+        elif dtype.lower() == "peptide":
+            data = self.peptide.copy()
+
+        elif dtype.lower() == "imputed":
+            data = np.log10(self.imputed.copy())
+
+        elif dtype.lower() == "noimputed":
+            data = self.noimputed.copy()
+
+        else:
+            assert False, f"{dtype} not supported"
+
+        if average_replicates:
+            data = data.groupby(
+                self.manifest.loc[data.columns, "model_id"], axis=1
+            ).mean()
+
+        if map_ids:
+            pmap = self.map_gene_name().loc[data.index, "GeneSymbol"].dropna()
+
+            data = data[data.index.isin(pmap.index)]
+            data = data.groupby(pmap.loc[data.index]).mean()
+
+        return data
+
+    def filter(self, dtype="protein", subset=None, normality=False, iqr_range=None, perc_measures=0.85):
+        df = self.get_data(dtype=dtype)
+
+        # Subset matrices
+        if subset is not None:
+            df = df.loc[:, df.columns.isin(subset)]
+
+        # Filter by IQR
+        if iqr_range is not None:
+            iqr_ranges = (
+                df.apply(lambda v: iqr(v, rng=iqr_range), axis=1)
+                .rename("iqr")
+                .to_frame()
+            )
+
+            gm_iqr = GaussianMixture(n_components=2).fit(iqr_ranges[["iqr"]])
+            iqr_ranges["gm"] = gm_iqr.predict(iqr_ranges[["iqr"]])
+
+            df = df.loc[iqr_ranges["gm"] != gm_iqr.means_.argmin()]
+
+            LOG.info(f"IQR {iqr_range}")
+            LOG.info(iqr_ranges.groupby("gm").agg({"min", "mean", "median", "max"}))
+
+        # Filter by normality
+        if normality:
+            normality = df.apply(lambda v: shapiro(v)[1], axis=1)
+            normality = multipletests(normality, method="bonferroni")
+            df = df.loc[normality[0]]
+
+        # Filter by number of obvservations
+        if perc_measures is not None:
+            df = df[df.count(1) > (perc_measures * df.shape[1])]
+
+        return df
+
+    def map_deprecated(self):
+        return pd.read_csv(
+            f"{DPATH}/uniprot_human_idmap_deprecated.tab", sep="\t", index_col=0
+        )
+
+    def map_gene_name(self, index_col="Entry name"):
+        idmap = pd.read_csv(f"{DPATH}/uniprot_human_idmap.tab.gz", sep="\t")
+
+        if index_col is not None:
+            idmap = idmap.dropna(subset=[index_col]).set_index(index_col)
+
+        idmap["GeneSymbol"] = idmap["Gene names  (primary )"].apply(
+            lambda v: v.split("; ")[0] if str(v).lower() != "nan" else v
+        )
+
+        return idmap
+
+
 class CRISPR:
     """
     Importer module for CRISPR-Cas9 screens acquired at Sanger and Broad Institutes.

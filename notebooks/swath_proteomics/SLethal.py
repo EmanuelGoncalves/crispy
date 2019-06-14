@@ -5,6 +5,7 @@ import logging
 import numpy as np
 import pandas as pd
 from limix.qtl import scan
+from limix.stats import linear_kinship
 from sklearn.preprocessing import StandardScaler
 from statsmodels.stats.multitest import multipletests
 from crispy.DataImporter import GeneExpression, CRISPR, Proteomics, WES, Sample
@@ -91,7 +92,8 @@ class SLethal:
     def get_covariates(self, std_filter=True):
         """
         Add CRISPR institute of origin as covariate;
-        Add mutational burden and cancer type as covariate to remove potential superious associations (https://doi.org/10.1016/j.cell.2019.05.005)
+        Add mutational burden and cancer type as covariate to remove potential superious associations
+        (https://doi.org/10.1016/j.cell.2019.05.005)
 
         """
 
@@ -144,10 +146,16 @@ class SLethal:
         return df
 
     @staticmethod
-    def kinship(k):
-        K = k.dot(k.T)
-        K /= K.values.diagonal().mean()
-        return K
+    def kinship(x, limix_linear=True):
+        if limix_linear:
+            k = linear_kinship(x.T.values) + 1e-9 * np.eye(x.shape[1])
+            k = pd.DataFrame(k, index=x.columns, columns=x.columns)
+
+        else:
+            k = x.dot(x.T)
+            k /= k.values.diagonal().mean()
+
+        return k
 
     @staticmethod
     def lmm_limix(
@@ -224,9 +232,14 @@ class SLethal:
         :param z: pandas.DataFrame
         :return: pandas.DataFrame
         """
+
         # - Kinship matrix (random effects)
-        k = self.kinship(x.T) if k is None else k
+        if k is None:
+            k = self.kinship(x.T.values)
+
+        # - Covariates
         m = self.get_covariates() if m is None else m
+        m = pd.concat([m, y.median(1)], axis=1, sort=False)
 
         # - Single feature linear mixed regression
         # Association
@@ -238,6 +251,7 @@ class SLethal:
 
             if z is None:
                 m_gene = m.copy()
+
             else:
                 m_gene = z.loc[[gene]].T
                 m_gene = pd.Series(
@@ -248,9 +262,6 @@ class SLethal:
                 m_gene = pd.concat([m_gene, m], axis=1, sort=False)
 
             gis = self.lmm_single_phenotype(y=y.loc[[gene]].T, x=x.T, k=k, m=m_gene)
-
-            # res = self.lmm_limix(y=y.loc[[gene]].T, x=x.T, k=k, m=m_gene)
-            # print(res[0])
 
             gi.append(gis)
 
