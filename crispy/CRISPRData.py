@@ -6,9 +6,7 @@ import logging
 import numpy as np
 import pandas as pd
 import pkg_resources
-import seaborn as sns
 import scipy.stats as st
-import matplotlib.pyplot as plt
 from pandas import DataFrame
 from crispy.Utils import Utils
 
@@ -138,12 +136,16 @@ DATASETS = {
 
 class Library:
     @staticmethod
-    def load_library(lib_file, set_index=True):
+    def load_library(lib_file, set_index=True, remove_dup=False):
         lib_path = f"{LIBS_DIR}/{lib_file}"
 
         assert os.path.exists(lib_path), f"CRISPR library {lib_file} not supported"
 
         clib = pd.read_csv(lib_path)
+
+        if remove_dup:
+            nmaps = clib.groupby("sgRNA_ID")["Gene"].agg(list)
+            clib = clib[clib["sgRNA_ID"].isin(set(nmaps[nmaps.apply(len) == 1].index))]
 
         if set_index:
             clib = clib.set_index("sgRNA_ID")

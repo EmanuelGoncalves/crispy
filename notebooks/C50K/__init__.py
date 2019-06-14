@@ -5,10 +5,9 @@ import os
 import logging
 import numpy as np
 import pandas as pd
-import seaborn as sns
 import pkg_resources
 import matplotlib.pyplot as plt
-from limix.qtl import st_scan
+from limix.qtl import scan
 from crispy.Utils import Utils
 from crispy.QCPlot import QCplot
 from scipy.stats import ks_2samp
@@ -383,7 +382,7 @@ def lm_limix(y, x):
     m["intercept"] = 1
 
     # Linear Mixed Model
-    lmm = st_scan(X, Y, M=m, lik="normal", verbose=False)
+    lmm = scan(X, Y, M=m, lik="normal", verbose=False)
 
     res = pd.DataFrame(
         dict(
