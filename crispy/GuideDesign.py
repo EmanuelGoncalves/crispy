@@ -47,10 +47,7 @@ import matplotlib.pyplot as plt
 #           + [Yusa] sgRNAs with more than 1 perfect exonic match were excluded;
 #           + [Yusa] N12NGG
 #
-#       7) On-target effect:
-#           + [Avana] Rule-set 1:
-#
-#       8) Multi-guides:
+#       7) Multi-guides:
 #           + [Brunello] sgRNAs need to target a location at least 5% away from other guides from a protein-coding
 #           standpoint.
 

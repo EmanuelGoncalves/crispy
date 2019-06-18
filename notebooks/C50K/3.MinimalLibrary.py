@@ -60,18 +60,28 @@ for g in pgenes["symbol"]:
         g_guides_brunello = g_guides_brunello.sort_values("doenchroot")
         g_guides = pd.concat([g_guides, g_guides_brunello.head(n_guides - g_guides.shape[0])], sort=False)
 
-    # Throw warning if no guides have been found
+    # Top-up with TKOv3 guides
     if len(g_guides) < n_guides:
-        LOG.warning(f"No sgRNA: {g}")
+        g_guides_tkov3 = mlib.query(f"(Gene == '{g}') & (lib == 'TKOv3')")
+        g_guides = pd.concat([g_guides, g_guides_tkov3.head(n_guides - g_guides.shape[0])], sort=False)
 
-    # Exclude non protein coding genes
-    if g_guides["Gene"].isnull().any() or (g not in pgenes["symbol"].values):
-        LOG.warning(f"Gene removed: {g} (non protein coding gene)")
-        continue
+    if g not in mlib["Gene"].values:
+        # Throw warning if no guides have been found
+        LOG.warning(f"Gene not included: {g}")
+
+    elif len(g_guides) < n_guides:
+        # Throw warning if no guides passing the QC have been found
+        LOG.warning(f"No sgRNA: {g}")
 
     minimal_lib.append(g_guides)
 
 minimal_lib = pd.concat(minimal_lib)
-minimal_lib["info"] = [
-    "LanderSabatini" if k[:2] == "sg" else v for k, v in minimal_lib["info"].iteritems()
+minimal_lib["lib"] = [
+    "LanderSabatini" if g[:2] == "sg" else l for g, l in minimal_lib[["sgRNA_ID", "lib"]].values
 ]
+LOG.info(minimal_lib["lib"].value_counts())
+
+
+# Export
+
+minimal_lib.to_csv(f"{dpath}/crispr_libs/minimal.csv.gz", compression="gzip", index=False)

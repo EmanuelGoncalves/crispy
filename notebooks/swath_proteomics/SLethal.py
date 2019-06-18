@@ -89,38 +89,54 @@ class SLethal:
         self.wes = self.wes_obj.filter(**self.filter_wes_kws)
         self.logger.info(f"WES={self.wes.shape}")
 
-    def get_covariates(self, std_filter=True):
+    def get_covariates(
+        self,
+        std_filter=True,
+        add_institute=True,
+        add_medium=True,
+        add_cancertype=True,
+        add_mburden=True,
+    ):
         """
         Add CRISPR institute of origin as covariate;
         Add mutational burden and cancer type as covariate to remove potential superious associations
         (https://doi.org/10.1016/j.cell.2019.05.005)
 
         """
+        covariates = []
 
         # CRISPR institute of origin
-        crispr_insitute = (
-            pd.get_dummies(self.crispr_obj.institute).astype(int).loc[self.samples]
-        )
+        if add_institute:
+            crispr_insitute = (
+                pd.get_dummies(self.crispr_obj.institute).astype(int).loc[self.samples]
+            )
+            covariates.append(crispr_insitute)
 
         # Cell lines culture conditions
-        culture = (
-            pd.get_dummies(self.ss_obj.samplesheet["growth_properties"])
-            .drop(columns=["Unknown"])
-            .loc[self.samples]
-        )
+        if add_medium:
+            culture = (
+                pd.get_dummies(self.ss_obj.samplesheet["growth_properties"])
+                .drop(columns=["Unknown"])
+                .loc[self.samples]
+            )
+            covariates.append(culture)
 
         # Cancer type
-        ctype = pd.get_dummies(self.ss_obj.samplesheet["cancer_type"]).loc[self.samples]
+        if add_cancertype:
+            ctype = pd.get_dummies(self.ss_obj.samplesheet["cancer_type"]).loc[
+                self.samples
+            ]
+            covariates.append(ctype)
 
         # Mutation burden
-        m_burdern = (
-            self.ss_obj.samplesheet["mutational_burden"].round(3).loc[self.samples]
-        )
+        if add_mburden:
+            m_burdern = (
+                self.ss_obj.samplesheet["mutational_burden"].round(3).loc[self.samples]
+            )
+            covariates.append(m_burdern)
 
         # Merge covariates
-        covariates = pd.concat(
-            [crispr_insitute, culture, ctype, m_burdern], axis=1, sort=False
-        )
+        covariates = pd.concat(covariates, axis=1, sort=False)
 
         # Remove covariates with zero standard deviation
         if std_filter:
@@ -198,7 +214,9 @@ class SLethal:
 
     @staticmethod
     def lmm_single_phenotype(y, x, m=None, k=None):
-        cols_rename = dict(effect_name="x_gene", pv20="pval", effsize="beta", effsize_se="beta_se")
+        cols_rename = dict(
+            effect_name="x_gene", pv20="pval", effsize="beta", effsize_se="beta_se"
+        )
 
         lmm, params = SLethal.lmm_limix(y, x, m, k, scale_x=(x.dtypes[0] != np.int))
 
@@ -238,8 +256,8 @@ class SLethal:
             k = self.kinship(x.T.values)
 
         # - Covariates
-        m = self.get_covariates() if m is None else m
-        m = pd.concat([m, y.median(1)], axis=1, sort=False)
+        m = self.get_covariates(add_cancertype=False) if m is None else m
+        m = pd.concat([m, y.median().rename("median_protein")], axis=1, sort=False)
 
         # - Single feature linear mixed regression
         # Association

@@ -49,7 +49,7 @@ slethal = SLethal()
 
 # CRISPR kinship matrix
 
-k_crispr = slethal.kinship(slethal.crispr_obj.get_data()[slethal.samples].T)
+k_crispr = slethal.kinship(slethal.crispr_obj.get_data()[slethal.samples])
 
 
 # Overlap genes
