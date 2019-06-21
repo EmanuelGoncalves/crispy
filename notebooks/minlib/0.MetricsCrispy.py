@@ -19,7 +19,7 @@
 # %autoreload 2
 
 import pandas as pd
-from C50K import rpath, dpath, LOG
+from minlib import rpath, dpath, LOG
 from crispy.CopyNumberCorrection import Crispy
 from crispy.DataImporter import CopyNumberSegmentation
 from crispy.CRISPRData import CRISPRDataSet, ReadCounts

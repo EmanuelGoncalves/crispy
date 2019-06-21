@@ -22,7 +22,7 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 from crispy.CrispyPlot import CrispyPlot
-from C50K import rpath
+from minlib import rpath
 
 
 # Metrics replicate correlations

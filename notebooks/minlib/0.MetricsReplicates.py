@@ -20,7 +20,7 @@
 
 import numpy as np
 import pandas as pd
-from C50K import rpath, LOG
+from minlib import rpath, LOG
 from crispy.CRISPRData import CRISPRDataSet
 
 

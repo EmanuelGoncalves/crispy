@@ -21,7 +21,7 @@
 import pandas as pd
 from crispy.DataImporter import Mobem
 from crispy.CRISPRData import CRISPRDataSet, ReadCounts
-from C50K import rpath, dpath, LOG, ky_v11_calculate_gene_fc, lm_associations
+from minlib import rpath, dpath, LOG, ky_v11_calculate_gene_fc, lm_associations
 
 
 # Genomic data

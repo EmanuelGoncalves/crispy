@@ -21,7 +21,7 @@
 
 import pandas as pd
 from crispy.CRISPRData import CRISPRDataSet
-from C50K import dpath, rpath, define_sgrnas_sets, estimate_ks
+from minlib import dpath, rpath, define_sgrnas_sets, estimate_ks
 
 
 # Project Score samples acquired with Kosuke_Yusa v1.1 library

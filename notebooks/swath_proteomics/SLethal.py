@@ -175,22 +175,29 @@ class SLethal:
 
     @staticmethod
     def lmm_limix(
-        y, x, m=None, k=None, lik="normal", scale_y=True, scale_x=True, filter_std=True
+        y, x, m=None, k=None, lik="normal", transform_y="scale", transform_x="scale", filter_std=True
     ):
-        # Build matrices
+        # Y
         Y = y.dropna()
 
-        if scale_y:
+        if transform_y == "scale":
             Y = pd.DataFrame(
                 StandardScaler().fit_transform(Y), index=Y.index, columns=Y.columns
             )
 
+        elif transform_y == "rank":
+            Y = Y.rank(axis=1)
+
+        # X
         X = x.loc[Y.index]
 
-        if scale_x:
+        if transform_x == "scale":
             X = pd.DataFrame(
                 StandardScaler().fit_transform(X), index=X.index, columns=X.columns
             )
+
+        elif transform_x == "rank":
+            X = X.rank(axis=1)
 
         # Random effects matrix
         if k is None:
@@ -213,12 +220,12 @@ class SLethal:
         return lmm, dict(x=X, y=Y, k=K, m=m)
 
     @staticmethod
-    def lmm_single_phenotype(y, x, m=None, k=None):
+    def lmm_single_phenotype(y, x, m=None, k=None, transform_y="scale", transform_x="scale"):
         cols_rename = dict(
             effect_name="x_gene", pv20="pval", effsize="beta", effsize_se="beta_se"
         )
 
-        lmm, params = SLethal.lmm_limix(y, x, m, k, scale_x=(x.dtypes[0] != np.int))
+        lmm, params = SLethal.lmm_limix(y, x, m, k, transform_y=transform_y, transform_x=transform_x)
 
         effect_sizes = lmm.effsizes["h2"].query("effect_type == 'candidate'")
         effect_sizes = effect_sizes.set_index("test").drop(
@@ -237,7 +244,7 @@ class SLethal:
 
         return res.sort_values("pval")
 
-    def genetic_interactions(self, y, x, m=None, k=None, z=None):
+    def genetic_interactions(self, y, x, m=None, k=None, z=None, add_y_median_cov=True, kws_cov=None, kws_lmm=None):
         """
         Determine genetic interactions between gene-products in y and x considering covariates m and sample structure
         defined in k. z can be provided to introduce an extra covariate of gene-product considered in y, e.g. predicting
@@ -248,6 +255,9 @@ class SLethal:
         :param m: pandas.DataFrame
         :param k: pandas.DataFrame
         :param z: pandas.DataFrame
+        :param add_y_median_cov: pandas.DataFrame
+        :param kws_cov: pandas.DataFrame
+        :param kws_lmm: pandas.DataFrame
         :return: pandas.DataFrame
         """
 
@@ -255,9 +265,16 @@ class SLethal:
         if k is None:
             k = self.kinship(x.T.values)
 
+        # - GLM regression kws
+        kws_lmm = dict(transform_y="scale", transform_x="scale") if kws_lmm is None else kws_lmm
+
         # - Covariates
-        m = self.get_covariates(add_cancertype=False) if m is None else m
-        m = pd.concat([m, y.median().rename("median_protein")], axis=1, sort=False)
+        kws_cov = dict(add_cancertype=False) if kws_cov is None else kws_cov
+
+        m = self.get_covariates(**kws_cov) if m is None else m
+
+        if add_y_median_cov:
+            m = pd.concat([m, y.median().rename("median_protein")], axis=1, sort=False)
 
         # - Single feature linear mixed regression
         # Association
@@ -270,7 +287,7 @@ class SLethal:
             if z is None:
                 m_gene = m.copy()
 
-            else:
+            elif type(z) is pd.DataFrame:
                 m_gene = z.loc[[gene]].T
                 m_gene = pd.Series(
                     StandardScaler().fit_transform(m_gene)[:, 0],
@@ -279,7 +296,14 @@ class SLethal:
                 )
                 m_gene = pd.concat([m_gene, m], axis=1, sort=False)
 
-            gis = self.lmm_single_phenotype(y=y.loc[[gene]].T, x=x.T, k=k, m=m_gene)
+            elif type(z) is pd.Series:
+                m_gene = pd.concat([z, m], axis=1, sort=False)
+
+            else:
+                m_gene = None
+                self.logger.warning(f"z type ({type(z)} not supported. m set to None")
+
+            gis = self.lmm_single_phenotype(y=y.loc[[gene]].T, x=x.T, k=k, m=m_gene, **kws_lmm)
 
             gi.append(gis)
 

@@ -21,7 +21,7 @@
 
 import pandas as pd
 from crispy.CRISPRData import CRISPRDataSet
-from C50K import rpath, guides_aroc_benchmark, LOG
+from minlib import rpath, guides_aroc_benchmark, LOG
 
 
 # Import sgRNA counts and efficiency metrics

@@ -21,7 +21,7 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from C50K import rpath
+from minlib import rpath
 from scipy.interpolate import interpn
 
 

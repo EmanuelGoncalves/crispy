@@ -18,9 +18,10 @@
 # %load_ext autoreload
 # %autoreload 2
 
+import re
 import numpy as np
 import pandas as pd
-from C50K import LOG, rpath, dpath
+from minlib import LOG, rpath, dpath
 from crispy.CRISPRData import CRISPRDataSet, Library
 
 
@@ -80,6 +81,25 @@ minimal_lib["lib"] = [
     "LanderSabatini" if g[:2] == "sg" else l for g, l in minimal_lib[["sgRNA_ID", "lib"]].values
 ]
 LOG.info(minimal_lib["lib"].value_counts())
+
+
+# Gencode
+
+sym_check = pd.read_csv(f"{dpath}/gencode.v30.annotation.gtf.hgnc.map.csv.gz")
+sym_check = sym_check.sort_values(["Input", "Match type"])
+sym_check = sym_check.groupby("Input").first()
+
+gencode = pd.read_csv(f"{dpath}/gencode.v30.annotation.gtf.gz", sep="\t", skiprows=5, header=None)
+gencode = gencode[gencode[8].apply(lambda v: 'gene_type "protein_coding"' in v)]
+gencode = gencode[gencode[2] == "gene"]
+gencode = gencode[gencode[0] != "chrM"]
+gencode["gene_name"] = gencode[8].apply(lambda v: re.search('gene_name "(.*?)";', v).group(1)).values
+gencode["Approved symbol"] = sym_check.reindex(gencode["gene_name"])["Approved symbol"].values
+
+gencode_miss = gencode[~gencode["gene_name"].isin(minimal_lib["Gene"].values)]
+gencode_miss = gencode_miss[gencode_miss[8].apply(lambda v: 'tag "overlapping_locus"' not in v)]
+gencode_miss = gencode_miss[gencode_miss[8].apply(lambda v: ' level 3;' not in v)]
+gencode_miss = gencode_miss[gencode_miss["Approved symbol"].isin(pgenes["symbol"].values)]
 
 
 # Export

@@ -22,7 +22,7 @@ import datetime
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
-from C50K import rpath, clib_palette, clib_order
+from minlib import rpath, clib_palette, clib_order
 
 
 # CRISPR-Cas9 library sizes

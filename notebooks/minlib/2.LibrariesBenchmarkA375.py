@@ -25,7 +25,7 @@ import matplotlib.pyplot as plt
 from crispy.QCPlot import QCplot
 from itertools import combinations
 from crispy.CrispyPlot import CrispyPlot
-from C50K import clib_palette, LOG, rpath
+from minlib import clib_palette, LOG, rpath
 from crispy.CRISPRData import CRISPRDataSet
 
 

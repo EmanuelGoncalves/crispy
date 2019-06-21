@@ -21,7 +21,7 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 from crispy.CRISPRData import CRISPRDataSet
-from C50K import rpath, sgrnas_scores_scatter, define_sgrnas_sets
+from minlib import rpath, sgrnas_scores_scatter, define_sgrnas_sets
 
 
 # Guides efficacy metric

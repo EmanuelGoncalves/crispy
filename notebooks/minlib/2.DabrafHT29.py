@@ -24,7 +24,7 @@ import seaborn as sns
 from math import sqrt
 import matplotlib.pyplot as plt
 from scipy.stats import spearmanr
-from C50K import dpath, rpath, LOG
+from minlib import dpath, rpath, LOG
 from scipy.interpolate import interpn
 from crispy.CRISPRData import CRISPRDataSet
 from sklearn.metrics import mean_squared_error

@@ -19,7 +19,7 @@ from statsmodels.stats.multitest import multipletests
 LOG = logging.getLogger("Crispy")
 
 dpath = pkg_resources.resource_filename("crispy", "data/")
-rpath = pkg_resources.resource_filename("notebooks", "C50K/reports/")
+rpath = pkg_resources.resource_filename("notebooks", "minlib/reports/")
 
 clib_palette = {
     "Yusa_v1.1": "#3182bd",

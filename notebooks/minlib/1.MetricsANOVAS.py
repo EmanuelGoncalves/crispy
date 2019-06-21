@@ -28,7 +28,7 @@ from scipy.interpolate import interpn
 from crispy.DataImporter import Mobem
 from sklearn.metrics import mean_squared_error
 from crispy.CRISPRData import CRISPRDataSet, ReadCounts
-from C50K import rpath, ky_v11_calculate_gene_fc, define_sgrnas_sets
+from minlib import rpath, ky_v11_calculate_gene_fc, define_sgrnas_sets
 
 
 # Biomarker associations (ANOVA) using Strongly Selective Dependencies (SSDs)

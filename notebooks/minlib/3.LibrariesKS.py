@@ -27,7 +27,7 @@ from scipy.stats import spearmanr
 from scipy.interpolate import interpn
 from crispy.CRISPRData import CRISPRDataSet
 from sklearn.metrics import mean_squared_error
-from C50K import dpath, rpath, define_sgrnas_sets, estimate_ks
+from minlib import dpath, rpath, define_sgrnas_sets, estimate_ks
 
 
 # CRISPR Project Score - Kosuke Yusa v1.1

@@ -20,7 +20,7 @@
 
 import pandas as pd
 import matplotlib.pyplot as plt
-from C50K import rpath
+from minlib import rpath
 from crispy.QCPlot import QCplot
 
 

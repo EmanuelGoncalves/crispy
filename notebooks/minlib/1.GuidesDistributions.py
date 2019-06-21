@@ -24,7 +24,7 @@ import matplotlib.pyplot as plt
 from crispy.Utils import Utils
 from scipy.stats import mannwhitneyu
 from crispy.CRISPRData import CRISPRDataSet, ReadCounts
-from C50K import rpath, LOG, define_sgrnas_sets, ky_v11_calculate_gene_fc
+from minlib import rpath, LOG, define_sgrnas_sets, ky_v11_calculate_gene_fc
 
 
 # Project Score - Kosuke_Yusa v1.1

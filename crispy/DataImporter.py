@@ -108,9 +108,7 @@ class GeneExpression:
 
     """
 
-    def __init__(
-        self, voom_file="gexp/rnaseq_voom.csv.gz"
-    ):
+    def __init__(self, voom_file="gexp/rnaseq_voom.csv.gz"):
         self.voom = pd.read_csv(f"{DPATH}/{voom_file}", index_col=0)
 
     def get_data(self, dtype="voom"):
@@ -179,7 +177,9 @@ class Proteomics:
             deprecated_ids["Entry name"]
         )
         self.noimputed = self.noimputed.set_index("Protein")
-        self.noimputed = self.noimputed.drop(columns=["N.Pept", "Q.Pept", "S/N", "P(PECA)"])
+        self.noimputed = self.noimputed.drop(
+            columns=["N.Pept", "Q.Pept", "S/N", "P(PECA)"]
+        )
 
         # Import peptide levels
         self.peptide = pd.read_csv(f"{DPATH}/{peptide_matrix}", sep="\t")
@@ -259,7 +259,14 @@ class Proteomics:
 
         return data
 
-    def filter(self, dtype="protein", subset=None, normality=False, iqr_range=None, perc_measures=0.85):
+    def filter(
+        self,
+        dtype="protein",
+        subset=None,
+        normality=False,
+        iqr_range=None,
+        perc_measures=0.85,
+    ):
         df = self.get_data(dtype=dtype)
 
         # Subset matrices
@@ -402,6 +409,7 @@ class CRISPR:
         drop_core_essential=False,
         min_events=5,
         drop_core_essential_broad=False,
+        context_specific_only=False,
     ):
         df = self.get_data(scale=scale)
 
@@ -447,6 +455,15 @@ class CRISPR:
 
         if drop_core_essential_broad:
             df = df[~df.index.isin(Utils.get_broad_core_essential())]
+
+        # Consider only contxt-specific genes
+        if context_specific_only:
+            csgenes = set(
+                pd.read_csv(f"{DPATH}/context_specific_genes.csv.gz").query(
+                    "not core_essential"
+                )["symbol"]
+            )
+            df = df.loc[list(set(df.index).intersection(csgenes))]
 
         # - Subset matrices
         return df
@@ -589,9 +606,22 @@ class CopyNumber:
         else:
             return 0
 
+    @staticmethod
+    def is_deleted(cn, ploidy, ploidy_threshold=2.7):
+        if (ploidy <= ploidy_threshold) and (cn == 0):
+            return 1
+
+        elif (ploidy > ploidy_threshold) and (cn < (ploidy - ploidy_threshold)):
+            return 1
+
+        else:
+            return 0
+
 
 class CopyNumberSegmentation:
-    def __init__(self, cnv_file="copy_number/Summary_segmentation_data_994_lines_picnic.csv.gz"):
+    def __init__(
+        self, cnv_file="copy_number/Summary_segmentation_data_994_lines_picnic.csv.gz"
+    ):
         self.copynumber = pd.read_csv(f"{DPATH}/{cnv_file}")
 
     def get_data(self):
@@ -605,3 +635,60 @@ class CopyNumberSegmentation:
             df = df[df["model_id"].isin(subset)]
 
         return df
+
+
+class PipelineResults:
+    def __init__(self, results_dir, import_fc=False, import_bagel=False, import_mageck=False):
+        self.results_dir = results_dir
+
+        if import_fc:
+            self.fc, self.fc_c, self.fc_cq = self.import_fc_results()
+            LOG.info("Fold-changes imported")
+
+        if import_bagel:
+            self.bf, self.bf_q, self.bf_b = self.import_bagel_results()
+            LOG.info("BAGEL imported")
+
+        if import_mageck:
+            self.mdep_fdr = self.import_mageck_results()
+            LOG.info("MAGeCK imported")
+
+    def import_bagel_results(self):
+        # Bayesian factors
+        bf = pd.read_csv(
+            f"{self.results_dir}/_BayesianFactors.tsv", sep="\t", index_col=0
+        )
+
+        # Quantile normalised bayesian factors
+        bf_q = pd.read_csv(
+            f"{self.results_dir}/_scaledBayesianFactors.tsv", sep="\t", index_col=0
+        )
+
+        # Binarised bayesian factors
+        bf_b = pd.read_csv(
+            f"{self.results_dir}/_binaryDepScores.tsv", sep="\t", index_col=0
+        )
+
+        return bf, bf_q, bf_b
+
+    def import_fc_results(self):
+        # Fold-changes
+        fc = pd.read_csv(f"{self.results_dir}/_logFCs.tsv", sep="\t", index_col=0)
+
+        # Copy-number corrected fold-changes
+        fc_c = pd.read_csv(
+            f"{self.results_dir}/_corrected_logFCs.tsv", sep="\t", index_col=0
+        )
+
+        # Quantile normalised copy-number corrected fold-changes
+        fc_cq = pd.read_csv(
+            f"{self.results_dir}/_qnorm_corrected_logFCs.tsv", sep="\t", index_col=0
+        )
+
+        return fc, fc_c, fc_cq
+
+    def import_mageck_results(self):
+        # Dependencies FDR
+        mdep_fdr = pd.read_csv(f"{self.results_dir}/_MageckFDRs.tsv", sep="\t", index_col=0)
+
+        return mdep_fdr

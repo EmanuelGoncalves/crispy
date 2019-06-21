@@ -22,7 +22,7 @@ import pandas as pd
 from crispy.QCPlot import QCplot
 from crispy.DataImporter import CopyNumber
 from crispy.CRISPRData import CRISPRDataSet, ReadCounts
-from C50K import rpath, LOG, assemble_corrected_fc, ky_v11_calculate_gene_fc
+from minlib import rpath, LOG, assemble_corrected_fc, ky_v11_calculate_gene_fc
 
 
 # Project Score samples acquired with Kosuke_Yusa v1.1 library
