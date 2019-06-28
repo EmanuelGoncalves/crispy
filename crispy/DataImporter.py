@@ -638,7 +638,7 @@ class CopyNumberSegmentation:
 
 
 class PipelineResults:
-    def __init__(self, results_dir, import_fc=False, import_bagel=False, import_mageck=False):
+    def __init__(self, results_dir, import_fc=False, import_bagel=False, import_mageck=False, mageck_fdr_thres=.1):
         self.results_dir = results_dir
 
         if import_fc:
@@ -650,7 +650,8 @@ class PipelineResults:
             LOG.info("BAGEL imported")
 
         if import_mageck:
-            self.mdep_fdr = self.import_mageck_results()
+            self.mageck_fdr_thres = mageck_fdr_thres
+            self.mdep_fdr, self.mdep_bin = self.import_mageck_results()
             LOG.info("MAGeCK imported")
 
     def import_bagel_results(self):
@@ -690,5 +691,6 @@ class PipelineResults:
     def import_mageck_results(self):
         # Dependencies FDR
         mdep_fdr = pd.read_csv(f"{self.results_dir}/_MageckFDRs.tsv", sep="\t", index_col=0)
+        mdep_bin = (mdep_fdr < self.mageck_fdr_thres).astype(int)
 
-        return mdep_fdr
+        return mdep_fdr, mdep_bin

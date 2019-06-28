@@ -10,7 +10,9 @@ import matplotlib.pyplot as plt
 from limix.qtl import scan
 from crispy.Utils import Utils
 from crispy.QCPlot import QCplot
+from scipy.stats import pearsonr
 from scipy.stats import ks_2samp
+from scipy.stats import gaussian_kde
 from scipy.interpolate import interpn
 from crispy.DataImporter import Sample
 from sklearn.preprocessing import StandardScaler
@@ -126,21 +128,32 @@ def sgrnas_scores_scatter(
     z=None,
     z_color="#F2C500",
     add_cbar=True,
+    annot=False,
+    diag_line=False,
+    reset_lim=False,
+    z_method="interpn",
     ax=None,
 ):
     highlight_guides = False
 
-    df = df_ks.dropna(subset=[x, y])
+    df = df_ks.dropna(subset=[x, y]).astype(float)
 
     if z is None:
-        data, x_e, y_e = np.histogram2d(df[x], df[y], bins=20)
-        z_var = interpn(
-            (0.5 * (x_e[1:] + x_e[:-1]), 0.5 * (y_e[1:] + y_e[:-1])),
-            data,
-            np.vstack([df[x], df[y]]).T,
-            method="splinef2d",
-            bounds_error=False,
-        )
+        if z_method == "interpn":
+            data, x_e, y_e = np.histogram2d(df[x], df[y], bins=20)
+            z_var = interpn(
+                (0.5 * (x_e[1:] + x_e[:-1]), 0.5 * (y_e[1:] + y_e[:-1])),
+                data,
+                np.vstack([df[x], df[y]]).T,
+                method="splinef2d",
+                bounds_error=False,
+            )
+
+        else:
+            xy = np.vstack([df[x], df[y]])
+            z_var = gaussian_kde(xy)(xy)
+
+        assert sum(np.isnan(z_var)) == 0, "Z var contains NaNs"
 
     elif type(z) is str:
         df = df.dropna(subset=[z])
@@ -179,6 +192,34 @@ def sgrnas_scores_scatter(
             s=2,
             alpha=0.85,
         )
+
+    # Annotation
+    if annot:
+        cor, pval = pearsonr(df[x], df[y])
+        annot_text = f"R={cor:.2g}, p={pval:.1e}"
+
+        ax.text(
+            0.05,
+            0.90,
+            annot_text,
+            fontsize=4,
+            transform=ax.transAxes,
+            ha="left",
+        )
+
+    # Diagonal line
+    (x0, x1), (y0, y1) = ax.get_xlim(), ax.get_ylim()
+
+    if diag_line:
+        lims = [max(x0, y0), min(x1, y1)]
+        ax.plot(
+            lims, lims, ls="--", lw=0.3, zorder=0, c="k"
+        )
+
+    # Reset X and Y lims
+    if reset_lim:
+        ax.set_xlim(lims)
+        ax.set_ylim(lims)
 
     if (not highlight_guides) and add_cbar:
         cbar = plt.colorbar(g, spacing="uniform", extend="max")
