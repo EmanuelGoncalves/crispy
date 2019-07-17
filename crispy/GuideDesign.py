@@ -2,11 +2,8 @@
 # Copyright (C) 2019 Emanuel Goncalves
 
 import logging
-import numpy as np
 import pandas as pd
 import pkg_resources
-import seaborn as sns
-import matplotlib.pyplot as plt
 
 # # sgRNAs library selection
 #
@@ -127,18 +124,20 @@ class GuideDesign:
 
     @classmethod
     def get_wes_transcripts(cls, gene_symbol):
-        transcripts = pd.read_json(
-            f"{cls.EXON_SEARCH}?marker_symbol={gene_symbol}&species={cls.BUILD}"
-        )
-        return transcripts
+        query = f"{cls.EXON_SEARCH}?marker_symbol={gene_symbol}&species={cls.BUILD}"
+
+        query = pd.read_json(query)
+
+        return query
 
     @classmethod
     def get_wes_sgrnas(cls, exons):
-        exons_query = "&".join(map(lambda v: f"exon_id[]={v}", exons))
-        sgrnas = pd.read_json(
-            f"{cls.CRISPR_SEARCH}?&species={cls.BUILD}&{exons_query}", typ="series"
-        )
-        return sgrnas
+        query = "&".join(map(lambda v: f"exon_id[]={v}", exons))
+        query = f"{cls.CRISPR_SEARCH}?&species={cls.BUILD}&{query}"
+
+        query = pd.read_json(query, typ="series")
+
+        return query
 
     @staticmethod
     def reverse_complement(sequence, reverse=True):

@@ -41,7 +41,7 @@ rpath = pkg_resources.resource_filename("notebooks", "swath_proteomics/reports/"
 
 slethal = SLethal(
     use_proteomics=False,
-    filter_gexp_kws=dict(dtype="voom", normality=True),
+    filter_gexp_kws=dict(dtype="voom", normality=False),
     filter_crispr_kws=dict(scale=True, abs_thres=0.5, iqr_range=(10, 90), iqr_range_thres=0.5),
     filter_wes_kws=dict(
         as_matrix=True, mutation_class=["frameshift", "nonsense", "ess_splice"]
@@ -49,13 +49,31 @@ slethal = SLethal(
 )
 
 
-gi_gexp = slethal.genetic_interactions(slethal.gexp)
-gi_gexp = gi_gexp.set_index(["phenotype", "gene"])
+y = slethal.crispr[slethal.samples]
+
+#
+
+x = slethal.gexp[slethal.samples]
+
+gi_gexp = slethal.genetic_interactions(y=y, x=x)
 gi_gexp.to_csv(f"{dpath}/gis_gexp.csv.gz", compression="gzip")
 
-k = slethal.kinship(slethal.wes_obj.get_data(as_matrix=True)[slethal.samples].T)
-gi_wes = slethal.genetic_interactions(slethal.wes, k=k)
-gi_wes = gi_wes.set_index(["phenotype", "gene"])
+
+#
+
+x = slethal.cn[slethal.samples]
+x = x.loc[x.std(1) != 0]
+
+gi_cn = slethal.genetic_interactions(y=y, x=x)
+gi_cn.to_csv(f"{dpath}/gis_cn.csv.gz", compression="gzip")
+
+
+#
+
+x = slethal.wes[slethal.samples]
+x = x.loc[x.std(1) != 0]
+
+gi_wes = slethal.genetic_interactions(y=y, x=x)
 gi_wes.to_csv(f"{dpath}/gis_wes.csv.gz", compression="gzip")
 
 

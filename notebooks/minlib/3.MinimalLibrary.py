@@ -21,8 +21,16 @@
 import re
 import numpy as np
 import pandas as pd
+from GuideDesign import GuideDesign
 from minlib import LOG, rpath, dpath
 from crispy.CRISPRData import CRISPRDataSet, Library
+
+
+# WGE KY v1.1 sequence mapping
+
+ky_v11_wge = pd.read_csv(f"{dpath}/crispr_libs/Yusa_v1.1_WGE_map.txt", sep="\t", index_col=0)
+ky_v11_wge = ky_v11_wge[~ky_v11_wge["WGE_sequence"].isna()]
+ky_v11_wge["WGE_sequence"] = ky_v11_wge["WGE_sequence"].apply(lambda v: v[:-3])
 
 
 # Master library (KosukeYusa v1.1 + Avana + Brunello)
@@ -31,6 +39,9 @@ mlib = Library.load_library("master.csv.gz", set_index=False)
 mlib = mlib.sort_values(
     ["ks_control_min", "jacks_min", "doenchroot"], ascending=[True, True, False]
 )
+
+mlib = mlib[~mlib["sgRNA_ID"].isin(ky_v11_wge[ky_v11_wge["Assembly"] == "Grch19"].index)]
+mlib.loc[mlib["sgRNA_ID"].isin(ky_v11_wge.index), "sgRNA"] = ky_v11_wge.loc[mlib["sgRNA_ID"], "WGE_sequence"].dropna().values
 
 
 # Protein coding genes
@@ -77,9 +88,14 @@ for g in pgenes["symbol"]:
     minimal_lib.append(g_guides)
 
 minimal_lib = pd.concat(minimal_lib)
+
 minimal_lib["lib"] = [
     "LanderSabatini" if g[:2] == "sg" else l for g, l in minimal_lib[["sgRNA_ID", "lib"]].values
 ]
+
+g_count = minimal_lib["Gene"].value_counts()
+minimal_lib = minimal_lib[~minimal_lib["Gene"].isin(g_count[g_count < n_guides].index)]
+
 LOG.info(minimal_lib["lib"].value_counts())
 
 

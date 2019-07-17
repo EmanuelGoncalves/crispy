@@ -13,10 +13,36 @@ from matplotlib.patches import Arc
 from collections import OrderedDict
 from sklearn.metrics.ranking import auc
 from crispy.CrispyPlot import CrispyPlot
-from sklearn.metrics import roc_auc_score
+from sklearn.metrics import roc_auc_score, roc_curve
 
 
 class QCplot(CrispyPlot):
+    @staticmethod
+    def aroc_threshold(values, true_set=None, false_set=None, fpr_thres=0.01):
+        if true_set is None:
+            true_set = Utils.get_essential_genes(return_series=False)
+
+        if false_set is None:
+            false_set = Utils.get_non_essential_genes(return_series=False)
+
+        index_set = true_set.union(false_set)
+
+        rank = values[values.index.isin(index_set)]
+        y_true = rank.index.isin(true_set).astype(int)
+
+        fpr, tpr, thres = roc_curve(y_true, -rank)
+        roc_auc_score(y_true, -rank, max_fpr=fpr_thres)
+
+        fc_fpr_thres = -min(thres[fpr <= fpr_thres])
+        values[values < fc_fpr_thres].sort_values()
+
+        plt.plot(fpr, tpr)
+        plt.show()
+
+        # lowest fold-change under 5% FPR
+
+
+
     @staticmethod
     def recall_curve(rank, index_set=None, min_events=None):
         """

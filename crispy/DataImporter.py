@@ -9,6 +9,7 @@ import pkg_resources
 import seaborn as sns
 import matplotlib.pyplot as plt
 from crispy.Utils import Utils
+from pybedtools import BedTool
 from crispy.QCPlot import QCplot
 from scipy.stats import shapiro, iqr
 from sklearn.mixture import GaussianMixture
@@ -578,20 +579,92 @@ class Mobem:
 
 
 class CopyNumber:
-    def __init__(self, cnv_file="copy_number/copynumber_total_new_map.csv.gz"):
+    def __init__(
+        self,
+        cnv_file="copy_number/copynumber_total_new_map.csv.gz",
+        calculate_deletions=True,
+        calculate_amplifications=True,
+    ):
+        self.ss_obj = Sample()
+
         self.copynumber = pd.read_csv(f"{DPATH}/{cnv_file}", index_col=0)
 
-    def get_data(self):
-        return self.copynumber.copy()
+        self.ploidy = self.ss_obj.samplesheet["ploidy"]
 
-    def filter(self, subset=None):
-        df = self.get_data()
+        if calculate_deletions:
+            self.copynumber_del = pd.DataFrame(
+                {
+                    s: self.copynumber[s].apply(
+                        lambda v: CopyNumber.is_deleted(v, self.ploidy[s])
+                    )
+                    for s in self.copynumber
+                    if s in self.ploidy
+                }
+            )
+
+        if calculate_amplifications:
+            self.copynumber_amp = pd.DataFrame(
+                {
+                    s: self.copynumber[s].apply(
+                        lambda v: CopyNumber.is_amplified(v, self.ploidy[s])
+                    )
+                    for s in self.copynumber
+                    if s in self.ploidy
+                }
+            )
+
+    def get_data(self, dtype="del"):
+        if dtype == "del":
+            res = self.copynumber_del.copy()
+
+        elif dtype == "amp":
+            res = self.copynumber_amp.copy()
+
+        else:
+            res = self.copynumber.copy()
+
+        return res
+
+    def filter(self, subset=None, dtype="cn"):
+        df = self.get_data(dtype=dtype)
 
         # Subset matrices
         if subset is not None:
             df = df.loc[:, df.columns.isin(subset)]
 
         return df
+
+    def ploidy_from_segments(
+        self, seg_file="copy_number/Summary_segmentation_data_994_lines_picnic.csv.gz"
+    ):
+        copynumber_seg = pd.read_csv(f"{DPATH}/{seg_file}")
+
+        return pd.Series(
+            {
+                s: self.calculate_ploidy(df)[1]
+                for s, df in copynumber_seg.groupby("model_id")
+            }
+        )
+
+    @staticmethod
+    def calculate_ploidy(cn_seg):
+        cn_seg = cn_seg[~cn_seg["chr"].isin(["chrX", "chrY"])]
+
+        cn_seg = cn_seg.assign(length=cn_seg["end"] - cn_seg["start"])
+        cn_seg = cn_seg.assign(
+            cn_by_length=cn_seg["length"] * (cn_seg["copy_number"] + 1)
+        )
+
+        chrm = (
+            cn_seg.groupby("chr")["cn_by_length"]
+            .sum()
+            .divide(cn_seg.groupby("chr")["length"].sum())
+            - 1
+        )
+
+        ploidy = (cn_seg["cn_by_length"].sum() / cn_seg["length"].sum()) - 1
+
+        return chrm, ploidy
 
     @staticmethod
     def is_amplified(
@@ -638,11 +711,22 @@ class CopyNumberSegmentation:
 
 
 class PipelineResults:
-    def __init__(self, results_dir, import_fc=False, import_bagel=False, import_mageck=False, mageck_fdr_thres=.1):
+    def __init__(
+        self,
+        results_dir,
+        import_fc=False,
+        import_bagel=False,
+        import_mageck=False,
+        mageck_fdr_thres=0.1,
+        fc_thres=-0.5,
+    ):
         self.results_dir = results_dir
 
         if import_fc:
-            self.fc, self.fc_c, self.fc_cq = self.import_fc_results()
+            self.fc_thres = fc_thres
+            self.fc, self.fc_c, self.fc_cq, self.fc_s, self.fc_b = (
+                self.import_fc_results()
+            )
             LOG.info("Fold-changes imported")
 
         if import_bagel:
@@ -686,11 +770,19 @@ class PipelineResults:
             f"{self.results_dir}/_qnorm_corrected_logFCs.tsv", sep="\t", index_col=0
         )
 
-        return fc, fc_c, fc_cq
+        # Scale fold-changes
+        fc_s = CRISPR.scale(fc)
+
+        # Fold-change binary
+        fc_b = (fc_s < self.fc_thres).astype(int)
+
+        return fc, fc_c, fc_cq, fc_s, fc_b
 
     def import_mageck_results(self):
         # Dependencies FDR
-        mdep_fdr = pd.read_csv(f"{self.results_dir}/_MageckFDRs.tsv", sep="\t", index_col=0)
+        mdep_fdr = pd.read_csv(
+            f"{self.results_dir}/_MageckFDRs.tsv", sep="\t", index_col=0
+        )
         mdep_bin = (mdep_fdr < self.mageck_fdr_thres).astype(int)
 
         return mdep_fdr, mdep_bin

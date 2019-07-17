@@ -8,7 +8,7 @@ from limix.qtl import scan
 from limix.stats import linear_kinship
 from sklearn.preprocessing import StandardScaler
 from statsmodels.stats.multitest import multipletests
-from crispy.DataImporter import GeneExpression, CRISPR, Proteomics, WES, Sample
+from crispy.DataImporter import GeneExpression, CRISPR, Proteomics, WES, Sample, CopyNumber
 
 
 class SLethal:
@@ -21,10 +21,13 @@ class SLethal:
         use_wes=True,
         use_proteomics=True,
         use_transcriptomics=True,
+        use_copynumber=True,
+        use_covariates=True,
         filter_crispr_kws=None,
         filter_gexp_kws=None,
         filter_prot_kws=None,
         filter_wes_kws=None,
+        filter_cn_kws=None,
     ):
         self.verbose = verbose
         self.min_events = min_events
@@ -36,6 +39,7 @@ class SLethal:
         self.prot_obj = Proteomics()
         self.crispr_obj = CRISPR()
         self.wes_obj = WES()
+        self.cn_obj = CopyNumber()
 
         # Samples overlap
         set_samples = [
@@ -43,8 +47,14 @@ class SLethal:
             (self.gexp_obj, use_transcriptomics),
             (self.prot_obj, use_proteomics),
             (self.wes_obj, use_wes),
+            (self.cn_obj, use_copynumber),
         ]
+
         set_samples = [list(o.get_data().columns) for o, f in set_samples if f]
+
+        if use_covariates:
+            set_samples.append(list(self.get_covariates().index))
+
         self.samples = set.intersection(*map(set, set_samples))
 
         # Get logger
@@ -76,6 +86,11 @@ class SLethal:
         )
         self.filter_wes_kws["subset"] = self.samples
 
+        self.filter_cn_kws = (
+            dict(dtype="del") if filter_cn_kws is None else filter_cn_kws
+        )
+        self.filter_cn_kws["subset"] = self.samples
+
         # Load and filter data-sets
         self.gexp = self.gexp_obj.filter(**self.filter_gexp_kws)
         self.logger.info(f"Gene-expression={self.gexp.shape}")
@@ -89,6 +104,9 @@ class SLethal:
         self.wes = self.wes_obj.filter(**self.filter_wes_kws)
         self.logger.info(f"WES={self.wes.shape}")
 
+        self.cn = self.cn_obj.filter(**self.filter_cn_kws)
+        self.logger.info(f"Copy-number={self.cn.shape}")
+
     def get_covariates(
         self,
         std_filter=True,
@@ -96,6 +114,7 @@ class SLethal:
         add_medium=True,
         add_cancertype=True,
         add_mburden=True,
+        add_ploidy=True,
     ):
         """
         Add CRISPR institute of origin as covariate;
@@ -108,7 +127,7 @@ class SLethal:
         # CRISPR institute of origin
         if add_institute:
             crispr_insitute = (
-                pd.get_dummies(self.crispr_obj.institute).astype(int).loc[self.samples]
+                pd.get_dummies(self.crispr_obj.institute).astype(int)
             )
             covariates.append(crispr_insitute)
 
@@ -117,23 +136,23 @@ class SLethal:
             culture = (
                 pd.get_dummies(self.ss_obj.samplesheet["growth_properties"])
                 .drop(columns=["Unknown"])
-                .loc[self.samples]
             )
             covariates.append(culture)
 
         # Cancer type
         if add_cancertype:
-            ctype = pd.get_dummies(self.ss_obj.samplesheet["cancer_type"]).loc[
-                self.samples
-            ]
+            ctype = pd.get_dummies(self.ss_obj.samplesheet["cancer_type"])
             covariates.append(ctype)
 
         # Mutation burden
         if add_mburden:
-            m_burdern = (
-                self.ss_obj.samplesheet["mutational_burden"].round(3).loc[self.samples]
-            )
+            m_burdern = self.ss_obj.samplesheet["mutational_burden"]
             covariates.append(m_burdern)
+
+        # Ploidy
+        if add_ploidy:
+            ploidy = self.ss_obj.samplesheet["ploidy"]
+            covariates.append(ploidy)
 
         # Merge covariates
         covariates = pd.concat(covariates, axis=1, sort=False)
@@ -142,7 +161,7 @@ class SLethal:
         if std_filter:
             covariates = covariates.loc[:, covariates.std() > 0]
 
-        return covariates
+        return covariates.dropna()
 
     @staticmethod
     def multipletests_per_phenotype(associations, method):
@@ -263,7 +282,7 @@ class SLethal:
 
         # - Kinship matrix (random effects)
         if k is None:
-            k = self.kinship(x.T.values)
+            k = self.kinship(x)
 
         # - GLM regression kws
         kws_lmm = dict(transform_y="scale", transform_x="scale") if kws_lmm is None else kws_lmm
@@ -275,6 +294,8 @@ class SLethal:
 
         if add_y_median_cov:
             m = pd.concat([m, y.median().rename("median_protein")], axis=1, sort=False)
+
+        m = m.loc[self.samples]
 
         # - Single feature linear mixed regression
         # Association
