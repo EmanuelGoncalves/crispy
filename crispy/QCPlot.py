@@ -18,7 +18,7 @@ from sklearn.metrics import roc_auc_score, roc_curve
 
 class QCplot(CrispyPlot):
     @staticmethod
-    def aroc_threshold(values, true_set=None, false_set=None, fpr_thres=0.01):
+    def aroc_threshold(values, true_set=None, false_set=None, fpr_thres=0.05):
         if true_set is None:
             true_set = Utils.get_essential_genes(return_series=False)
 
@@ -31,17 +31,11 @@ class QCplot(CrispyPlot):
         y_true = rank.index.isin(true_set).astype(int)
 
         fpr, tpr, thres = roc_curve(y_true, -rank)
-        roc_auc_score(y_true, -rank, max_fpr=fpr_thres)
 
-        fc_fpr_thres = -min(thres[fpr <= fpr_thres])
-        values[values < fc_fpr_thres].sort_values()
+        auc_fpr = roc_auc_score(y_true, -rank, max_fpr=fpr_thres)
+        fc_thres_fpr = -min(thres[fpr <= fpr_thres])
 
-        plt.plot(fpr, tpr)
-        plt.show()
-
-        # lowest fold-change under 5% FPR
-
-
+        return auc_fpr, fc_thres_fpr
 
     @staticmethod
     def recall_curve(rank, index_set=None, min_events=None):

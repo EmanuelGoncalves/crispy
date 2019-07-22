@@ -17,7 +17,6 @@
 # %autosave 0
 # %load_ext autoreload
 # %autoreload 2
-from itertools import groupby
 
 import numpy as np
 import pandas as pd
@@ -68,7 +67,8 @@ ssd_genes = list(pd.read_excel(f"{dpath}/ssd_genes.xls")["CancerGenes"])
 # CRISPR pipeline results
 
 cres_min2 = PipelineResults(
-    f"{dpath}/minimal_lib/Top3_KYV11/",
+    # f"{dpath}/minimal_lib/Top3_KYV11/",
+    f"{dpath}/minimal_lib/minlib_top2_dep_v11/",
     import_fc=True,
     import_bagel=True,
     import_mageck=True,
@@ -93,7 +93,86 @@ LOG.info(f"Genes={len(genes)}; Samples={len(samples)}")
 
 #
 
-g = "TXNL4A"
+sample_thres = []
+
+for s in samples:
+    for d, df in [("Top2", cres_min2.fc), ("All", cres_all.fc)]:
+        fpr_auc, fpr_thres = QCplot.aroc_threshold(df.loc[genes, s])
+
+        sample_thres.append(dict(
+            sample=s, dtype=d, auc=fpr_auc, fpr_thres=fpr_thres
+        ))
+
+sample_thres = pd.DataFrame(sample_thres)
+
+
+#
+
+for value in ["auc", "fpr_thres"]:
+    plot_df = pd.pivot_table(sample_thres, index="sample", columns="dtype", values=value)
+
+    plt.figure(figsize=(2.0, 1.5), dpi=600)
+    ax = plt.gca()
+    sgrnas_scores_scatter(
+        df_ks=plot_df,
+        x="All",
+        y="Top2",
+        annot=True,
+        diag_line=True,
+        reset_lim=False,
+        z_method="gaussian_kde",
+        ax=ax,
+    )
+    ax.grid(True, ls=":", lw=0.1, alpha=1.0, zorder=0)
+    ax.set_xlabel("All sgRNAs")
+    ax.set_ylabel("Top 2 sgRNAs")
+    ax.set_title(f"{value} 5% FPR")
+    plt.savefig(f"{rpath}/recapdep_fpr_{value}_scatter.png", bbox_inches="tight")
+    plt.close("all")
+
+
+#
+
+fc_thres = pd.pivot_table(sample_thres, index="sample", columns="dtype", values="fpr_thres")
+
+fc_bin = {}
+for d, df in [("Top2", cres_min2.fc), ("All", cres_all.fc)]:
+    fc_bin[d] = {}
+    for s in samples:
+        fc_bin[d][s] = (df.loc[genes, s] < fc_thres.loc[s, d]).astype(int)
+    fc_bin[d] = pd.DataFrame(fc_bin[d])
+
+
+
+plot_df = pd.concat([fc_bin[c].sum(1).rename(c) for c in fc_bin], axis=1, sort=False)
+plot_df["n_sgrnas"] = ky_v11_count.lib.groupby("Gene")["sgRNA"].count().loc[plot_df.index].values
+plot_df["diff"] = plot_df.eval("All - Top2")
+
+plot_df.loc[plot_df.eval("All - Top2").sort_values().index]
+
+plt.figure(figsize=(2.0, 1.5), dpi=600)
+ax = plt.gca()
+sgrnas_scores_scatter(
+    df_ks=plot_df,
+    x="All",
+    y="Top2",
+    annot=True,
+    diag_line=True,
+    reset_lim=True,
+    z_method="gaussian_kde",
+    ax=ax,
+)
+ax.grid(True, ls=":", lw=0.1, alpha=1.0, zorder=0)
+ax.set_xlabel("All sgRNAs")
+ax.set_ylabel("Top 2 sgRNAs")
+ax.set_title(f"{value} 5% FPR")
+plt.savefig(f"{rpath}/recapdep_fpr_fc_bin_scatter.png", bbox_inches="tight")
+plt.close("all")
+
+
+#
+
+g = "RPS9"
 
 g_metrics = ky_v11_metrics.query(f"Gene == '{g}'").sort_values("ks_control_min")
 

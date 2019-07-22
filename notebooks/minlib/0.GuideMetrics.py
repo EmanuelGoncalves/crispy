@@ -39,7 +39,7 @@ ky_v11_fc = (
 sgrna_sets = define_sgrnas_sets(ky_v11_count.lib, ky_v11_fc, add_controls=True)
 
 
-# Test sgRNA distribution difference to non-targetting guides (Kolmogorov-Smirnov)
+# sgRNA distribution difference to non-targetting guides (Kolmogorov-Smirnov)
 
 ky_v11_ks = estimate_ks(ky_v11_fc, sgrna_sets["nontargeting"]["fc"])
 ky_v11_ks["ks_control_min"] = 1 - ky_v11_ks["ks_control"]

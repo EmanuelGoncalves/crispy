@@ -33,7 +33,6 @@ from notebooks.swath_proteomics.SLethal import SLethal
 
 
 logger = logging.getLogger("Crispy")
-dpath = pkg_resources.resource_filename("crispy", "data/sl")
 rpath = pkg_resources.resource_filename("notebooks", "swath_proteomics/reports/")
 
 
@@ -49,32 +48,35 @@ slethal = SLethal(
 )
 
 
+# GI
+
 y = slethal.crispr[slethal.samples]
 
-#
+
+# Gene-expression GI
 
 x = slethal.gexp[slethal.samples]
 
 gi_gexp = slethal.genetic_interactions(y=y, x=x)
-gi_gexp.to_csv(f"{dpath}/gis_gexp.csv.gz", compression="gzip")
+gi_gexp.to_csv(f"{rpath}/gis_gexp.csv.gz", compression="gzip")
 
 
-#
+# Copy-number GI
 
 x = slethal.cn[slethal.samples]
 x = x.loc[x.std(1) != 0]
 
 gi_cn = slethal.genetic_interactions(y=y, x=x)
-gi_cn.to_csv(f"{dpath}/gis_cn.csv.gz", compression="gzip")
+gi_cn.to_csv(f"{rpath}/gis_cn.csv.gz", compression="gzip")
 
 
-#
+# WES GI
 
 x = slethal.wes[slethal.samples]
 x = x.loc[x.std(1) != 0]
 
 gi_wes = slethal.genetic_interactions(y=y, x=x)
-gi_wes.to_csv(f"{dpath}/gis_wes.csv.gz", compression="gzip")
+gi_wes.to_csv(f"{rpath}/gis_wes.csv.gz", compression="gzip")
 
 
 # -
