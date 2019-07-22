@@ -48,9 +48,6 @@ brunello_data = CRISPRDataSet("Brunello_A375")
 brunello_count = brunello_data.counts.remove_low_counts(brunello_data.plasmids)
 
 brunello_library = brunello_data.lib.loc[brunello_count.index, "Gene"]
-brunello_library = brunello_library[
-    [not v.startswith("NO_CURRENT_") for v in brunello_library]
-]
 
 
 # GeCKO v2
@@ -63,8 +60,6 @@ gecko_count = gecko_count[
 ]
 
 gecko_library = gecko_data.lib[gecko_data.lib.index.isin(gecko_count.index)]["Gene"]
-gecko_library = gecko_library[[not v.startswith("NonTargeting") for v in gecko_library]]
-gecko_library = gecko_library[[not v.startswith("hsa-") for v in gecko_library]]
 
 
 # Assemble CRISPR data-sets
@@ -114,13 +109,7 @@ arocs = []
 n_iterations = 10
 
 for dset in datasets:
-    lib = dset["library"]
-
-    # Library
-    gene_nguides = lib.value_counts()
-    nguides_thres = int(gene_nguides.median())
-
-    guides = lib[lib.isin(gene_nguides[gene_nguides >= nguides_thres].index)]
+    guides = dset["library"]
 
     # Iterate number of guides
     for nguides in np.arange(1, nguides_thres + 1):
@@ -132,8 +121,12 @@ for dset in datasets:
             )
 
             # Guides
-            guides_rand = guides.groupby(guides).apply(lambda x: x.sample(n=nguides))
-            guides_rand.index = guides_rand.index.droplevel()
+            guides_rand = pd.concat(
+                [
+                    df.sample(n=nguides) if df.shape[0] > nguides else df
+                    for n, df in guides.groupby(guides)
+                ]
+            )
 
             nguides_count = dset["dataset"].loc[guides_rand.index]
             nguides_fc = nguides_count.norm_rpm().foldchange(dset["plasmids"])
@@ -160,6 +153,7 @@ for dset in datasets:
                         nguides=nguides,
                         aroc=QCplot.pr_curve(ss_fc),
                         aupr=QCplot.recall_curve(ss_fc)[2],
+                        fpr=QCplot.aroc_threshold(ss_fc)[0],
                     )
                 )
 
@@ -183,15 +177,15 @@ lib_ks = {
 # Plot subsample of replicates and sgRNAs on A375 cell line across GeCKOv2, Brunello and KosukeYusa V1.0
 
 f, axs = plt.subplots(
-    2,
+    3,
     len(datasets),
     sharex="col",
     sharey="all",
-    figsize=(len(datasets) * 2.0, 3.0),
+    figsize=(len(datasets) * 2.0, 4.5),
     dpi=600,
 )
 
-for j, metric in enumerate(["aroc", "aupr"]):
+for j, metric in enumerate(["aroc", "aupr", "fpr"]):
     for i, dset in enumerate(datasets):
         ax = axs[j, i]
 
@@ -205,7 +199,7 @@ for j, metric in enumerate(["aroc", "aupr"]):
 
         sns.boxplot(
             "nguides",
-            "aroc" if j == 0 else "aupr",
+            metric,
             "n_samples",
             df,
             ax=ax,
@@ -223,21 +217,26 @@ for j, metric in enumerate(["aroc", "aupr"]):
             for n in lib_ks:
                 ks_count = dset["dataset"].loc[lib_ks[n].index]
                 ks_fc = ks_count.norm_rpm().foldchange(dset["plasmids"])
-                ks_fc = ks_fc.loc[lib_ks[n].index].groupby(dset["library"].loc[lib_ks[n].index]).mean().mean(1)
-
-                ks_metric = (
-                    QCplot.pr_curve(ks_fc)
-                    if j == 0
-                    else QCplot.recall_curve(ks_fc)[2]
+                ks_fc = (
+                    ks_fc.loc[lib_ks[n].index]
+                    .groupby(dset["library"].loc[lib_ks[n].index])
+                    .mean()
+                    .mean(1)
                 )
 
-                ax.axhline(ks_metric, ls="-", lw=.5, c=n_pal[n], zorder=0, label=f"Top {n}")
+                ks_metric = (
+                    QCplot.pr_curve(ks_fc) if j == 0 else QCplot.recall_curve(ks_fc)[2]
+                )
 
-        ax.grid(True, ls=":", lw=0.1, alpha=1.0, zorder=0)
+                ax.axhline(
+                    ks_metric, ls="-", lw=0.5, c=n_pal[n], zorder=0, label=f"Top {n}"
+                )
+
+        ax.grid(True, ls=":", lw=0.1, alpha=1.0, zorder=0, axis="x")
 
         ax.set_title(f"{dset['name']} {dset['description']}" if j == 0 else None)
         ax.set_xlabel("Number of guides" if j == 1 else None)
-        ax.set_ylabel(("ROC-AUC" if j == 0 else "AUPR") if i == 0 else None)
+        ax.set_ylabel(metric if i == 0 else None)
 
         ax.legend(
             loc=4, frameon=False, prop={"size": 4}, title="Replicates"

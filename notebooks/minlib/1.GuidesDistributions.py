@@ -22,7 +22,9 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 from crispy.Utils import Utils
+from crispy.QCPlot import QCplot
 from scipy.stats import mannwhitneyu
+from crispy.CrispyPlot import CrispyPlot
 from crispy.CRISPRData import CRISPRDataSet, ReadCounts
 from minlib import rpath, LOG, define_sgrnas_sets, ky_v11_calculate_gene_fc
 
@@ -93,6 +95,21 @@ for n_guides in [2, 3]:
         }
 
 
+# sgRNAs sets AURC
+
+sgrna_aucs = pd.DataFrame(
+    [
+        dict(
+            sample=s,
+            dtype=ss,
+            aurc=QCplot.recall_curve(ky_v11_fc[s], sgrna_sets[ss]["sgrnas"])[2],
+        )
+        for ss in sgrna_sets
+        for s in ky_v11_fc
+    ]
+)
+
+
 # Plot sgRNA sets of Yusa_v1.1
 
 plt.figure(figsize=(2.5, 2), dpi=600)
@@ -142,7 +159,7 @@ f, axs = plt.subplots(
     len(metrics),
     sharex="all",
     sharey="all",
-    figsize=(len(metrics) * 1.5, 3.),
+    figsize=(len(metrics) * 1.5, 3.0),
     dpi=600,
 )
 
@@ -167,4 +184,30 @@ for j, n_guides in enumerate([2, 3]):
 
 plt.subplots_adjust(hspace=0.05, wspace=0.05)
 plt.savefig(f"{rpath}/ky_v11_metrics_gene_distributions.png", bbox_inches="tight")
+plt.close("all")
+
+
+#
+
+pal = {s: sgrna_sets[s]["color"] for s in sgrna_sets}
+
+
+plt.figure(figsize=(2., .75), dpi=600)
+sns.boxplot(
+    "aurc",
+    "dtype",
+    data=sgrna_aucs,
+    orient="h",
+    palette=pal,
+    saturation=1,
+    showcaps=False,
+    boxprops=dict(linewidth=0.3),
+    whiskerprops=dict(linewidth=0.3),
+    flierprops=CrispyPlot.FLIERPROPS,
+    notch=True,
+)
+plt.grid(True, ls=":", lw=0.1, alpha=1.0, zorder=0, axis="x")
+plt.xlabel("Area under recall curve")
+plt.ylabel("")
+plt.savefig(f"{rpath}/ky_v11_guides_aucs.pdf", bbox_inches="tight")
 plt.close("all")

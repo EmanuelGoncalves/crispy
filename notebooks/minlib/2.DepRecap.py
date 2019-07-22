@@ -168,7 +168,7 @@ for value in ["auc", "fpr_thres"]:
         y="Top2",
         annot=True,
         diag_line=True,
-        reset_lim=True,
+        reset_lim=False,
         z_method="gaussian_kde",
         ax=ax,
     )
@@ -208,7 +208,7 @@ plt.close("all")
 
 #
 
-g = "EEF1B2"
+g = "HIST1H4K"
 
 g_metrics = ky_metrics.query(f"Gene == '{g}'").sort_values("ks_control_min")
 
@@ -217,7 +217,7 @@ g_df = ky_all_fc.loc[g_metrics.index].dropna()
 row_colors = pd.Series(CrispyPlot.PAL_DBGD)[g_metrics["top2"]]
 row_colors.index = g_metrics.index
 
-g = sns.clustermap(
+sns.clustermap(
     g_df,
     cmap="Spectral",
     xticklabels=False,
