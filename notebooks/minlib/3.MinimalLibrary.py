@@ -51,24 +51,27 @@ pgenes = pd.read_csv(f"{dpath}/hgnc_protein_coding_set.txt", sep="\t")
 # Defining a minimal library
 
 n_guides = 2
+thres_jacks = 1.0
+thres_doenchroot = .4
 
 minimal_lib = []
 
 for g in pgenes["symbol"]:
     # KosukeYusa v1.1 sgRNAs
     g_guides = mlib.query(f"(Gene == '{g}') & (lib == 'KosukeYusa')")
-    g_guides = g_guides[g_guides["jacks_min"] < 1.5].head(n_guides)
+    g_guides = g_guides.query(f"jacks_min < {thres_jacks}")
+    g_guides = g_guides.head(n_guides)
 
     # Top-up with Avana guides
     if len(g_guides) < n_guides:
         g_guides_avana = mlib.query(f"(Gene == '{g}') & (lib == 'Avana')")
-        g_guides_avana = g_guides_avana[g_guides_avana["jacks_min"] < 1.5].head(n_guides)
+        g_guides_avana = g_guides_avana.query(f"jacks_min < {thres_jacks}").head(n_guides)
         g_guides = pd.concat([g_guides, g_guides_avana.head(n_guides - g_guides.shape[0])], sort=False)
 
     # Top-up with Brunello guides
     if len(g_guides) < n_guides:
         g_guides_brunello = mlib.query(f"(Gene == '{g}') & (lib == 'Brunello')")
-        g_guides_brunello = g_guides_brunello.query("doenchroot > .4")
+        g_guides_brunello = g_guides_brunello.query(f"doenchroot > {thres_doenchroot}")
         g_guides_brunello = g_guides_brunello.sort_values("doenchroot")
         g_guides = pd.concat([g_guides, g_guides_brunello.head(n_guides - g_guides.shape[0])], sort=False)
 
@@ -118,6 +121,19 @@ gencode_miss = gencode_miss[gencode_miss[8].apply(lambda v: ' level 3;' not in v
 gencode_miss = gencode_miss[gencode_miss["Approved symbol"].isin(pgenes["symbol"].values)]
 
 
+# Targeted gene list
+
+score_ess = list(pd.read_csv(f"{dpath}/gene_sets/essential_sanger_depmap19.tsv", sep="\t")["Gene"])
+drive_genes = list(pd.read_csv(f"{dpath}/gene_sets/driver_genes_2018-09-13_1322.csv")["gene_symbol"])
+
+
 # Export
 
-minimal_lib.to_csv(f"{dpath}/crispr_libs/minimal.csv.gz", compression="gzip", index=False)
+count = CRISPRDataSet("Yusa_v1.1")
+
+count.counts.reindex(minimal_lib["sgRNA_ID"].values).dropna().to_csv(
+    f"{rpath}/KosukeYusa_v1.1_sgrna_counts_minimal_top_{n_guides}.csv.gz",
+    compression="gzip",
+)
+
+minimal_lib.to_csv(f"{dpath}/crispr_libs/minimal_top_{n_guides}.csv.gz", compression="gzip", index=False)
