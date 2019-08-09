@@ -50,8 +50,8 @@ pgenes = pd.read_csv(f"{dpath}/hgnc_protein_coding_set.txt", sep="\t")
 
 # Defining a minimal library
 
-n_guides = 2
-thres_jacks = 1.0
+n_guides = 3
+thres_jacks = 1.
 thres_doenchroot = .4
 
 minimal_lib = []

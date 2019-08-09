@@ -23,7 +23,7 @@ class CrispyPlot:
     }
 
     # PALETTES
-    PAL_DBGD = {0: "#656565", 1: "#F2C500", 2: "#E1E1E1"}
+    PAL_DBGD = {0: "#656565", 1: "#F2C500", 2: "#E1E1E1", 3: "#0570b0"}
 
     SV_PALETTE = {
         "tandem-duplication": "#377eb8",
