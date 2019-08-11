@@ -266,7 +266,7 @@ x = pd.concat([x, Sample().samplesheet.loc[x.index, "msi_status"]], axis=1).drop
 
 x.sort_values(["all", DTYPES[1], "msi_status"], ascending=[False, False, True])
 
-g = "BRCA1"
+g = "SDK1"
 
 g_metrics = ky_metrics.query(f"Gene == '{g}'").sort_values("ks_control_min")
 
@@ -290,18 +290,19 @@ plt.close("all")
 
 # Recover scatter
 
-plt.figure(figsize=(2.5, 1.5), dpi=600)
+fig, ax1 = plt.subplots(figsize=(2.5, 1.5), dpi=600)
 
 for i, (n, df) in enumerate(c_recover.groupby("dtype")):
     df = df.sort_values("recall", ascending=False).reset_index(drop=True)
-    plt.scatter(df.index, df["recall"], c=CrispyPlot.PAL_DBGD[i], s=2, lw=0, label=n)
+
+    ax1.plot(df.index, df["recall"], c=CrispyPlot.PAL_DBGD[i], label=n)
 
     for t in [.8, .9]:
         s_t = df[df["recall"] < t].index[0]
-        plt.axvline(s_t, lw=0.1, c=CrispyPlot.PAL_DBGD[i], zorder=0)
+        ax1.axvline(s_t, lw=0.1, c=CrispyPlot.PAL_DBGD[i], zorder=0)
 
         s_t_text = f"{((s_t / df.shape[0]) * 100):.1f}%"
-        plt.text(
+        ax1.text(
             s_t,
             plt.ylim()[0],
             s_t_text,
