@@ -51,8 +51,8 @@ ky_v11_metrics = ky_v11_metrics[metrics].dropna()
 nguides_thres = 5
 
 ky_v11_arocs = guides_aroc_benchmark(
-    ky_v11_metrics,
-    ky_v11_count,
+    metrics=ky_v11_metrics,
+    sgrna_counts=ky_v11_count,
     nguides_thres=nguides_thres,
     guide_set=set(ky_v11_metrics.index),
     rand_iterations=10,

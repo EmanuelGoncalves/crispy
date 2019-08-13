@@ -34,8 +34,8 @@ ky_v11_arocs = pd.read_excel(f"{rpath}/KosukeYusa_v1.1_benchmark_aroc.xlsx")
 
 nguides_thres = 5
 
-x_feature = "ks_control_min"
-y_features = ["random", "ks_control", "median_fc", "jacks_min", "doenchroot", "doenchroot_min"]
+x_feature = "random"
+y_features = ["ks_control_min", "ks_control", "doenchroot", "doenchroot_min", "jacks_min", "median_fc"]
 
 f, axs = plt.subplots(
     len(y_features),
@@ -93,9 +93,9 @@ for i in range(nguides_thres):
 
     if i == 0:
         for l_index, l in enumerate(y_features):
-            axs[l_index][i].set_ylabel(f"{l}\n(AROC)")
+            axs[l_index][i].set_ylabel(f"{l}\nAROC")
 
-    axs[len(y_features) - 1][i].set_xlabel("KS (AROC)")
+    axs[len(y_features) - 1][i].set_xlabel(f"{x_feature}\nAROC")
 
 plt.subplots_adjust(hspace=0.05, wspace=0.05)
 plt.savefig(f"{rpath}/ky_v11_ks_guides_benchmark_scatter.png", bbox_inches="tight")

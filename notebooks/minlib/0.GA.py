@@ -78,13 +78,6 @@ mlib_min = mlib_min[
 mlib_min_dict = {g: list(df.index) for g, df in mlib_min.groupby("Gene")}
 
 
-# Missed dependencies
-
-top_missed = pd.read_csv(f"{rpath}/dep_recap_per_genes.csv", index_col=0)
-top_missed = top_missed.eval("all - minimal_top_2")
-top_missed
-
-
 # Genes
 
 GENES = natsorted(set(mlib_min["Gene"]))
@@ -114,13 +107,13 @@ def calculate_gene_fc(sgrnas):
     return KY_SGRNA_FC.groupby(mlib.loc[sgrnas, "Gene"]).mean()
 
 
-def binarise_fc(fcs, fpr_thres=0.01):
+def binarise_fc(fcs):
     fcs = fcs.loc[GENES]
 
     fcs_thres = []
     for i, _ in enumerate(fcs):
         fpr, tpr, thres = roc_curve(RANK_Y_TRUE, -fcs.iloc[RANK_SET, i])
-        fcs_thres.append(-min(thres[fpr < fpr_thres]))
+        fcs_thres.append(-min(thres[fpr < FDR_THRES]))
 
     fcs_bin = (fcs < fcs_thres).astype(int)
     return fcs_bin
@@ -149,13 +142,10 @@ def evaluate(ind):
     ind_recall = recap_dependencies(ind_bin)
     # LOG.info("Recall")
 
-    ind_size = sum(ind) / len(mlib_min)
     ind_fitness = sum(np.array(ind_recall) > 0.9) / len(ind_recall)
-
-    multi_fitness = ind_fitness / ind_size
     # LOG.info("Fitness")
 
-    return multi_fitness,
+    return ind_fitness,
 
 
 # All sgRNAs fold-changes
@@ -163,12 +153,15 @@ def evaluate(ind):
 KY_SGRNA_FC = KY_COUNTS.norm_rpm().foldchange(KY.plasmids)
 KY_SGRNA_FC = KY_SGRNA_FC.groupby(KY_SMAP["model_id"], axis=1).mean()
 
+KY_FC = calculate_gene_fc(mlib.index)
+
 SAMPLES = natsorted(set(KY_SGRNA_FC))
 LOG.info(f"Samples: {len(SAMPLES)}")
 
-KY_FC = calculate_gene_fc(mlib.index)
-KY_BIN = binarise_fc(KY_FC)
-KY_BIN = KY_BIN.loc[GENES, SAMPLES]
+FDR_THRES = 0.01
+
+KY_BIN_THRES = [QCplot.aroc_threshold(KY_FC[s], fpr_thres=FDR_THRES)[1] for s in SAMPLES]
+KY_BIN = binarise_fc(KY_FC[SAMPLES])
 
 
 # GA Params
@@ -204,7 +197,7 @@ toolbox.register("population", tools.initRepeat, list, toolbox.individual)
 # Operators
 
 toolbox.register("mate", tools.cxTwoPoint)
-toolbox.register("mutate", tools.mutUniformInt, low=2, up=4, indpb=INDPB)
+toolbox.register("mutate", tools.mutUniformInt, low=2, up=3, indpb=INDPB)
 toolbox.register("select", tools.selTournament, tournsize=POP_SIZE)
 toolbox.register("evaluate", evaluate)
 
@@ -220,8 +213,8 @@ stats.register("max", np.max)
 
 # Optimisation
 
-pop = toolbox.population(n=POP_SIZE)
-# pop = [creator.Individual([2] * IND_SIZE) for i in range(POP_SIZE)]
+# pop = toolbox.population(n=POP_SIZE)
+pop = [creator.Individual([2] * IND_SIZE) for i in range(POP_SIZE)]
 pop, logbook = algorithms.eaSimple(pop, toolbox, cxpb=CXPB, mutpb=MUTPB, ngen=N_GEN, stats=stats, verbose=True)
 
 

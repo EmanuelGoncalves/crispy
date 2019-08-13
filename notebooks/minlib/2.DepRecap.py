@@ -46,6 +46,17 @@ ky = CRISPRDataSet("Yusa_v1.1")
 s_map = project_score_sample_map()
 
 
+# sgRNAs lib
+
+mlib = (
+    Library.load_library("master.csv.gz", set_index=False)
+    .query("lib == 'KosukeYusa'")
+    .dropna(subset=["Gene"])
+    .set_index("sgRNA_ID")
+)
+mlib = mlib[mlib.index.isin(ky.counts.index)]
+
+
 # Conditions
 
 DTYPES = ["all", "minimal_top_2", "minimal_top_3"]
@@ -71,7 +82,7 @@ for dtype in DTYPES:
     fc = counts.remove_low_counts(ky.plasmids).norm_rpm().foldchange(ky.plasmids)
 
     # gene fold-changes
-    fc_gene = fc.groupby(ky.lib.loc[fc.index, "Gene"]).mean()
+    fc_gene = fc.groupby(mlib.loc[fc.index, "Gene"]).mean()
 
     # gene average fold-changes
     fc_gene_avg = fc_gene.groupby(s_map["model_id"], axis=1).mean()
@@ -83,7 +94,7 @@ for dtype in DTYPES:
     ).T
 
     # gene binarised
-    fc_gene_avg_bin = (fc_gene_avg < fpr.loc[fc_gene_avg.columns, "thres"]).astype(int)
+    fc_gene_avg_bin = (fc_gene_avg < fpr.loc[fc_gene_avg.columns, "thres"].values).astype(int)
 
     # cumulative dependencies
     n_iters = range(10)
@@ -111,7 +122,7 @@ for dtype in DTYPES:
         fc_gene=fc_gene,
         fc_gene_avg=fc_gene_avg,
         fc_gene_avg_bin=fc_gene_avg_bin,
-        lib=ky.lib.loc[fc.index],
+        lib=mlib.loc[fc.index],
         fpr=fpr,
         cumulative_dep=cumulative_dep,
     )
@@ -122,7 +133,7 @@ for dtype in DTYPES:
 ky_metrics = Library.load_library("master.csv.gz", set_index=False)
 
 ky_metrics = ky_metrics.sort_values(
-    ["ks_control_min", "jacks_min", "doenchroot"], ascending=[True, True, False]
+    ["jacks_min", "ks_control_min", "doenchroot"], ascending=[True, True, False]
 )
 
 for m in DTYPES:
@@ -226,6 +237,7 @@ plot_df = pd.concat(
     axis=1,
     sort=False,
 )
+plot_df.to_csv(f"{rpath}/dep_recap_per_genes.csv")
 
 f, axs = plt.subplots(
     1,

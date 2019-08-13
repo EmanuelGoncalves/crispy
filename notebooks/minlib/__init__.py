@@ -236,10 +236,12 @@ def random_guides_aroc(sgrna_counts, sgrna_metric, n_guides=1, n_iterations=10):
 
     scores = []
     for i in range(n_iterations):
-        sgrnas = sgrna_metric.groupby(sgrna_metric).apply(
-            lambda x: x.sample(n=n_guides)
+        sgrnas = pd.concat(
+            [
+                df.sample(n=n_guides) if df.shape[0] > n_guides else df
+                for _, df in sgrna_metric.groupby("Gene")
+            ]
         )
-        sgrnas = sgrnas.rename("x").reset_index().drop("x", axis=1).set_index("sgRNA")
 
         sgrna_fc = (
             sgrna_counts_all.loc[sgrnas.index]
@@ -261,7 +263,7 @@ def guides_aroc(sgrna_fc, sgrna_metric):
     sg_fc_genes = sg_fc_sgrna.groupby(sgrna_metric["Gene"]).mean()
     LOG.info(f"#(sgRNAs)={sg_fc_sgrna.shape[0]}; #(Genes)={sg_fc_genes.shape[0]}")
 
-    ess_aroc = dict(auc={s: QCplot.pr_curve(sg_fc_genes[s]) for s in sg_fc_genes})
+    ess_aroc = dict(auc={s: QCplot.aroc_threshold(sg_fc_genes[s], fpr_thres=0.05)[0] for s in sg_fc_genes})
 
     res = pd.DataFrame(ess_aroc).reset_index()
 
@@ -279,24 +281,48 @@ def guides_aroc_benchmark(
     if guide_set is not None:
         guides = guides.reindex(guide_set).dropna()
 
-    gene_nguides = guides.value_counts()
-    gene_nguides = gene_nguides[gene_nguides >= nguides_thres]
+    LOG.info(f"#(sgRNAs)={guides.shape[0]}")
 
-    guides = guides[guides.isin(gene_nguides.index)]
-    LOG.info(f"#(sgRNAs)={guides.shape[0]}; #(genes)={gene_nguides.shape[0]}")
+    # AROC scores
+    aroc_scores = []
+
+    # Randomised benchmark
+    if rand_iterations is not None:
+        rand_aroc = []
+
+        for n in range(1, (nguides_thres + 1)):
+            rand_aroc.append(
+                random_guides_aroc(
+                    sgrna_counts, metrics.loc[guides.index, ["Gene"]], n_guides=n, n_iterations=rand_iterations
+                ).assign(n_guides=n)
+            )
+
+        rand_aroc = pd.concat(rand_aroc)
+
+        rand_aroc = (
+            rand_aroc.groupby(["index", "n_guides"])
+            .mean()
+            .assign(dtype="random")
+            .reset_index()
+        )
+
+        aroc_scores.append(rand_aroc)
 
     # Benchmark guides: AROC
-    aroc_scores = []
     for m in metrics:
         if m != "Gene":
             LOG.info(f"Metric = {m}")
 
             guides_metric = metrics.loc[guides.index, [m, "Gene"]].sort_values(m)
-            guides_metric = guides_metric.groupby("Gene")
 
             metric_aroc = []
             for n in range(1, (nguides_thres + 1)):
-                guides_metric_topn = guides_metric.head(n=n)
+                guides_metric_topn = pd.concat(
+                    [
+                        df.head(n=n) if df.shape[0] > n else df
+                        for _, df in guides_metric.groupby("Gene")
+                    ]
+                )
 
                 # Calculate fold-changes on subset
                 sgrna_fc = (
@@ -312,25 +338,6 @@ def guides_aroc_benchmark(
             metric_aroc = pd.concat(metric_aroc).assign(dtype=m)
 
             aroc_scores.append(metric_aroc)
-
-    # Randomised benchmark
-    if rand_iterations is not None:
-        rand_aroc = []
-        for n in range(1, (nguides_thres + 1)):
-            rand_aroc.append(
-                random_guides_aroc(
-                    sgrna_counts, guides, n_guides=n, n_iterations=rand_iterations
-                ).assign(n_guides=n)
-            )
-        rand_aroc = pd.concat(rand_aroc)
-        rand_aroc = (
-            rand_aroc.groupby(["index", "n_guides"])
-            .mean()
-            .assign(dtype="random")
-            .reset_index()
-        )
-
-        aroc_scores.append(rand_aroc)
 
     # Merge
     aroc_scores = pd.concat(aroc_scores, sort=False)

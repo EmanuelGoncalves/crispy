@@ -18,7 +18,7 @@ from sklearn.metrics import roc_auc_score, roc_curve
 
 class QCplot(CrispyPlot):
     @staticmethod
-    def aroc_threshold(values, true_set=None, false_set=None, fpr_thres=0.05):
+    def aroc_threshold(values, true_set=None, false_set=None, fpr_thres=0.01):
         if true_set is None:
             true_set = Utils.get_essential_genes(return_series=False)
 
