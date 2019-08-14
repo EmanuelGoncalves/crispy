@@ -427,28 +427,30 @@ def lm_limix(y, x):
     X = x.loc[Y.index]
 
     m = Sample().get_covariates().loc[Y.index]
+    m = m.loc[:, m.std() > 0]
     m["intercept"] = 1
 
     # Linear Mixed Model
     lmm = scan(X, Y, M=m, lik="normal", verbose=False)
 
-    res = pd.DataFrame(
-        dict(
-            beta=lmm.variant_effsizes.values,
-            pval=lmm.variant_pvalues.values,
-            gene=X.columns,
-        )
+    effect_sizes = lmm.effsizes["h2"].query("effect_type == 'candidate'")
+    effect_sizes = effect_sizes.set_index("test").drop(
+        columns=["trait", "effect_type"]
     )
+    pvalues = lmm.stats["pv20"].rename("pval")
 
-    res = res.assign(phenotype=y.columns[0])
-    res = res.assign(samples=Y.shape[0])
+    res = (
+        pd.concat([effect_sizes, pvalues], axis=1, sort=False)
+            .reset_index(drop=True)
+    )
+    res = res.assign(y_gene=y.columns[0])
+    res = res.assign(samples=y.shape[0])
+    res = res.assign(ncovariates=m.shape[1])
 
-    return res
+    return res.sort_values("pval")
 
 
 def lm_associations(Y, X):
-    assocs = pd.concat([lm_limix(Y[[g]], X) for g in Y], sort=False).reset_index(
-        drop=True
-    )
+    assocs = pd.concat([lm_limix(Y[[g]], X) for g in Y], sort=False).reset_index(drop=True)
     assocs = assocs.assign(fdr=multipletests(assocs["pval"], method="fdr_bh")[1])
     return assocs

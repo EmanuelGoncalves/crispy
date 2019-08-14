@@ -13,12 +13,12 @@ from matplotlib.patches import Arc
 from collections import OrderedDict
 from sklearn.metrics.ranking import auc
 from crispy.CrispyPlot import CrispyPlot
-from sklearn.metrics import roc_auc_score, roc_curve
+from sklearn.metrics import roc_auc_score, roc_curve, precision_recall_curve, average_precision_score
 
 
 class QCplot(CrispyPlot):
     @staticmethod
-    def aroc_threshold(values, true_set=None, false_set=None, fpr_thres=0.01):
+    def aroc_threshold(values, true_set=None, false_set=None, fpr_thres=0.01, return_curve=False):
         if true_set is None:
             true_set = Utils.get_essential_genes(return_series=False)
 
@@ -35,7 +35,31 @@ class QCplot(CrispyPlot):
         auc_fpr = roc_auc_score(y_true, -rank, max_fpr=fpr_thres)
         fc_thres_fpr = -min(thres[fpr <= fpr_thres])
 
-        return auc_fpr, fc_thres_fpr
+        res = (auc_fpr, fc_thres_fpr, fpr, tpr) if return_curve else (auc_fpr, fc_thres_fpr)
+
+        return res
+
+    @staticmethod
+    def precision_recall_curve(values, true_set=None, false_set=None, fdr_thres=0.01, return_curve=False):
+        if true_set is None:
+            true_set = Utils.get_essential_genes(return_series=False)
+
+        if false_set is None:
+            false_set = Utils.get_non_essential_genes(return_series=False)
+
+        index_set = true_set.union(false_set)
+
+        rank = values[values.index.isin(index_set)]
+        y_true = rank.index.isin(true_set).astype(int)
+
+        ap = average_precision_score(y_true, -rank)
+
+        precision, recall, thres = precision_recall_curve(y_true, -rank)
+        recall_fdr = recall[precision > (1 - fdr_thres)].max()
+
+        res = (ap, recall_fdr, precision, recall, thres) if return_curve else (ap, recall_fdr)
+
+        return res
 
     @staticmethod
     def recall_curve(rank, index_set=None, min_events=None):

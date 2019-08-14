@@ -37,7 +37,7 @@ ky_v11_wge["WGE_sequence"] = ky_v11_wge["WGE_sequence"].apply(lambda v: v[:-3])
 
 mlib = Library.load_library("master.csv.gz", set_index=False)
 mlib = mlib.sort_values(
-    ["jacks_min", "ks_control_min", "doenchroot"], ascending=[True, True, False]
+    ["ks_control_min", "jacks_min", "doenchroot"], ascending=[True, True, False]
 )
 
 mlib = mlib[~mlib["sgRNA_ID"].isin(ky_v11_wge[ky_v11_wge["Assembly"] == "Grch19"].index)]
@@ -98,7 +98,6 @@ minimal_lib["lib"] = [
 
 g_count = minimal_lib["Gene"].value_counts()
 minimal_lib = minimal_lib[~minimal_lib["Gene"].isin(g_count[g_count < n_guides].index)]
-
 LOG.info(minimal_lib["lib"].value_counts())
 
 

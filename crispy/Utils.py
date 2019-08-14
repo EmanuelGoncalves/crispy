@@ -173,7 +173,7 @@ class Utils(object):
 
     @classmethod
     def get_essential_genes(
-        cls, dfile="gene_sets/curated_BAGEL_essential.csv", return_series=True
+        cls, dfile="gene_sets/EssentialGenes.csv", return_series=True
     ):
         geneset = set(pd.read_csv(f"{cls.DPATH}/{dfile}", sep="\t")["gene"])
 
@@ -184,7 +184,7 @@ class Utils(object):
 
     @classmethod
     def get_non_essential_genes(
-        cls, dfile="gene_sets/curated_BAGEL_nonEssential.csv", return_series=True
+        cls, dfile="gene_sets/NonessentialGenes.csv", return_series=True
     ):
         geneset = set(pd.read_csv(f"{cls.DPATH}/{dfile}", sep="\t")["gene"])
 

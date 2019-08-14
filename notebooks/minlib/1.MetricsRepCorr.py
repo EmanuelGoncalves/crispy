@@ -34,44 +34,42 @@ rep_corrs = pd.read_csv(
 
 # Plot replicates correlation across different metrics
 
-metrics = ["ks_control_min", "ks_control", "median_fc", "jacks_min", "doenchroot", "doenchroot_min", "all"]
+dtypes = rep_corrs.groupby("metric")
 
 palette = dict(Yes="#d62728", No="#E1E1E1")
 
 f, axs = plt.subplots(
-    2,
-    len(metrics),
+    1,
+    len(dtypes),
     sharex="all",
-    sharey="all",
-    figsize=(len(metrics) * 0.9, 3),
+    sharey="row",
+    figsize=(len(dtypes) * 0.5, 1.5),
     dpi=600,
 )
 
 all_rep_corr = rep_corrs.query("(metric == 'all') & (replicate == 'Yes')")["corr"].median()
 
-for i, m in enumerate(metrics):
-    for j, n_guides in enumerate([2, 3]):
-        ax = axs[j, i]
+for i, (dtype, df) in enumerate(dtypes):
+    ax = axs[i]
 
-        sns.boxplot(
-            "replicate",
-            "corr",
-            data=rep_corrs.query(f"(metric == '{m}') & (n_guides == '{n_guides}')"),
-            palette=palette,
-            saturation=1,
-            showcaps=False,
-            flierprops=CrispyPlot.FLIERPROPS,
-            boxprops=dict(linewidth=0.3),
-            whiskerprops=dict(linewidth=0.3),
-            notch=True,
-            ax=ax,
-        )
+    sns.boxplot(
+        "replicate",
+        "corr",
+        data=df,
+        palette=palette,
+        saturation=1,
+        showcaps=False,
+        flierprops=CrispyPlot.FLIERPROPS,
+        boxprops=dict(linewidth=0.3),
+        whiskerprops=dict(linewidth=0.3),
+        notch=True,
+        ax=ax,
+    )
 
-        ax.axhline(all_rep_corr, ls="-", lw=1.0, zorder=0, c="#484848")
+    ax.axhline(all_rep_corr, ls="-", lw=1.0, zorder=0, c="#484848")
 
-        ax.set_title(m if j == 0 else "")
-        ax.set_xlabel("Replicate" if j == 1 else "")
-        ax.set_ylabel(f"Top {n_guides} sgRNAs\n(Pearson R)" if i == 0 else None)
+    ax.set_title(dtype)
+    ax.set_ylabel(f"Replicates correlation\n(Pearson R)" if i == 0 else None)
 
 plt.subplots_adjust(hspace=0.05, wspace=0.1)
 plt.savefig(f"{rpath}/ky_v11_rep_corrs.png", bbox_inches="tight")

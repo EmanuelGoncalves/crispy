@@ -21,20 +21,21 @@
 import numpy as np
 import pandas as pd
 from minlib import rpath, LOG
-from crispy.CRISPRData import CRISPRDataSet
+from crispy.CRISPRData import CRISPRDataSet, Library
 
 
-def replicates_correlation(sgrna_data, guides=None):
+def replicates_correlation(sgrna_data, guides=None, plasmids=None):
     # Subset guides
     if guides is not None:
-        df = sgrna_data.counts.reindex(guides)
+        df = sgrna_data.reindex(guides).copy()
 
     else:
-        df = sgrna_data.counts.copy()
+        df = sgrna_data.copy()
+
+    plasmids = ["CRISPR_C6596666.sample"] if plasmids is None else plasmids
 
     # Calculate fold-changes
-    df = df.remove_low_counts(sgrna_data.plasmids)
-    df = df.norm_rpm().foldchange(sgrna_data.plasmids)
+    df = df.remove_low_counts(plasmids).norm_rpm().foldchange(plasmids)
 
     # Remove replicate tags
     df.columns = [c.split("_")[0] for c in df]
@@ -55,44 +56,36 @@ def replicates_correlation(sgrna_data, guides=None):
 
 # Import Project Score samples acquired with Kosuke_Yusa v1.1 library
 
-ky_v11_data = CRISPRDataSet("Yusa_v1.1")
+ky = CRISPRDataSet("Yusa_v1.1")
+ky_counts = ky.counts.remove_low_counts(ky.plasmids)
+
+
+# Minimal library
+
+min_lib = Library.load_library("minimal_top_2.csv.gz")
+min_lib = min_lib[min_lib.index.isin(ky_counts.index)]
+
+
+# Master library
+
+master_lib = (
+    Library.load_library("master.csv.gz")
+    .query("lib == 'KosukeYusa'")
+    .dropna(subset=["Gene"])
+)
+master_lib = master_lib[master_lib.index.isin(ky_counts.index)]
+master_lib = master_lib[master_lib["Gene"].isin(min_lib["Gene"])]
 
 
 # sgRNA efficiency metrics
 
-metrics = [
-    "ks_control",
-    "ks_control_min",
-    "jacks_min",
-    "doenchroot",
-    "doenchroot_min",
-    "median_fc",
-    "Gene",
-]
-
 rep_corrs = []
-for n_guides in [2, 3]:
-    for m in metrics:
-        LOG.info(f"metric={m}; sgRNA={n_guides}")
+for n, library in [("all", master_lib), ("minimal_top_2", min_lib)]:
+    LOG.info(f"metric={n}; sgRNA={library.shape[0]}")
 
-        if m != "Gene":
-            m_counts = pd.read_csv(
-                f"{rpath}/KosukeYusa_v1.1_sgrna_counts_{m}_top{n_guides}.csv.gz",
-                index_col=0,
-            )
+    m_rep_corr = replicates_correlation(ky_counts, guides=list(library.index)).assign(metric=n)
 
-        else:
-            m_counts = pd.read_excel(
-                f"{rpath}/KosukeYusa_v1.1_sgRNA_metrics.xlsx", index_col=0
-            )[metrics].dropna()
-
-        m_rep_corr = replicates_correlation(ky_v11_data, guides=list(m_counts.index))
-
-        rep_corrs.append(
-            m_rep_corr.assign(metric="all" if m == "Gene" else m).assign(
-                n_guides=n_guides
-            )
-        )
+    rep_corrs.append(m_rep_corr)
 
 rep_corrs = pd.concat(rep_corrs)
 
