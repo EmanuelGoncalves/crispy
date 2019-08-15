@@ -43,5 +43,6 @@ __all__ = [
     "SSGSEA",
     "GSEAplot",
     "Utils",
-    "__version__"
+    "__version__",
+    "logger",
 ]
