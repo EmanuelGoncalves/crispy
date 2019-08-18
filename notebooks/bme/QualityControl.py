@@ -35,52 +35,20 @@ if __name__ == "__main__":
         read_counts="bme2_counts.csv.gz",
         library="Yusa_v1.1.csv.gz",
         plasmids=["Plasmid_v1.1"],
-        samplesheet="samplesheet.csv",
+        samplesheet="samplesheet.xlsx",
     )
 
     # - Imports
     ddir = pkg_resources.resource_filename("data", "organoids/bme2/")
     dreports = pkg_resources.resource_filename("notebooks", "bme/reports/")
 
-    ss = pd.read_csv(f"{ddir}/{organoids['samplesheet']}", index_col=0)
+    ss = pd.read_excel(f"{ddir}/{organoids['samplesheet']}", index_col=0)
 
     counts = CRISPRDataSet(organoids, ddir=ddir)
 
     # -
-    samples = [
-        "EGAN00002058174.sample",
-        "EGAN00002058175.sample",
-        "EGAN00002058176.sample",
-        "EGAN00002058177.sample",
-        "EGAN00002058178.sample",
-        "EGAN00002058179.sample",
-        "EGAN00001914831.sample",
-        "EGAN00001914832.sample",
-        "EGAN00001914833.sample",
-        "EGAN00001914829.sample",
-        "EGAN00001914830.sample",
-        "EGAN00001586345.sample",
-        "EGAN00001586347.sample",
-        "Plasmid_v1.1",
-    ]
-
-    palette = [
-        "#31a354",
-        "#31a354",
-        "#31a354",
-        "#74c476",
-        "#74c476",
-        "#74c476",
-        "#3182bd",
-        "#3182bd",
-        "#3182bd",
-        "#6baed6",
-        "#6baed6",
-        "#e6550d",
-        "#756bb1",
-        "#636363",
-    ]
-    palette = dict(zip(*(ss.loc[samples, "name"], palette)))
+    samples = list(ss.index)
+    palette = ss.set_index("name")["palette"].to_dict()
 
     # - Fold-changes
     fc = (
@@ -89,7 +57,7 @@ if __name__ == "__main__":
         .foldchange(counts.plasmids)
     )
 
-    fc_gene = fc.groupby(counts.lib.reindex(fc.index)["GENES"]).mean()
+    fc_gene = fc.groupby(counts.lib.reindex(fc.index)["Gene"]).mean()
 
     fc_gene_scaled = ReadCounts(fc_gene).scale()
 
@@ -369,13 +337,7 @@ if __name__ == "__main__":
     plt.close("all")
 
     # -
-    plot_df = (
-        fc_gene_scaled.reindex(
-            [i for i in samples if not i.startswith("EGAN000019148")], axis=1
-        )
-        .dropna(axis=1)
-        .rename(columns=ss["name"])
-    )
+    plot_df = fc_gene_scaled.rename(columns=ss["name"])
 
     def triu_plot(x, y, color, label, **kwargs):
         data, x_e, y_e = np.histogram2d(x, y, bins=20)
@@ -400,7 +362,7 @@ if __name__ == "__main__":
         plt.plot(lims, lims, ls=":", lw=0.1, c="#484848", zorder=0)
 
     def diag_plot(x, color, label, **kwargs):
-        sns.distplot(x, color=palette[kwargs["x_var"]], label=label)
+        sns.distplot(x, label=label)
 
     grid = sns.PairGrid(plot_df, height=1.1, despine=False)
 

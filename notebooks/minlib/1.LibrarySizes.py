@@ -22,7 +22,7 @@ import datetime
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
-from minlib import rpath, clib_palette, clib_order
+from minlib import rpath
 
 
 # CRISPR-Cas9 library sizes
@@ -30,28 +30,30 @@ from minlib import rpath, clib_palette, clib_order
 clib_size = pd.read_excel(f"{rpath}/Human CRISPR-Cas9 dropout libraries.xlsx")
 
 
-plt.figure(figsize=(2.5, 1.5), dpi=600)
+fig, ax = plt.subplots(1, 1, figsize=(2., 2.0), dpi=600)
 
 sns.scatterplot(
     "Date",
     "Number of guides",
-    "Library ID",
+    "Citation",
     data=clib_size,
     size="sgRNAs per Gene",
-    palette=clib_palette,
-    hue_order=clib_order,
+    palette=clib_size.set_index("Citation")["Palette"],
+    hue_order=list(clib_size["Citation"]),
     sizes=(10, 50),
+    ax=ax
 )
 
-plt.grid(True, ls="-", lw=0.1, alpha=1.0, zorder=0)
+ax.set_xlim(datetime.date(2013, 11, 1), datetime.date(2020, 3, 1))
 
-plt.xlim(datetime.date(2013, 11, 1), datetime.date(2020, 3, 1))
+ax.grid(True, ls="-", lw=0.1, alpha=1.0, zorder=0)
 
-plt.title("CRISPR-Cas9 libraries")
-plt.xlabel("Publication date")
-plt.ylabel("Number of sgRNAs")
+ax.set_xlabel("Publication date")
+ax.set_ylabel("Number of sgRNAs (log)")
 
-plt.legend(loc="center left", bbox_to_anchor=(1, 0.5), frameon=False, prop={"size": 4})
+ax.set_yscale('log')
 
-plt.savefig(f"{rpath}/crispr_libraries_coverage.pdf", bbox_inches="tight")
+ax.legend(loc="center left", bbox_to_anchor=(1, 0.5), frameon=False, prop={"size": 4})
+
+plt.savefig(f"{rpath}/1.LibrarySizes.pdf", bbox_inches="tight")
 plt.close("all")

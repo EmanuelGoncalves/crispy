@@ -23,38 +23,6 @@ LOG = logging.getLogger("Crispy")
 dpath = pkg_resources.resource_filename("crispy", "data/")
 rpath = pkg_resources.resource_filename("notebooks", "minlib/reports/")
 
-clib_palette = {
-    "Yusa_v1.1": "#3182bd",
-    "Yusa_v1": "#6baed6",
-    "Sabatini_Lander_AML": "#31a354",
-    "Sabatini_Lander_2015": "#74c476",
-    "Sabatini_Lander_2013": "#a1d99b",
-    "Brunello": "#9467bd",
-    "Avana": "#ba9cd4",
-    "GeCKOv2": "#ff7f0e",
-    "GeCKOv1": "#ffa85b",
-    "TKOv3": "#17becf",
-    "TKO": "#48dceb",
-    "Manjunath_Wu": "#8c564b",
-    "minimal": "#d62728",
-}
-
-clib_order = [
-    "Yusa_v1.1",
-    "Yusa_v1",
-    "Sabatini_Lander_AML",
-    "Sabatini_Lander_2015",
-    "Sabatini_Lander_2013",
-    "Brunello",
-    "Avana",
-    "GeCKOv2",
-    "GeCKOv1",
-    "TKOv3",
-    "TKO",
-    "Manjunath_Wu",
-    "minimal",
-]
-
 
 def define_sgrnas_sets(clib, fc=None, add_controls=True, dataset_name="Yusa_v1"):
     sgrna_sets = dict()
