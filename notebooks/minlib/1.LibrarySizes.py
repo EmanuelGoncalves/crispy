@@ -26,9 +26,13 @@ from minlib import rpath
 
 
 # CRISPR-Cas9 library sizes
+#
 
 clib_size = pd.read_excel(f"{rpath}/Human CRISPR-Cas9 dropout libraries.xlsx")
 
+
+# Scatterplot of library sizes
+#
 
 fig, ax = plt.subplots(1, 1, figsize=(2., 2.0), dpi=600)
 
