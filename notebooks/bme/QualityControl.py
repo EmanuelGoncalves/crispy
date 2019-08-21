@@ -61,6 +61,10 @@ if __name__ == "__main__":
 
     fc_gene_scaled = ReadCounts(fc_gene).scale()
 
+    # -
+    fc_gene_scaled.rename(columns=ss["name"]).round(5).to_excel(f"{dreports}/gene_scaled_fold_changes.xlsx")
+    fc_gene_scaled.rename(columns=ss["name"]).corr().to_excel(f"{dreports}/samples_correlation_matrix.xlsx")
+
     # - sgRNAs counts
     count_thres = 10
 

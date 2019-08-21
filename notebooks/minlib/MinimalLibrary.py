@@ -66,26 +66,34 @@ pgenes = pd.read_csv(
 # Defining a minimal library
 #
 
-NGUIDES, JACKS_THRES, RULESET2_THRES = 3, 1.0, 0.4
+NGUIDES, JACKS_THRES, RULESET2_THRES = 2, 0.5, 0.4
 
 minimal_lib = []
 for g in pgenes["symbol"]:
     # KosukeYusa v1.1 sgRNAs
-    g_guides = master_lib.query(f"(Approved_Symbol == '{g}') & (Library == 'KosukeYusa')")
+    g_guides = master_lib.query(
+        f"(Approved_Symbol == '{g}') & (Library == 'KosukeYusa')"
+    ).dropna(subset=["KS"])
     g_guides = g_guides.query(f"JACKS_min < {JACKS_THRES}")
     g_guides = g_guides.head(NGUIDES)
 
     # Top-up with Avana guides
     if len(g_guides) < NGUIDES:
-        g_guides_avana = master_lib.query(f"(Approved_Symbol == '{g}') & (Library == 'Avana')")
-        g_guides_avana = g_guides_avana.query(f"JACKS_min < {JACKS_THRES}").head(NGUIDES)
+        g_guides_avana = master_lib.query(
+            f"(Approved_Symbol == '{g}') & (Library == 'Avana')"
+        ).dropna(subset=["KS"])
+        g_guides_avana = g_guides_avana.query(f"JACKS_min < {JACKS_THRES}").head(
+            NGUIDES
+        )
         g_guides = pd.concat(
             [g_guides, g_guides_avana.head(NGUIDES - g_guides.shape[0])], sort=False
         )
 
     # Top-up with Brunello guides
     if len(g_guides) < NGUIDES:
-        g_guides_brunello = master_lib.query(f"(Approved_Symbol == '{g}') & (Library == 'Brunello')")
+        g_guides_brunello = master_lib.query(
+            f"(Approved_Symbol == '{g}') & (Library == 'Brunello')"
+        )
         g_guides_brunello = g_guides_brunello.query(f"RuleSet2 > {RULESET2_THRES}")
         g_guides_brunello = g_guides_brunello.sort_values("RuleSet2")
         g_guides = pd.concat(
@@ -94,23 +102,27 @@ for g in pgenes["symbol"]:
 
     # Top-up with TKOv3 guides
     if len(g_guides) < NGUIDES:
-        g_guides_tkov3 = master_lib.query(f"(Approved_Symbol == '{g}') & (Library == 'TKOv3')")
+        g_guides_tkov3 = master_lib.query(
+            f"(Approved_Symbol == '{g}') & (Library == 'TKOv3')"
+        )
         g_guides = pd.concat(
             [g_guides, g_guides_tkov3.head(NGUIDES - g_guides.shape[0])], sort=False
         )
 
+    # Throw warning if no guides have been found
     if g not in master_lib["Approved_Symbol"].values:
-        # Throw warning if no guides have been found
         LOG.warning(f"Gene not included: {g}")
+        continue
 
-    elif len(g_guides) < NGUIDES:
-        # Throw warning if no guides passing the QC have been found
+    # Throw warning if no guides passing the QC have been found
+    if len(g_guides) < NGUIDES:
         LOG.warning(f"No sgRNA: {g}")
         continue
 
     minimal_lib.append(g_guides)
 
 minimal_lib = pd.concat(minimal_lib)
+LOG.info(f"Genes: {minimal_lib['Approved_Symbol'].value_counts().shape[0]}")
 LOG.info(minimal_lib["Library"].value_counts())
 
 
@@ -134,7 +146,9 @@ gencode["Approved_Symbol"] = sym_check.reindex(gencode["gene_name"])[
     "Approved symbol"
 ].values
 
-gencode_miss = gencode[~gencode["gene_name"].isin(minimal_lib["Approved_Symbol"].values)]
+gencode_miss = gencode[
+    ~gencode["gene_name"].isin(minimal_lib["Approved_Symbol"].values)
+]
 gencode_miss = gencode_miss[
     gencode_miss[8].apply(lambda v: 'tag "overlapping_locus"' not in v)
 ]
@@ -148,19 +162,14 @@ gencode_miss = gencode_miss[
 #
 
 drive_genes = pd.read_csv(f"{DPATH}/gene_sets/driver_genes_2018-09-13_1322.csv")
-drive_genes_miss = drive_genes[~drive_genes["gene_symbol"].isin(minimal_lib["Approved_Symbol"])]
+drive_genes_miss = drive_genes[
+    ~drive_genes["gene_symbol"].isin(minimal_lib["Approved_Symbol"])
+]
 LOG.warning("Missed driver genes: " + "; ".join(drive_genes_miss["gene_symbol"]))
 
 
 # Export
 #
-
-count = CRISPRDataSet("Yusa_v1.1")
-
-count.counts.reindex(minimal_lib["sgRNA_ID"].values).dropna().to_csv(
-    f"{RPATH}/KosukeYusa_v1.1_sgrna_counts_MinimalLib_top{NGUIDES}.csv.gz",
-    compression="gzip",
-)
 
 minimal_lib.to_csv(
     f"{DPATH}/crispr_libs/MinimalLib_top{NGUIDES}.csv.gz",

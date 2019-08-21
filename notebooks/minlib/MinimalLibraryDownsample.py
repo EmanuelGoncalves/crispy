@@ -23,7 +23,7 @@ import numpy as np
 import pandas as pd
 import pkg_resources
 import matplotlib.pyplot as plt
-from crispy.CRISPRData import CRISPRDataSet, Library, ReadCounts
+from crispy.CRISPRData import CRISPRDataSet, Library
 from minlib.Utils import project_score_sample_map, downsample_sgrnas, density_interpolate
 
 
@@ -32,50 +32,42 @@ DPATH = pkg_resources.resource_filename("crispy", "data/")
 RPATH = pkg_resources.resource_filename("notebooks", "minlib/reports/")
 
 
-# Samples manifest
-#
-
-smap = project_score_sample_map()
-plasmids = ["CRISPR_C6596666.sample"]
-
-
 # Project Score samples acquired with Kosuke_Yusa v1.1 library
 #
 
-ky_counts = CRISPRDataSet("Yusa_v1.1").counts.remove_low_counts(plasmids)
-ky_lib = Library.load_library("MasterLib_v1.csv.gz").query(
-    "Library == 'KosukeYusa'"
-)
+ky = CRISPRDataSet("Yusa_v1.1")
+ky_smap = project_score_sample_map()
+ky_counts = ky.counts.remove_low_counts(ky.plasmids)
+
+
+# KY v1.1 library
+#
+
+ky_lib = Library.load_library("MasterLib_v1.csv.gz").query("Library == 'KosukeYusa'")
+ky_lib = ky_lib[ky_lib.index.isin(ky_counts.index)]
 
 
 # Minimal library (top 2)
 #
 
-ml_lib = Library.load_library("MinimalLib_top2.csv.gz").query(
-    "Library == 'KosukeYusa'"
-)
-ml_counts = ReadCounts(
-    pd.read_csv(
-        f"{RPATH}/KosukeYusa_v1.1_sgrna_counts_MinimalLib_top2.csv.gz", index_col=0
-    )
-).remove_low_counts(plasmids)
+ml_lib = Library.load_library("MinimalLib_top2.csv.gz").query("Library == 'KosukeYusa'")
+ml_lib = ml_lib[ml_lib.index.isin(ky_counts.index)]
 
 
 # Genes overlap
 #
 
 genes = set(ky_lib["Approved_Symbol"]).intersection(ml_lib["Approved_Symbol"])
-LOG.info(f"Genes={len(genes)}")
-
 ky_lib = ky_lib[ky_lib["Approved_Symbol"].isin(genes)]
 ml_lib = ml_lib[ml_lib["Approved_Symbol"].isin(genes)]
+LOG.info(f"Genes={len(genes)}")
 
 
 # Downsample analysis
 #
 
-ky_scores = downsample_sgrnas(ky_counts, ky_lib, smap, [2], gene_col="Approved_Symbol")
-ml_scores = downsample_sgrnas(ml_counts, ml_lib, smap, [2], gene_col="Approved_Symbol")
+ky_scores = downsample_sgrnas(ky_counts, ky_lib, ky_smap, [2], gene_col="Approved_Symbol")
+ml_scores = downsample_sgrnas(ky_counts, ml_lib, ky_smap, [2], gene_col="Approved_Symbol")
 
 
 # Plot density scatter
@@ -108,8 +100,8 @@ plt.grid(True, ls=":", lw=0.1, alpha=1.0, zorder=0)
 
 plt.xlabel("Random - 2 sgRNAs")
 plt.ylabel("Minimal Library - 2 sgRNAs")
-plt.title("AROC essential genes\n1%FDR")
+plt.title("AROC essential genes")
 
-plt.gcf().set_size_inches(1.5, 1.5)
+plt.gcf().set_size_inches(2, 2)
 plt.savefig(f"{RPATH}/MinimalLib_downsample_scatter.pdf", bbox_inches="tight")
 plt.close("all")

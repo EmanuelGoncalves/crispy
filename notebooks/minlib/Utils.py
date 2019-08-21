@@ -50,10 +50,10 @@ def downsample_sgrnas(
             genes_fc = sgrnas_fc.groupby(sgrnas.set_index("sgRNA_ID")[gene_col]).mean()
             genes_fc = genes_fc.groupby(manifest["model_id"], axis=1).mean()
 
-            # AROC of 1% FDR
+            # AROC
             res = pd.DataFrame(
                 [
-                    dict(sample=s, aroc=QCplot.aroc_threshold(genes_fc[s])[0])
+                    dict(sample=s, aroc=QCplot.aroc_threshold(genes_fc[s], fpr_thres=.2)[0])
                     for s in genes_fc
                 ]
             ).assign(n_guides=n_guides)

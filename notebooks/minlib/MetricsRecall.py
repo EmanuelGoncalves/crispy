@@ -39,7 +39,7 @@ RPATH = pkg_resources.resource_filename("notebooks", "minlib/reports/")
 
 
 def guides_recall_benchmark(
-    metrics, sgrna_counts, dataset, smap, nguides_thres=None, jacks_thres=1, fpr_thres=0.01
+    metrics, sgrna_counts, dataset, smap, nguides_thres=None, jacks_thres=1., fpr_thres=0.01
 ):
     nguides_thres = [1, 2, 3, 4, 5, 100] if nguides_thres is None else nguides_thres
 
@@ -73,7 +73,7 @@ def guides_recall_benchmark(
             metric_fc = metric_fc.groupby(metrics["Approved_Symbol"]).mean()
             metric_fc = metric_fc.groupby(smap["model_id"], axis=1).mean()
 
-            # Binarise fold-changes (1% FDR)
+            # Binarise fold-changes
             metric_thres = [
                 QCplot.aroc_threshold(metric_fc[s], fpr_thres=fpr_thres)[1]
                 for s in metric_fc
@@ -91,7 +91,7 @@ def guides_recall_benchmark(
                         metric=m,
                         nguides=n,
                         ess_aroc=QCplot.aroc_threshold(
-                            metric_fc.loc[genes, s], fpr_thres=fpr_thres
+                            metric_fc.loc[genes, s], fpr_thres=.2
                         )[0],
                         recall=recall_score(
                             ky_bin.loc[genes, s], metric_bin.loc[genes, s]
@@ -153,7 +153,7 @@ ky_bin = (ky_fc < ky_thres).astype(int)
 # Benchmark sgRNA: Essential/Non-essential AROC
 #
 
-metrics_recall = guides_recall_benchmark(master_lib, ky_counts, ky, ky_smap, fpr_thres=FDR_THRES)
+metrics_recall = guides_recall_benchmark(master_lib, ky_counts, ky, ky_smap, fpr_thres=FDR_THRES, jacks_thres=0.5)
 metrics_recall.to_excel(f"{RPATH}/KosukeYusa_v1.1_benchmark_recall.xlsx", index=False)
 
 
@@ -182,7 +182,7 @@ pal = {
 }
 
 f, axs = plt.subplots(
-    n_rows, n_cols, sharey="row", sharex="col", figsize=(0.75 * n_cols, 1.5 * n_rows)
+    n_rows, n_cols, sharey="row", sharex="col", figsize=(.5 * n_cols, 2. * n_rows)
 )
 
 for i, (var, var_df) in enumerate(plot_df.groupby("variable")):
@@ -220,5 +220,5 @@ for i, (var, var_df) in enumerate(plot_df.groupby("variable")):
         plt.setp(ax.xaxis.get_majorticklabels(), rotation=90)
 
 plt.subplots_adjust(hspace=0.05, wspace=0.05)
-plt.savefig(f"{RPATH}/ky_v11_ks_guides_benchmark_boxplots.pdf", bbox_inches="tight")
+plt.savefig(f"{RPATH}/MetricsRecall_boxplots.pdf", bbox_inches="tight")
 plt.close("all")
