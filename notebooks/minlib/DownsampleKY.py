@@ -20,53 +20,15 @@
 
 import logging
 import numpy as np
-import pandas as pd
 import pkg_resources
 import matplotlib.pyplot as plt
-from crispy.QCPlot import QCplot
 from crispy.CRISPRData import CRISPRDataSet
-from minlib.Utils import project_score_sample_map, density_interpolate
+from minlib.Utils import project_score_sample_map, density_interpolate, downsample_sgrnas
 
 
 LOG = logging.getLogger("Crispy")
 DPATH = pkg_resources.resource_filename("crispy", "data/")
 RPATH = pkg_resources.resource_filename("notebooks", "minlib/reports/")
-
-
-def downsample_sgrnas(counts, lib, manifest, n_guides_thresholds, n_iters=10):
-    # Guides library
-    glib = (
-        lib[lib.index.isin(counts.index)].reset_index()[["sgRNA_ID", "Gene"]].dropna()
-    )
-    glib = glib.groupby("Gene")
-
-    scores = []
-    for n_guides in n_guides_thresholds:
-        for iteration in range(n_iters):
-            LOG.info(f"Number of sgRNAs: {n_guides}; Iteration: {iteration + 1}")
-
-            # Downsample randomly guides per genes
-            sgrnas = pd.concat(
-                [d.sample(n=n_guides) if d.shape[0] > n_guides else d for _, d in glib]
-            )
-
-            # sgRNAs fold-change
-            sgrnas_fc = counts.norm_rpm().foldchange(ky.plasmids)
-
-            # genes fold-change
-            genes_fc = sgrnas_fc.groupby(sgrnas.set_index("sgRNA_ID")["Gene"]).mean()
-            genes_fc = genes_fc.groupby(manifest["model_id"], axis=1).mean()
-
-            # AROC of 1% FDR
-            res = pd.DataFrame(
-                [
-                    dict(sample=s, aroc=QCplot.aroc_threshold(genes_fc[s])[0])
-                    for s in genes_fc
-                ]
-            ).assign(n_guides=n_guides)
-            scores.append(res)
-
-    return pd.concat(scores)
 
 
 # Project Score samples acquired with Kosuke_Yusa v1.1 library
@@ -92,7 +54,9 @@ ds_scores.to_excel(f"{RPATH}/YusaDownsample_AROCs.xlsx", index=False)
 x_features, y_feature = np.arange(1, 6), 100
 
 plot_df = ds_scores.groupby(["sample", "n_guides"])["aroc"].mean().reset_index()
+
 xy_min, xy_max = plot_df["aroc"].min(), plot_df["aroc"].max()
+
 y_var = (
     plot_df.query(f"n_guides == {y_feature}").set_index("sample")["aroc"].rename("y")
 )
@@ -129,3 +93,4 @@ for i, (n, df) in enumerate(
 plt.suptitle(f"Essential genes AROC (1% FDR)", y=1.02)
 plt.subplots_adjust(hspace=0.05, wspace=0.05)
 plt.savefig(f"{RPATH}/YusaDownsample_AROCs_scatter.pdf", bbox_inches="tight")
+plt.close("all")
