@@ -8,13 +8,13 @@ samplesheet = read.csv(gzfile("crispy/data/crispr_manifests/HT29_Dabraf_samplesh
 samplesheet$id = paste(samplesheet$medium, samplesheet$time, sep="_")
 
 # Import data
-for (metric in c("top2", "top3", "all")) {
+for (metric in c("All", "Minimal")) {
   message(c("Metric: ", metric))
   
   data <- read.csv(
     gzfile(
       paste(
-        "notebooks/C50K/reports/HT29_Dabraf_gene_fc_", metric, ".csv.gz", sep=""), 
+        "notebooks/minlib/reports/HT29_Dabraf_gene_fc_", metric, ".csv.gz", sep=""), 
       "rt"
     ), 
     row.names = 1, 
@@ -52,5 +52,5 @@ for (metric in c("top2", "top3", "all")) {
   
   # Export results
   res <- topTableF(fit2, adjust="fdr", number=Inf)
-  write.csv(res, paste("notebooks/C50K/reports/HT29_Dabraf_limma_", metric, ".csv", sep=""), quote = F)
+  write.csv(res, paste("notebooks/minlib/reports/HT29_Dabraf_limma_", metric, ".csv", sep=""), quote = F)
 }

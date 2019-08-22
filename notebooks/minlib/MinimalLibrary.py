@@ -66,7 +66,7 @@ pgenes = pd.read_csv(
 # Defining a minimal library
 #
 
-NGUIDES, JACKS_THRES, RULESET2_THRES = 2, 0.5, 0.4
+NGUIDES, JACKS_THRES, RULESET2_THRES = 2, 1., 0.4
 
 minimal_lib = []
 for g in pgenes["symbol"]:
