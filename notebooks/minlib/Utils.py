@@ -10,6 +10,7 @@ from crispy.QCPlot import QCplot
 from scipy.stats import ks_2samp
 from scipy.interpolate import interpn
 from scipy.stats import gaussian_kde
+from crispy.CRISPRData import ReadCounts
 
 
 LOG = logging.getLogger("Crispy")
@@ -41,13 +42,13 @@ def downsample_sgrnas(
             # Downsample randomly guides per genes
             sgrnas = pd.concat(
                 [d.sample(n=n_guides) if d.shape[0] > n_guides else d for _, d in glib]
-            )
+            ).set_index("sgRNA_ID")
 
             # sgRNAs fold-change
-            sgrnas_fc = counts.norm_rpm().foldchange(plasmids)
+            sgrnas_fc = counts.loc[sgrnas.index].norm_rpm().foldchange(plasmids)
 
             # genes fold-change
-            genes_fc = sgrnas_fc.groupby(sgrnas.set_index("sgRNA_ID")[gene_col]).mean()
+            genes_fc = sgrnas_fc.groupby(sgrnas[gene_col]).mean()
             genes_fc = genes_fc.groupby(manifest["model_id"], axis=1).mean()
 
             # AROC
@@ -162,3 +163,29 @@ def density_interpolate(xx, yy, dtype="gaussian"):
         )
 
     return zz
+
+
+def replicates_correlation(sgrna_data, guides=None, plasmids=None):
+    # Subset guides
+    if guides is not None:
+        df = sgrna_data.reindex(guides).copy()
+
+    else:
+        df = sgrna_data.copy()
+
+    # Calculate fold-changes
+    if type(sgrna_data) == ReadCounts:
+        plasmids = ["CRISPR_C6596666.sample"] if plasmids is None else plasmids
+        df = df.remove_low_counts(plasmids).norm_rpm().foldchange(plasmids)
+
+    # Sample correlation
+    df_corr = df.corr()
+    df_corr = df_corr.where(np.triu(np.ones(df_corr.shape), 1).astype(np.bool))
+    df_corr = df_corr.unstack().dropna().reset_index()
+    df_corr.columns = ["sample_1", "sample_2", "corr"]
+    df_corr["replicate"] = [
+        s1.split("_")[0] == s2.split("_")[0]
+        for s1, s2 in df_corr[["sample_1", "sample_2"]].values
+    ]
+
+    return df_corr

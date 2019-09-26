@@ -28,6 +28,7 @@ from minlib.Utils import define_sgrnas_sets, estimate_ks
 
 LOG = logging.getLogger("Crispy")
 DPATH = pkg_resources.resource_filename("crispy", "data/")
+RPATH = pkg_resources.resource_filename("notebooks", "minlib/reports/")
 
 
 # Project Score KY v1.1
@@ -42,12 +43,12 @@ ky_ks = estimate_ks(ky_fc, ky_gsets["nontargeting"]["fc"])
 # DepMap 19Q2 Avana
 #
 
-avana = CRISPRDataSet("Avana")
+avana = CRISPRDataSet("Avana_DepMap19Q2")
 avana_fc = (
     avana.counts.remove_low_counts(avana.plasmids).norm_rpm().foldchange(avana.plasmids)
 )
 avana_gsets = define_sgrnas_sets(
-    avana.lib, avana_fc, dataset_name="Avana", add_controls=True
+    avana.lib, avana_fc, dataset_name="Avana_DepMap19Q2", add_controls=True
 )
 avana_ks = estimate_ks(avana_fc, avana_gsets["nontargeting"]["fc"])
 
@@ -186,4 +187,8 @@ master = master.sort_values(
 
 master.drop(columns=["sgRNA", "Gene"]).to_csv(
     f"{DPATH}/crispr_libs/MasterLib_v1.csv.gz", index=False, compression="gzip"
+)
+
+master.drop(columns=["sgRNA", "Gene"]).to_csv(
+    f"{RPATH}/MasterLib_v1.xlsx", index=False, compression="gzip"
 )

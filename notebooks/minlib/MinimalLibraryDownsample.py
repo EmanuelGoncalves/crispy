@@ -58,8 +58,6 @@ ml_lib = ml_lib[ml_lib.index.isin(ky_counts.index)]
 #
 
 genes = set(ky_lib["Approved_Symbol"]).intersection(ml_lib["Approved_Symbol"])
-ky_lib = ky_lib[ky_lib["Approved_Symbol"].isin(genes)]
-ml_lib = ml_lib[ml_lib["Approved_Symbol"].isin(genes)]
 LOG.info(f"Genes={len(genes)}")
 
 

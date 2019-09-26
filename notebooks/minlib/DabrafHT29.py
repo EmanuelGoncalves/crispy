@@ -111,21 +111,12 @@ dif_cols = ["Dif10d", "Dif14d", "Dif18d", "Dif21d"]
 x_min = dabraf_limma[dif_cols].mean(1).min()
 x_max = dabraf_limma[dif_cols].mean(1).max()
 
-x_var = (
-    dabraf_limma.query(f"library == 'All'").set_index(["Approved_Symbol"]).loc[genes]
-)
-x = x_var[dif_cols].mean(1)
-
-y_var = (
-    dabraf_limma.query(f"library == 'Minimal'")
-    .set_index(["Approved_Symbol"])
-    .loc[genes]
-)
-y = y_var[dif_cols].mean(1)
-
-z = density_interpolate(x, y)
-
-plot_df = pd.DataFrame(dict(x=x, y=y, z=z)).sort_values("z")
+plot_df = pd.DataFrame(dict(
+    x=dabraf_limma.query(f"library == 'All'").set_index(["Approved_Symbol"]).loc[genes, dif_cols].mean(1),
+    y=dabraf_limma.query(f"library == 'Minimal'").set_index(["Approved_Symbol"]).loc[genes, dif_cols].mean(1),
+)).dropna()
+plot_df["z"] = density_interpolate(plot_df["x"], plot_df["y"])
+plot_df = plot_df.sort_values("z")
 
 fig, ax = plt.subplots(1, 1, figsize=(2.0, 2.0), dpi=600)
 
@@ -140,8 +131,8 @@ ax.scatter(
     alpha=0.7,
 )
 
-rmse = sqrt(mean_squared_error(x, y))
-cor, _ = spearmanr(x, y)
+rmse = sqrt(mean_squared_error(plot_df["x"], plot_df["y"]))
+cor, _ = spearmanr(plot_df["x"], plot_df["y"])
 annot_text = f"Spearman's R={cor:.2g}; RMSE={rmse:.2f}"
 ax.text(0.95, 0.05, annot_text, fontsize=4, transform=ax.transAxes, ha="right")
 
@@ -153,7 +144,7 @@ ax.set_xlabel("All sgRNAs")
 ax.set_ylabel("Minimal Library")
 ax.set_title("CRISPR + Dabrafinib (fold-change)")
 
-plt.savefig(f"{RPATH}/HT29_Dabraf_fc_scatter.pdf", bbox_inches="tight")
+plt.savefig(f"{RPATH}/HT29_Dabraf_fc_scatter.pdf", bbox_inches="tight", transparent=True)
 plt.close("all")
 
 
@@ -228,5 +219,5 @@ for i, ltype in enumerate(libraries):
         ax.text(0.05, 0.05, annot_text, fontsize=4, transform=ax.transAxes, ha="left")
 
 plt.subplots_adjust(hspace=0.05, wspace=0.05)
-plt.savefig(f"{RPATH}/HT29_Dabraf_assoc_examples.pdf", bbox_inches="tight")
+plt.savefig(f"{RPATH}/HT29_Dabraf_assoc_examples.pdf", bbox_inches="tight", transparent=True)
 plt.close("all")

@@ -153,7 +153,7 @@ ky_bin = (ky_fc < ky_thres).astype(int)
 # Benchmark sgRNA: Essential/Non-essential AROC
 #
 
-metrics_recall = guides_recall_benchmark(master_lib, ky_counts, ky, ky_smap, fpr_thres=FDR_THRES, jacks_thres=0.5)
+metrics_recall = guides_recall_benchmark(master_lib, ky_counts, ky, ky_smap, fpr_thres=FDR_THRES, jacks_thres=1.)
 metrics_recall.to_excel(f"{RPATH}/KosukeYusa_v1.1_benchmark_recall.xlsx", index=False)
 
 
@@ -220,5 +220,5 @@ for i, (var, var_df) in enumerate(plot_df.groupby("variable")):
         plt.setp(ax.xaxis.get_majorticklabels(), rotation=90)
 
 plt.subplots_adjust(hspace=0.05, wspace=0.05)
-plt.savefig(f"{RPATH}/MetricsRecall_boxplots.pdf", bbox_inches="tight")
+plt.savefig(f"{RPATH}/MetricsRecall_boxplots.pdf", bbox_inches="tight", transparent=True)
 plt.close("all")

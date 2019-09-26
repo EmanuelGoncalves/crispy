@@ -25,39 +25,13 @@ import pkg_resources
 import seaborn as sns
 import matplotlib.pyplot as plt
 from crispy import CrispyPlot
-from minlib.Utils import project_score_sample_map
 from crispy.CRISPRData import CRISPRDataSet, Library
+from minlib.Utils import project_score_sample_map, replicates_correlation
 
 
 LOG = logging.getLogger("Crispy")
 DPATH = pkg_resources.resource_filename("crispy", "data/")
 RPATH = pkg_resources.resource_filename("notebooks", "minlib/reports/")
-
-
-def replicates_correlation(sgrna_data, guides=None, plasmids=None):
-    # Subset guides
-    if guides is not None:
-        df = sgrna_data.reindex(guides).copy()
-
-    else:
-        df = sgrna_data.copy()
-
-    plasmids = ["CRISPR_C6596666.sample"] if plasmids is None else plasmids
-
-    # Calculate fold-changes
-    df = df.remove_low_counts(plasmids).norm_rpm().foldchange(plasmids)
-
-    # Sample correlation
-    df_corr = df.corr()
-    df_corr = df_corr.where(np.triu(np.ones(df_corr.shape), 1).astype(np.bool))
-    df_corr = df_corr.unstack().dropna().reset_index()
-    df_corr.columns = ["sample_1", "sample_2", "corr"]
-    df_corr["replicate"] = [
-        s1.split("_")[0] == s2.split("_")[0]
-        for s1, s2 in df_corr[["sample_1", "sample_2"]].values
-    ]
-
-    return df_corr
 
 
 # Project Score samples acquired with Kosuke_Yusa v1.1 library

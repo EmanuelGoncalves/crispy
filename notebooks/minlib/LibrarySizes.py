@@ -18,6 +18,7 @@
 # %load_ext autoreload
 # %autoreload 2
 
+import crispy
 import datetime
 import pandas as pd
 import pkg_resources
@@ -31,13 +32,13 @@ RPATH = pkg_resources.resource_filename("notebooks", "minlib/reports/")
 # CRISPR-Cas9 library sizes
 #
 
-clib_size = pd.read_excel(f"{RPATH}/LibrarySizes_Human_CRISPR_Cas9")
+clib_size = pd.read_excel(f"{RPATH}/LibrarySizes_Human_CRISPR_Cas9.xlsx")
 
 
 # Scatterplot of library sizes
 #
 
-fig, ax = plt.subplots(1, 1, figsize=(2.0, 2.0), dpi=600)
+fig, ax = plt.subplots(1, 1, figsize=(2., 2.), dpi=600)
 
 sns.scatterplot(
     "Date",
@@ -62,5 +63,5 @@ ax.set_yscale("log")
 
 ax.legend(loc="center left", bbox_to_anchor=(1, 0.5), frameon=False, prop={"size": 4})
 
-plt.savefig(f"{RPATH}/LibrarySizes.pdf", bbox_inches="tight")
+plt.savefig(f"{RPATH}/LibrarySizes.pdf", bbox_inches="tight", transparent=True)
 plt.close("all")

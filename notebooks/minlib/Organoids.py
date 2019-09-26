@@ -107,7 +107,9 @@ metrics_arocs = pd.DataFrame(metrics_arocs)
 
 pal = dict(All="#e34a33", Minimal="#fee8c8")
 
-fig, ax = plt.subplots(1, 1, figsize=(2.0, 2.0), dpi=600)
+n = libraries["All"]["fc"].shape[1]
+
+fig, ax = plt.subplots(1, 1, figsize=(.6 * n, 2.0), dpi=600)
 
 sns.barplot("sample", "aroc", "library", metrics_arocs, ax=ax, palette=pal, linewidth=0)
 
@@ -117,9 +119,9 @@ ax.set_xlabel(None)
 ax.set_ylabel("AROC Essential (20% FDR)")
 
 ax.set_ylim(0.5, 1)
-ax.get_legend().remove()
+plt.legend(frameon=False, loc='center left', bbox_to_anchor=(1, 0.5))
 
-plt.savefig(f"{RPATH}/organoids_ess_barplot.pdf", bbox_inches="tight")
+plt.savefig(f"{RPATH}/organoids_ess_barplot.pdf", bbox_inches="tight", transparent=True)
 plt.close("all")
 
 
@@ -129,7 +131,9 @@ plt.close("all")
 x_min = min([libraries[m]["fc"].min().min() for m in libraries])
 x_max = max([libraries[m]["fc"].max().max() for m in libraries])
 
-f, axs = plt.subplots(1, 3, sharex="all", sharey="all", figsize=(6, 2), dpi=600)
+n = libraries["All"]["fc"].shape[1]
+
+f, axs = plt.subplots(1, n, sharex="all", sharey="all", figsize=(2 * n, 2), dpi=600)
 
 for i, s in enumerate(libraries["All"]["fc"]):
     ax = axs[i]
@@ -166,5 +170,5 @@ for i, s in enumerate(libraries["All"]["fc"]):
     ax.text(0.95, 0.05, annot_text, fontsize=4, transform=ax.transAxes, ha="right")
 
 plt.subplots_adjust(hspace=0.05, wspace=0.05)
-plt.savefig(f"{RPATH}/organoids_gene_fc_scatter.png", bbox_inches="tight")
+plt.savefig(f"{RPATH}/organoids_gene_fc_scatter.png", bbox_inches="tight", transparent=True)
 plt.close("all")

@@ -20,6 +20,7 @@
 
 import logging
 import numpy as np
+import pandas as pd
 import pkg_resources
 import matplotlib.pyplot as plt
 from crispy.CRISPRData import CRISPRDataSet
@@ -71,10 +72,12 @@ for i, (n, df) in enumerate(
     x_var = df.set_index("sample")["aroc"].rename("x")
     z_var = density_interpolate(x_var, y_var)
 
+    df = pd.DataFrame(dict(x_var=x_var, y_var=y_var, z_var=z_var)).sort_values("z_var")
+
     axs[i].scatter(
-        x_var,
-        y_var,
-        c=z_var,
+        df["x_var"],
+        df["y_var"],
+        c=df["z_var"],
         marker="o",
         edgecolor="",
         cmap="Spectral_r",
@@ -90,7 +93,7 @@ for i, (n, df) in enumerate(
     axs[i].set_xlabel(f"{n} sgRNA (per gene)" if i == 0 else f"{n} sgRNAs (per gene)")
     axs[i].set_ylabel(f"All sgRNAs" if i == 0 else None)
 
-plt.suptitle(f"Essential genes AROC (1% FDR)", y=1.02)
+plt.suptitle(f"Essential genes AROC", y=1.02)
 plt.subplots_adjust(hspace=0.05, wspace=0.05)
-plt.savefig(f"{RPATH}/YusaDownsample_AROCs_scatter.pdf", bbox_inches="tight")
+plt.savefig(f"{RPATH}/YusaDownsample_AROCs_scatter.pdf", bbox_inches="tight", transparent=True)
 plt.close("all")

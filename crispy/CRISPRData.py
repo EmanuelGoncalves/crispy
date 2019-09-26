@@ -29,6 +29,11 @@ DATASETS = {
         read_counts="Yusa_v1.1_Score_readcount.csv.gz",
         library="Yusa_v1.1.csv.gz",
         plasmids=["CRISPR_C6596666.sample"],
+        exclude_samples=set(
+            pd.read_csv(
+                f"{MANIFESTS_DIR}/project_score_exclude_samples.csv", header=None
+            )[0]
+        ),
     ),
     "GeCKOv2": dict(
         name="GeCKO v2",
@@ -41,19 +46,33 @@ DATASETS = {
             )["sgRNA"]
         ),
     ),
-    "Avana": dict(
+    "Avana_DepMap19Q2": dict(
         name="Avana DepMap19Q2",
         read_counts="Avana_DepMap19Q2_readcount.csv.gz",
         library="Avana_v1.csv.gz",
         plasmids=pd.read_csv(
             f"{MANIFESTS_DIR}/Avana_DepMap19Q2_sample_map.csv.gz", index_col="sample"
-        )["controls"]
-        .apply(lambda v: v.split(";"))
-        .to_dict(),
+        )["controls"].apply(lambda v: v.split(";")).to_dict(),
         exclude_guides=set(
             pd.read_csv(f"{MANIFESTS_DIR}/Avana_DepMap19Q2_dropped_guides.csv.gz")[
                 "guide"
             ]
+        ),
+    ),
+    "Avana_DepMap19Q3": dict(
+        name="Avana DepMap19Q3",
+        read_counts="Avana_DepMap19Q3_readcount.csv.gz",
+        library="Avana_v1.csv.gz",
+        plasmids=pd.read_csv(
+            f"{MANIFESTS_DIR}/Avana_DepMap19Q3_sample_map.csv.gz",
+            index_col="replicate_ID",
+        )["controls"]
+        .apply(lambda v: v.split(";"))
+        .to_dict(),
+        exclude_guides=set(
+            pd.read_csv(
+                f"{MANIFESTS_DIR}/Avana_DepMap19Q3_dropped_guides.csv", index_col=0
+            ).index
         ),
     ),
     "Sabatini_Lander_AML": dict(
@@ -105,6 +124,20 @@ DATASETS = {
         read_counts="Yusa_v1.1_organoids.csv.gz",
         library="Yusa_v1.1.csv.gz",
         plasmids=["Plasmid_v1.1"],
+        exclude_guides={
+            "DHRSX_CCDS35195.1_ex1_X:2161152-2161175:+_3-1",
+            "DHRSX_CCDS35195.1_ex6_Y:2368915-2368938:+_3-3",
+            "DHRSX_CCDS35195.1_ex4_X:2326777-2326800:+_3-2",
+            "sgPOLR2K_1",
+        },
+    ),
+    "KM12_coverage": dict(
+        name="KM12 coverage",
+        read_counts="KM12_coverage.csv.gz",
+        library="Yusa_v1.1.csv.gz",
+        plasmids=pd.read_excel(
+            f"{MANIFESTS_DIR}/KM12_coverage_samplesheet.xlsx", index_col="sample"
+        )["plasmid"].apply(lambda v: v.split(";")).to_dict(),
         exclude_guides={
             "DHRSX_CCDS35195.1_ex1_X:2161152-2161175:+_3-1",
             "DHRSX_CCDS35195.1_ex6_Y:2368915-2368938:+_3-3",
@@ -256,11 +289,19 @@ class CRISPRDataSet:
         # Drop excluded samples
         if exclude_samples is not None:
             data = data.drop(exclude_samples, axis=1, errors="ignore")
+            LOG.info(f"#(samples)={len(exclude_samples)} excluded")
+
+        elif "exclude_samples" in self.dataset_dict:
+            data = data.drop(
+                self.dataset_dict["exclude_samples"], axis=1, errors="ignore"
+            )
+            LOG.info(f"#(samples)={len(self.dataset_dict['exclude_samples'])} excluded")
 
         # Drop excluded guides
         if exclude_guides is not None:
             data = data.drop(exclude_guides, axis=0, errors="ignore")
             self.lib = self.lib.drop(exclude_guides, axis=0, errors="ignore")
+            LOG.info(f"#(guides)={len(exclude_guides)} excluded")
 
         elif "exclude_guides" in self.dataset_dict:
             data = data.drop(
@@ -269,6 +310,7 @@ class CRISPRDataSet:
             self.lib = self.lib.drop(
                 self.dataset_dict["exclude_guides"], axis=0, errors="ignore"
             )
+            LOG.info(f"#(guides)={len(self.dataset_dict['exclude_guides'])} excluded")
 
         self.counts = ReadCounts(data=data)
 

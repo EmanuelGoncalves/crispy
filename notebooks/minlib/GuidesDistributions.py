@@ -91,7 +91,7 @@ for c in ky_gsets:
 plt.grid(True, ls=":", lw=0.1, alpha=1.0, zorder=0, axis="x")
 plt.xlabel("sgRNAs fold-change")
 plt.legend(frameon=False)
-plt.savefig(f"{RPATH}/ky_v11_guides_distributions.pdf", bbox_inches="tight")
+plt.savefig(f"{RPATH}/ky_v11_guides_distributions.pdf", bbox_inches="tight", transparent=True)
 plt.close("all")
 
 
@@ -118,5 +118,32 @@ plt.axvline(0.5, ls="-", lw=0.1, zorder=0, c="k")
 plt.grid(True, ls=":", lw=0.1, alpha=1.0, zorder=0, axis="x")
 plt.xlabel("Area under sgRNAs recall curve")
 plt.ylabel(None)
-plt.savefig(f"{RPATH}/ky_v11_guides_aucs.pdf", bbox_inches="tight")
+plt.savefig(f"{RPATH}/ky_v11_guides_aucs.pdf", bbox_inches="tight", transparent=True)
+plt.close("all")
+
+
+# Representative AROC example
+#
+
+s = "22RV1_c908R1"
+
+plt.figure(figsize=(2., 2.), dpi=600)
+
+for gs in ky_gsets:
+    x, y, xy_auc = QCplot.recall_curve(ky_fc[s], index_set=ky_gsets[gs]["sgrnas"])
+    plt.plot(x, y, label=gs, color=ky_gsets[gs]["color"])
+    plt.fill_between(x, 0, y, facecolor=ky_gsets[gs]["color"], alpha=0.2)
+
+lims = [1, 0]
+plt.plot(lims, lims, "k-", lw=0.3, zorder=0)
+
+plt.grid(True, ls=":", lw=0.1, alpha=1.0, zorder=0)
+
+plt.xlabel("Precent-rank of sgRNAs")
+plt.ylabel("Cumulative fraction")
+plt.title(s)
+
+plt.legend(prop={'size': 4}, frameon=False)
+
+plt.savefig(f"{RPATH}/ky_v11_guides_recall_curve_{s}.pdf", bbox_inches="tight", transparent=True)
 plt.close("all")
