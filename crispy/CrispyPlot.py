@@ -4,6 +4,8 @@
 import numpy as np
 import seaborn as sns
 import matplotlib.colors as colors
+from scipy.interpolate import interpn
+from scipy.stats import gaussian_kde
 
 
 class CrispyPlot:
@@ -59,6 +61,24 @@ class CrispyPlot:
     def get_palette_continuous(n_colors, color=PAL_DBGD[0]):
         pal = sns.light_palette(color, n_colors=n_colors + 2).as_hex()[2:]
         return pal
+
+    @staticmethod
+    def density_interpolate(xx, yy, dtype="gaussian"):
+        if dtype == "gaussian":
+            xy = np.vstack([xx, yy])
+            zz = gaussian_kde(xy)(xy)
+        else:
+            data, x_e, y_e = np.histogram2d(xx, yy, bins=20)
+
+            zz = interpn(
+                (0.5 * (x_e[1:] + x_e[:-1]), 0.5 * (y_e[1:] + y_e[:-1])),
+                data,
+                np.vstack([xx, yy]).T,
+                method="splinef2d",
+                bounds_error=False,
+            )
+
+        return zz
 
 
 class MidpointNormalize(colors.Normalize):

@@ -40,8 +40,18 @@ master_lib = Library.load_library("MasterLib_v1.csv.gz", set_index=False)
 # Drop sgRNAs that do not align to GRCh38
 master_lib = master_lib.query("Assembly == 'Human (GRCh38)'")
 
-# Drop sgRNAs with no alignment to GRCh38
+# Remove sgRNAs that match to multiple genes
+sg_count = master_lib.groupby("WGE_Sequence")["Approved_Symbol"].agg(lambda v: len(set(v)))
+sg_count = sg_count[sg_count != 1]
+master_lib = master_lib[~master_lib["WGE_Sequence"].isin(sg_count.index)]
+
+# Remove sgRNAs with no alignment to GRCh38
 master_lib = master_lib.dropna(subset=["Approved_Symbol", "Off_Target"])
+
+# Remove duplicates (sgRNAs shared across multiple libraries)
+master_lib["Library"] = pd.Categorical(master_lib["Library"], ["KosukeYusa", "Avana", "Brunello", "TKOv3"])
+master_lib = master_lib.sort_values("Library")
+master_lib = master_lib.groupby("WGE_Sequence").first().reset_index()
 
 # Parse off target summaries
 master_lib["Off_Target"] = master_lib["Off_Target"].apply(ast.literal_eval).values
@@ -295,17 +305,24 @@ ky_counts = ky.counts.remove_low_counts(ky.plasmids)
 ky_fc = ky_counts.norm_rpm().norm_rpm().foldchange(ky.plasmids)
 ky_gsets = define_sgrnas_sets(ky.lib, ky_fc, add_controls=True)
 
-ctrl_mean = ky_fc.loc[ky_gsets["nontargeting"]["sgrnas"]].mean(1).dropna()
-ctrl_mean = abs(ctrl_mean - ctrl_mean.mean())
+ctrl_map = pd.read_csv(f"{DPATH}/update/NTC_19_results.txt", sep='\t')
+ctrl_map = ctrl_map[(ctrl_map["MM:0"] == 0) & (ctrl_map["MM:1"] == 0) & (ctrl_map["MM:2"] <= 3)]
 
-ctrl_std = ky_fc.loc[ky_gsets["nontargeting"]["sgrnas"]].std(1).dropna()
+ctrl_sgrnas = ky_gsets["nontargeting"]["sgrnas"]
+ctrl_sgrnas = ctrl_sgrnas.intersection(ctrl_map["sgRNA"])
+
+ctrl_mean = ky_fc.loc[ctrl_sgrnas].mean(1).dropna()
+ctrl_mean = abs(ctrl_mean - ctrl_mean.mean())
 
 ctrl_guides = ky.lib.loc[ctrl_mean.sort_values().head(200).index].dropna(axis=1)
 ctrl_guides = ctrl_guides.rename(columns={"sgRNA": "WGE_Sequence"})
 ctrl_guides = ctrl_guides.reset_index().rename(columns={"sgRNA": "sgRNA_ID"})
+ctrl_guides["WGE_ID"] = ctrl_guides["sgRNA_ID"].values
+ctrl_guides["Library"] = "KosukeYusa"
 
 minimal_lib = pd.concat([minimal_lib, ctrl_guides], sort=False)
 LOG.info(minimal_lib.shape)
+
 
 # Export
 #

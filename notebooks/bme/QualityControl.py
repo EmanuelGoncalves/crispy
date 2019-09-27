@@ -36,19 +36,29 @@ if __name__ == "__main__":
         library="Yusa_v1.1.csv.gz",
         plasmids=["Plasmid_v1.1"],
         samplesheet="samplesheet.xlsx",
+        exclude_samples=[
+            "EGAN00002143461.sample",
+            "EGAN00002143462.sample",
+            "EGAN00002143463.sample",
+            "EGAN00002143464.sample",
+            "EGAN00002143465.sample",
+            "EGAN00002143466.sample",
+        ],
     )
 
     # - Imports
     ddir = pkg_resources.resource_filename("data", "organoids/bme2/")
     dreports = pkg_resources.resource_filename("notebooks", "bme/reports/")
 
-    ss = pd.read_excel(f"{ddir}/{organoids['samplesheet']}", index_col=0)
+    ss = pd.read_excel(f"{ddir}/{organoids['samplesheet']}", index_col=0).query(
+        "sample == 'COLO-027'"
+    )
 
     counts = CRISPRDataSet(organoids, ddir=ddir)
 
     # -
-    samples = list(ss.index)
-    palette = ss.set_index("name")["palette"].to_dict()
+    samples = list(set(ss.index).intersection(ss.index))
+    palette = ss.set_index("name")["palette"]
 
     # - Fold-changes
     fc = (
@@ -62,8 +72,12 @@ if __name__ == "__main__":
     fc_gene_scaled = ReadCounts(fc_gene).scale()
 
     # -
-    fc_gene_scaled.rename(columns=ss["name"]).round(5).to_excel(f"{dreports}/gene_scaled_fold_changes.xlsx")
-    fc_gene_scaled.rename(columns=ss["name"]).corr().to_excel(f"{dreports}/samples_correlation_matrix.xlsx")
+    fc_gene_scaled.rename(columns=ss["name"]).round(5).to_excel(
+        f"{dreports}/gene_scaled_fold_changes.xlsx"
+    )
+    fc_gene_scaled.rename(columns=ss["name"]).corr(method="spearman").to_excel(
+        f"{dreports}/samples_correlation_matrix.xlsx"
+    )
 
     # - sgRNAs counts
     count_thres = 10
@@ -82,266 +96,139 @@ if __name__ == "__main__":
         .dropna()
     )
 
-    # Total counts barplot
-    plt.figure(figsize=(2, 3), dpi=600)
+    for x in ["Total reads", "Guides threshold"]:
+        plt.figure(figsize=(2, 1.5), dpi=600)
 
-    sns.barplot(
-        x="Total reads",
-        y="name",
-        orient="h",
-        data=plot_df.sort_values("Total reads", ascending=False),
-        palette=palette,
-    )
+        sns.barplot(
+            x=x,
+            y="name",
+            orient="h",
+            linewidth=0,
+            saturation=1,
+            order=palette.index,
+            data=plot_df.sort_values("Total reads", ascending=False),
+            palette=palette,
+        )
+        plt.grid(True, ls=":", lw=0.1, alpha=1.0, zorder=0, axis="x")
+        plt.title(
+            "Total raw counts"
+            if x == "Total reads"
+            else f"sgRNAs with counts > {count_thres}"
+        )
+        plt.xlabel("Total counts (sum)" if x == "Total reads" else "Number of sgRNAs")
+        plt.ylabel("")
 
-    plt.title("Total raw counts")
-    plt.xlabel("Total counts (sum)")
-    plt.ylabel("")
+        plt.savefig(
+            f"{dreports}/rawcounts_{x.replace(' ', '_')}_barplot.pdf",
+            bbox_inches="tight",
+        )
+        plt.close("all")
 
-    plt.savefig(f"{dreports}/rawcounts_total_barplot.pdf", bbox_inches="tight")
-    plt.close("all")
+    # - Fold-changes boxplots
+    for n, df in [("sgRNA fold-change", fc), ("Gene fold-change", fc_gene)]:
+        plot_df = df.reindex(samples, axis=1).dropna(axis=1).rename(columns=ss["name"])
+        plot_df = plot_df.unstack().rename("fc").reset_index()
+        plot_df.columns = ["sample", "sgRNA", "fc"]
 
-    # Guides above count threshold
-    plt.figure(figsize=(2, 3), dpi=600)
+        plt.figure(figsize=(2, 1.5), dpi=600)
+        sns.boxplot(
+            "fc",
+            "sample",
+            orient="h",
+            data=plot_df,
+            order=palette.index,
+            palette=palette,
+            saturation=1,
+            showcaps=False,
+            flierprops=CrispyPlot.FLIERPROPS,
+        )
+        plt.xlabel("Fold-change (log2)")
+        plt.ylabel("")
+        plt.grid(True, ls=":", lw=0.1, alpha=1.0, zorder=0, axis="both")
+        plt.title(n)
+        plt.savefig(
+            f"{dreports}/boxplots_{n.replace(' ', '_')}.pdf", bbox_inches="tight"
+        )
+        plt.close("all")
 
-    sns.barplot(
-        x="Guides threshold",
-        y="name",
-        orient="h",
-        data=plot_df.sort_values("Guides threshold", ascending=False),
-        palette=palette,
-    )
+    # - Fold-changes clustermap
+    for n, df in [("sgRNA fold-change", fc), ("Gene fold-change", fc_gene)]:
+        plot_df = (
+            df.reindex(samples, axis=1)
+            .dropna(axis=1)
+            .rename(columns=ss["name"])
+            .corr(method="spearman")
+        )
+        sns.clustermap(
+            plot_df,
+            cmap="Spectral",
+            annot=True,
+            center=0,
+            fmt=".2f",
+            annot_kws=dict(size=4),
+            figsize=(3, 3),
+            lw=0.05,
+            col_colors=pd.Series(palette)[plot_df.columns].rename("BME"),
+            row_colors=pd.Series(palette)[plot_df.index].rename("BME"),
+        )
+        plt.suptitle(n)
+        plt.savefig(
+            f"{dreports}/clustermap_{n.replace(' ', '_')}.pdf", bbox_inches="tight"
+        )
+        plt.close("all")
 
-    plt.title(f"sgRNAs with counts > {count_thres}")
-    plt.xlabel("Number of sgRNAs")
-    plt.ylabel("")
-
-    plt.savefig(f"{dreports}/rawcounts_threshold_barplot.pdf", bbox_inches="tight")
-    plt.close("all")
-
-    # - sgRNAs fold-changes
-    plot_df = fc.reindex(samples, axis=1).dropna(axis=1).rename(columns=ss["name"])
-    plot_df = plot_df.unstack().rename("fc").reset_index()
-    plot_df.columns = ["sample", "sgRNA", "fc"]
-
-    plt.figure(figsize=(2, 3), dpi=600)
-    sns.boxplot(
-        "fc",
-        "sample",
-        orient="h",
-        data=plot_df,
-        palette=palette,
-        saturation=1,
-        showcaps=False,
-        flierprops=CrispyPlot.FLIERPROPS,
-    )
-    plt.axvline(0, ls="-", lw=0.05, zorder=0, c="#484848")
-    plt.title("sgRNA fold-changes")
-    plt.savefig(f"{dreports}/foldchange_sgrna_boxplots.pdf", bbox_inches="tight")
-    plt.close("all")
-
-    # - Gene fold-changes
-    plot_df = fc_gene.reindex(samples, axis=1).dropna(axis=1).rename(columns=ss["name"])
-    plot_df = plot_df.unstack().rename("fc").reset_index()
-    plot_df.columns = ["sample", "gene", "fc"]
-
-    plt.figure(figsize=(2, 3), dpi=600)
-    sns.boxplot(
-        "fc",
-        "sample",
-        orient="h",
-        data=plot_df,
-        palette=palette,
-        saturation=1,
-        showcaps=False,
-        flierprops=CrispyPlot.FLIERPROPS,
-    )
-    plt.axvline(0, ls="-", lw=0.05, zorder=0, c="#484848")
-    plt.title("Gene fold-changes (mean)")
-    plt.savefig(f"{dreports}/foldchange_gene_boxplots.pdf", bbox_inches="tight")
-    plt.close("all")
-
-    # - Clustermap raw counts
-    plot_df = (
-        np.log10(counts.counts)
-        .reindex(samples, axis=1)
-        .dropna(axis=1)
-        .rename(columns=ss["name"])
-        .corr(method="spearman")
-    )
-    g = sns.clustermap(
-        plot_df,
-        cmap="Spectral",
-        center=0,
-        annot=True,
-        fmt=".1f",
-        annot_kws=dict(size=4),
-        figsize=(3, 3),
-        lw=0.05,
-        col_colors=pd.Series(palette)[plot_df.columns],
-        row_colors=pd.Series(palette)[plot_df.index],
-    )
-    plt.suptitle("Raw counts (log10) spearman")
-    plt.savefig(f"{dreports}/clustermap_rawcounts.pdf", bbox_inches="tight")
-    plt.close("all")
-
-    # - Clustermap sgrna fold-changes
-    plot_df = (
-        fc.reindex(samples, axis=1)
-        .dropna(axis=1)
-        .rename(columns=ss["name"])
-        .corr(method="spearman")
-    )
-    sns.clustermap(
-        plot_df,
-        cmap="Spectral",
-        center=0,
-        annot=True,
-        fmt=".1f",
-        annot_kws=dict(size=4),
-        figsize=(3, 3),
-        lw=0.05,
-        col_colors=pd.Series(palette)[plot_df.columns],
-        row_colors=pd.Series(palette)[plot_df.index],
-    )
-    plt.suptitle("sgRNAs fold-change spearman")
-    plt.savefig(f"{dreports}/clustermap_foldchange_sgrna.pdf", bbox_inches="tight")
-    plt.close("all")
-
-    # - Clustermap gene fold-changes
+    # - Recall gene lists
     plot_df = (
         fc_gene.reindex(samples, axis=1)
         .dropna(axis=1)
-        .rename(columns=ss["name"])
-        .corr(method="spearman")
-    )
-    sns.clustermap(
-        plot_df,
-        cmap="Spectral",
-        center=0,
-        annot=True,
-        fmt=".1f",
-        annot_kws=dict(size=4),
-        figsize=(3, 3),
-        lw=0.05,
-        col_colors=pd.Series(palette)[plot_df.columns],
-        row_colors=pd.Series(palette)[plot_df.index],
-    )
-    plt.suptitle("Gene fold-change spearman")
-    plt.savefig(f"{dreports}/clustermap_foldchange_gene.pdf", bbox_inches="tight")
-    plt.close("all")
-
-    # - Recall gene lists
-    plot_df = fc_gene.reindex(samples, axis=1).dropna(axis=1).rename(columns=ss["name"])
-
-    # Essential
-    plt.figure(figsize=(2, 2), dpi=600)
-
-    ax = plt.gca()
-
-    _, stats_ess = QCplot.plot_cumsum_auc(
-        plot_df,
-        Utils.get_essential_genes(),
-        palette=palette,
-        legend_prop={"size": 4},
-        ax=ax,
+        .rename(columns=ss["name"])[palette.index]
     )
 
-    plt.savefig(f"{dreports}/qc_ess_aurc_ess.pdf", bbox_inches="tight")
-    plt.close("all")
+    for n, gset in [
+        ("Essential", Utils.get_essential_genes()),
+        ("Non-essential", Utils.get_non_essential_genes()),
+    ]:
+        # Aroc
+        plt.figure(figsize=(2, 2), dpi=600)
+        ax = plt.gca()
+        _, stats_ess = QCplot.plot_cumsum_auc(
+            plot_df, gset, palette=palette, legend_prop={"size": 4}, ax=ax
+        )
+        plt.title(f"{n} recall curve")
+        plt.xlabel("Percent-rank of genes")
+        plt.ylabel("Cumulative fraction")
+        plt.grid(True, ls=":", lw=0.1, alpha=1.0, zorder=0, axis="both")
+        plt.savefig(f"{dreports}/roccurves_{n}.pdf", bbox_inches="tight")
+        plt.close("all")
 
-    # Non-essential
-    plt.figure(figsize=(2, 2), dpi=600)
+        # Barplot
+        df = pd.Series(stats_ess["auc"])[palette.index].rename("auc").reset_index()
 
-    ax = plt.gca()
+        plt.figure(figsize=(2, 1), dpi=600)
+        sns.barplot(
+            "auc",
+            "name",
+            data=df,
+            palette=palette,
+            linewidth=0,
+            saturation=1,
+            orient="h",
+        )
+        plt.axvline(0.5, ls="-", lw=0.1, alpha=1.0, zorder=0, color="k")
+        plt.xlabel("Area under the recall curve")
+        plt.ylabel("")
+        plt.title(n)
+        plt.grid(True, ls=":", lw=0.1, alpha=1.0, zorder=0, axis="both")
+        plt.savefig(f"{dreports}/roccurves_{n}_barplot.pdf", bbox_inches="tight")
+        plt.close("all")
 
-    _, stats_ness = QCplot.plot_cumsum_auc(
-        plot_df,
-        Utils.get_non_essential_genes(),
-        palette=palette,
-        legend_prop={"size": 4},
-        ax=ax,
-    )
-
-    plt.savefig(f"{dreports}/qc_ess_aurc_ness.pdf", bbox_inches="tight")
-    plt.close("all")
-
-    # - Scaled gene fold-changes
-    # Boxplots
+    # - Scatter grid
     plot_df = (
-        fc_gene_scaled.reindex(samples, axis=1)
+        fc_gene.reindex(samples, axis=1)
         .dropna(axis=1)
-        .rename(columns=ss["name"])
+        .rename(columns=ss["name"])[palette.index]
     )
-    plot_df = plot_df.unstack().rename("fc").reset_index()
-    plot_df.columns = ["sample", "gene", "fc"]
-
-    plt.figure(figsize=(2, 3), dpi=600)
-    sns.boxplot(
-        "fc",
-        "sample",
-        orient="h",
-        data=plot_df,
-        palette=palette,
-        saturation=1,
-        showcaps=False,
-        flierprops=CrispyPlot.FLIERPROPS,
-    )
-    plt.axvline(0, ls="-", lw=0.05, zorder=0, c="#484848")
-    plt.title("Gene fold-changes (mean, scaled)")
-    plt.savefig(f"{dreports}/foldchange_gene_scaled_boxplots.pdf", bbox_inches="tight")
-    plt.close("all")
-
-    # Clustermap
-    plot_df = (
-        fc_gene_scaled.reindex(samples, axis=1)
-        .dropna(axis=1)
-        .rename(columns=ss["name"])
-        .corr(method="spearman")
-    )
-    sns.clustermap(
-        plot_df,
-        cmap="Spectral",
-        center=0,
-        annot=True,
-        fmt=".1f",
-        annot_kws=dict(size=4),
-        figsize=(3, 3),
-        lw=0.05,
-        col_colors=pd.Series(palette)[plot_df.columns],
-        row_colors=pd.Series(palette)[plot_df.index],
-    )
-    plt.suptitle("Scaled gene fold-change spearman")
-    plt.savefig(
-        f"{dreports}/clustermap_foldchange_scaled_gene.pdf", bbox_inches="tight"
-    )
-    plt.close("all")
-
-    # Clustermap filtered
-    plot_df = fc_gene_scaled.reindex(samples, axis=1).dropna(axis=1)
-    plot_df = plot_df.loc[(fc_gene_scaled.abs() > 1).sum(1) > 5]
-    plot_df = plot_df.rename(columns=ss["name"]).corr(method="spearman")
-
-    sns.clustermap(
-        plot_df,
-        cmap="Spectral",
-        center=0,
-        annot=True,
-        fmt=".1f",
-        annot_kws=dict(size=4),
-        figsize=(3, 3),
-        lw=0.05,
-        col_colors=pd.Series(palette)[plot_df.columns],
-        row_colors=pd.Series(palette)[plot_df.index],
-    )
-    plt.suptitle("Filtered and Scaled gene fold-change spearman")
-    plt.savefig(
-        f"{dreports}/clustermap_foldchange_scaled_filtered_gene.pdf",
-        bbox_inches="tight",
-    )
-    plt.close("all")
-
-    # -
-    plot_df = fc_gene_scaled.rename(columns=ss["name"])
+    plot_df.columns = [c.replace("COLO-027 ", "") for c in plot_df.columns]
 
     def triu_plot(x, y, color, label, **kwargs):
         data, x_e, y_e = np.histogram2d(x, y, bins=20)
@@ -369,14 +256,13 @@ if __name__ == "__main__":
         sns.distplot(x, label=label)
 
     grid = sns.PairGrid(plot_df, height=1.1, despine=False)
-
     grid.map_diag(diag_plot, kde=True, hist_kws=dict(linewidth=0), bins=30)
 
     for i, j in zip(*np.tril_indices_from(grid.axes, -1)):
         ax = grid.axes[i, j]
         r, p = spearmanr(plot_df.iloc[:, i], plot_df.iloc[:, j])
         ax.annotate(
-            f"R={r:.2f}\np={p:.1e}",
+            f"R={r:.2f}\np={p:.1e}" if p != 0 else f"R={r:.2f}\np<0.0001",
             xy=(0.5, 0.5),
             xycoords=ax.transAxes,
             ha="center",
@@ -385,11 +271,85 @@ if __name__ == "__main__":
         )
 
     grid = grid.map_upper(triu_plot, marker="o", edgecolor="", cmap="Spectral_r", s=2)
-
     grid.fig.subplots_adjust(wspace=0.05, hspace=0.05)
+    plt.suptitle("COLO-027", y=1.02)
+    plt.gcf().set_size_inches(6, 6)
+    plt.savefig(
+        f"{dreports}/pairplot_gene_fold_changes.png", bbox_inches="tight", dpi=600
+    )
+    plt.close("all")
+
+    # - Scatter grid (replicates averaged)
+    plot_df.columns = [" ".join(c.split(" ")[:2]) for c in plot_df.columns]
+    plot_df = plot_df.groupby(plot_df.columns, axis=1).mean()
+    plot_df["density"] = CrispyPlot.density_interpolate(
+        plot_df["BME 5%"], plot_df["BME 80%"]
+    )
+
+    x_min, x_max = (
+        plot_df[["BME 5%", "BME 80%"]].min().min(),
+        plot_df[["BME 5%", "BME 80%"]].max().max(),
+    )
+
+    r, p = spearmanr(plot_df["BME 5%"], plot_df["BME 80%"])
+    rannot = f"R={r:.2f}; p={p:.1e}" if p != 0 else f"R={r:.2f}; p<0.0001"
+
+    ax = plt.gca()
+
+    ax.scatter(
+        plot_df["BME 5%"],
+        plot_df["BME 80%"],
+        c=plot_df["density"],
+        marker="o",
+        edgecolor="",
+        cmap="Spectral_r",
+        s=2,
+    )
+    ax.annotate(
+        rannot,
+        xy=(0.95, 0.05),
+        xycoords=ax.transAxes,
+        ha="right", va="center", fontsize=7,
+    )
+    ax.set_xlabel("BME 5%\ngene log2 fold-change")
+    ax.set_ylabel("BME 80%\ngene log2 fold-change")
+    ax.set_title("COLO-027")
+    ax.grid(True, ls=":", lw=0.1, alpha=1.0, zorder=0, axis="both")
+    plt.gcf().set_size_inches(2, 2)
+    plt.savefig(
+        f"{dreports}/pairplot_average_gene_fold_changes.pdf",
+        bbox_inches="tight",
+    )
+    plt.close("all")
+
+    # - Waterfall plot BME 5%
+    plot_df = plot_df.sort_values("BME 5%")
+    plot_df["index"] = np.arange(plot_df.shape[0])
+
+    genes_highlight = ["WRN", "BRAF"]
+    genes_palette = sns.color_palette("Set2", n_colors=len(genes_highlight)).as_hex()
+
+    plt.figure(figsize=(3, 2), dpi=600)
+    plt.scatter(plot_df["index"], plot_df["BME 5%"], c=CrispyPlot.PAL_DBGD[2], s=5, linewidths=0)
+
+    for i, g in enumerate(genes_highlight):
+        plt.scatter(plot_df.loc[g, "index"], plot_df.loc[g, "BME 5%"], c=genes_palette[i], s=10, linewidths=0, label=g)
+
+    q10_fc = plot_df["BME 5%"].quantile(.1)
+    plt.axhline(q10_fc, ls="--", color="k", lw=.1, zorder=0)
+    plt.text(-5, q10_fc, "Top 10%", color="k", ha='left', va='bottom', fontsize=5)
+
+    plt.xlabel("Rank of genes")
+    plt.ylabel("BME 5%\ngene log2 fold-change")
+    plt.title("COLO-027")
+    plt.legend(frameon=False)
+
+    plt.axhline(0, ls="-", color="k", lw=.3, zorder=0)
+    plt.grid(True, ls=":", lw=0.1, alpha=1.0, zorder=0, axis="both")
 
     plt.savefig(
-        f"{dreports}/pairplot_gene_foldchanges_scatter.png", bbox_inches="tight"
+        f"{dreports}/waterfall_BME 5%.pdf",
+        bbox_inches="tight",
     )
     plt.close("all")
 
