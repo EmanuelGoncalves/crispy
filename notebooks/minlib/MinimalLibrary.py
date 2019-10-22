@@ -32,7 +32,7 @@ DPATH = pkg_resources.resource_filename("crispy", "data/")
 RPATH = pkg_resources.resource_filename("notebooks", "minlib/reports/")
 
 
-# Master library (KosukeYusa v1.1 + Avana + Brunello)
+# Master library (KosukeYusa v1.1 + Avana + Brunello + TKOv3)
 #
 
 master_lib = Library.load_library("MasterLib_v1.csv.gz", set_index=False)

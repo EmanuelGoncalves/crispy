@@ -24,10 +24,9 @@ import pkg_resources
 import seaborn as sns
 import matplotlib.pyplot as plt
 from crispy.QCPlot import QCplot
-from scipy.stats import ks_2samp
 from crispy.CrispyPlot import CrispyPlot
-from crispy.CRISPRData import CRISPRDataSet
-from minlib.Utils import define_sgrnas_sets
+from crispy.CRISPRData import CRISPRDataSet, Library
+from minlib.Utils import define_sgrnas_sets, project_score_sample_map
 
 
 LOG = logging.getLogger("Crispy")
@@ -40,12 +39,16 @@ RPATH = pkg_resources.resource_filename("notebooks", "minlib/reports/")
 
 ky = CRISPRDataSet("Yusa_v1.1")
 
+ky_smap = project_score_sample_map()
+
 ky_counts = ky.counts.remove_low_counts(ky.plasmids)
 
 ky_fc = ky_counts.norm_rpm().norm_rpm().foldchange(ky.plasmids)
 
 ky_gsets = define_sgrnas_sets(ky.lib, ky_fc, add_controls=True)
 
+
+master_lib = Library.load_library("MasterLib_v1.csv.gz").query("Library == 'KosukeYusa'")
 
 # sgRNAs sets AURC
 #
@@ -65,21 +68,10 @@ ky_gsets_aurc = pd.concat(
 ky_gsets_aurc.to_excel(f"{RPATH}/ky_v11_guides_aurcs.xlsx")
 
 
-# sgRNAs distribution statistical changes
-#
-
-[
-    (g1, g2, ks_2samp(ky_gsets[g1]["fc"], ky_gsets[g2]["fc"]))
-    for g1 in ky_gsets
-    for g2 in ky_gsets
-    if g1 != g2
-]
-
-
 # sgRNA sets histograms
 #
 
-plt.figure(figsize=(2.5, 1.5), dpi=600)
+plt.figure(figsize=(2.5, 1.5))
 for c in ky_gsets:
     sns.distplot(
         ky_gsets[c]["fc"],
@@ -90,6 +82,7 @@ for c in ky_gsets:
     )
 plt.grid(True, ls=":", lw=0.1, alpha=1.0, zorder=0, axis="x")
 plt.xlabel("sgRNAs fold-change")
+plt.ylabel("Density")
 plt.legend(frameon=False)
 plt.savefig(f"{RPATH}/ky_v11_guides_distributions.pdf", bbox_inches="tight", transparent=True)
 plt.close("all")
@@ -100,7 +93,7 @@ plt.close("all")
 
 pal = {s: ky_gsets[s]["color"] for s in ky_gsets}
 
-plt.figure(figsize=(2.5, 0.75), dpi=600)
+plt.figure(figsize=(2.5, 1.))
 sns.boxplot(
     "aurc",
     "dtype",
@@ -141,7 +134,7 @@ plt.grid(True, ls=":", lw=0.1, alpha=1.0, zorder=0)
 
 plt.xlabel("Precent-rank of sgRNAs")
 plt.ylabel("Cumulative fraction")
-plt.title(s)
+plt.title(f"{s.split('_')[0]} (Replicate {s[-1:]})")
 
 plt.legend(prop={'size': 4}, frameon=False)
 

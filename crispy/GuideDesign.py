@@ -138,14 +138,3 @@ class GuideDesign:
         query = pd.read_json(query, typ="series")
 
         return query
-
-    @staticmethod
-    def reverse_complement(sequence, reverse=True):
-        code = dict(A="T", T="A", C="G", G="C")
-
-        complement_seq = "".join([code[b] for b in sequence])
-
-        if reverse:
-            complement_seq = complement_seq[::-1]
-
-        return complement_seq

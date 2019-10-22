@@ -172,7 +172,7 @@ class QCplot(CrispyPlot):
         return ax
 
     @classmethod
-    def plot_cumsum_auc(cls, df, index_set, ax=None, palette=None, legend=True, plot_mean=False, legend_prop=None):
+    def plot_cumsum_auc(cls, df, index_set, ax=None, palette=None, legend=True, plot_mean=False, legend_prop=None, color="#484848"):
         """
         Plot cumulative sum of values X considering index_set list.
 
@@ -205,7 +205,7 @@ class QCplot(CrispyPlot):
             plot_stats['auc'][f] = xy_auc
 
             # Plot
-            c = "#484848" if palette is None else palette[f]
+            c = color if palette is None else palette[f]
             ax.plot(x, y, label='%s: %.2f' % (f, xy_auc) if (legend is True) else None, lw=1., c=c, alpha=.8)
 
         # Mean

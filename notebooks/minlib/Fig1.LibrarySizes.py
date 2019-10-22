@@ -32,7 +32,7 @@ RPATH = pkg_resources.resource_filename("notebooks", "minlib/reports/")
 # CRISPR-Cas9 library sizes
 #
 
-clib_size = pd.read_excel(f"{RPATH}/LibrarySizes_Human_CRISPR_Cas9.xlsx")
+clib_size = pd.read_excel(f"{RPATH}/LibrarySizes_Human_CRISPR_Cas9.xlsx", index_col=0)
 
 
 # Scatterplot of library sizes
@@ -49,10 +49,13 @@ sns.scatterplot(
     palette=clib_size.set_index("Citation")["Palette"],
     hue_order=list(clib_size["Citation"]),
     sizes=(10, 50),
+    linewidth=0,
     ax=ax,
 )
 
 ax.set_xlim(datetime.date(2013, 11, 1), datetime.date(2020, 3, 1))
+
+ax.axhline(clib_size.loc["Haoquan_Wu", "Number of guides"], lw=.5, color="#706f6f", ls="-", zorder=0)
 
 ax.grid(True, ls="-", lw=0.1, alpha=1.0, zorder=0)
 

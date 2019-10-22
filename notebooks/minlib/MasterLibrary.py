@@ -90,6 +90,17 @@ wge_coord = pd.read_csv(f"{DPATH}/update/WGE_coordinates.txt", sep="\t", index_c
 
 ks = pd.concat([ky_ks["ks_control"], avana_ks["ks_control"]])
 
+ks_lib = pd.concat([
+    ky_ks["ks_control"].reset_index().assign(library="KosukeYusa"),
+    avana_ks["ks_control"].reset_index().assign(library="Avana"),
+])
+ks_lib.to_csv(
+    f"{RPATH}/KS_sgRNAs_scores.csv.gz", index=False, compression="gzip"
+)
+ks_lib.to_excel(
+    f"{RPATH}/KS_sgRNAs_scores.xlsx", index=False
+)
+
 
 # JACKS scores
 #
@@ -189,6 +200,6 @@ master.drop(columns=["sgRNA", "Gene"]).to_csv(
     f"{DPATH}/crispr_libs/MasterLib_v1.csv.gz", index=False, compression="gzip"
 )
 
-master.drop(columns=["sgRNA", "Gene"]).to_csv(
-    f"{RPATH}/MasterLib_v1.xlsx", index=False, compression="gzip"
+master.drop(columns=["sgRNA", "Gene"]).to_excel(
+    f"{RPATH}/MasterLib_v1.xlsx", index=False
 )

@@ -17,7 +17,7 @@ class LibraryRepresentaion:
         gini_scores = {}
 
         for c in self.counts:
-            values = self.counts[c]
+            values = self.counts[c].dropna()
 
             sorted_list = sorted(values)
 
@@ -120,7 +120,7 @@ class LibraryRepresentaion:
         gini_scores = self.gini()
 
         for c in self.counts:
-            values = np.sort(self.counts[c])
+            values = np.sort(self.counts[c].dropna())
 
             x_lorenz = np.cumsum(values) / np.sum(values)
             y_lorenz = np.arange(1, len(x_lorenz) + 1) / len(x_lorenz)
@@ -131,14 +131,15 @@ class LibraryRepresentaion:
                 color=CrispyPlot.PAL_DBGD[0] if palette is None else palette[c],
                 label=f"{c} (gini={gini_scores[c]:.2f})",
                 zorder=2,
+                alpha=.5,
             )
 
         ax.plot([0, 1], [0, 1], "k-", lw=0.3, zorder=1)
 
         ax.grid(True, ls="-", lw=0.1, alpha=1.0, zorder=0)
 
-        ax.set_xlabel("Fraction of total reads")
-        ax.set_ylabel("Fraction of total sgRNAs")
+        ax.set_ylabel("Fraction of total reads")
+        ax.set_xlabel("Fraction of total sgRNAs")
 
         plt.legend(loc=2, frameon=False, prop={"size": 4})
 
