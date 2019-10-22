@@ -28,6 +28,7 @@ class SLethal:
         filter_prot_kws=None,
         filter_wes_kws=None,
         filter_cn_kws=None,
+        samples=None,
     ):
         self.verbose = verbose
         self.min_events = min_events
@@ -36,18 +37,18 @@ class SLethal:
         self.ss_obj = Sample()
 
         self.gexp_obj = GeneExpression()
-        self.prot_obj = Proteomics()
+        # self.prot_obj = Proteomics()
         self.crispr_obj = CRISPR()
-        self.wes_obj = WES()
-        self.cn_obj = CopyNumber()
-
+        # self.wes_obj = WES()
+        # self.cn_obj = CopyNumber()
+        #
         # Samples overlap
         set_samples = [
-            (self.crispr_obj, use_crispr),
-            (self.gexp_obj, use_transcriptomics),
-            (self.prot_obj, use_proteomics),
-            (self.wes_obj, use_wes),
-            (self.cn_obj, use_copynumber),
+            # (self.crispr_obj, use_crispr),
+            # (self.gexp_obj, use_transcriptomics),
+            # (self.prot_obj, use_proteomics),
+            # (self.wes_obj, use_wes),
+            # (self.cn_obj, use_copynumber),
         ]
 
         set_samples = [list(o.get_data().columns) for o, f in set_samples if f]
@@ -55,57 +56,57 @@ class SLethal:
         if use_covariates:
             set_samples.append(list(self.get_covariates().index))
 
-        self.samples = set.intersection(*map(set, set_samples))
+        self.samples = set.intersection(*map(set, set_samples)) if samples is None else samples
 
         # Get logger
         self.logger = logging.getLogger("Crispy")
         self.logger.info(f"Samples={len(self.samples)}")
 
-        # Filter kws
+        # # Filter kws
         self.filter_crispr_kws = (
             dict(scale=True, abs_thres=0.5)
             if filter_crispr_kws is None
             else filter_crispr_kws
         )
-        self.filter_crispr_kws["subset"] = self.samples
+        # self.filter_crispr_kws["subset"] = self.samples
 
         self.filter_gexp_kws = (
             dict(dtype="voom") if filter_gexp_kws is None else filter_gexp_kws
         )
-        self.filter_gexp_kws["subset"] = self.samples
-
-        self.filter_prot_kws = (
-            dict(dtype="noimputed", perc_measures=0.85)
-            if filter_prot_kws is None
-            else filter_prot_kws
-        )
-        self.filter_prot_kws["subset"] = self.samples
-
-        self.filter_wes_kws = (
-            dict(as_matrix=True) if filter_wes_kws is None else filter_wes_kws
-        )
-        self.filter_wes_kws["subset"] = self.samples
-
-        self.filter_cn_kws = (
-            dict(dtype="del") if filter_cn_kws is None else filter_cn_kws
-        )
-        self.filter_cn_kws["subset"] = self.samples
-
+        # self.filter_gexp_kws["subset"] = self.samples
+        #
+        # self.filter_prot_kws = (
+        #     dict(dtype="noimputed", perc_measures=0.85)
+        #     if filter_prot_kws is None
+        #     else filter_prot_kws
+        # )
+        # self.filter_prot_kws["subset"] = self.samples
+        #
+        # self.filter_wes_kws = (
+        #     dict(as_matrix=True) if filter_wes_kws is None else filter_wes_kws
+        # )
+        # self.filter_wes_kws["subset"] = self.samples
+        #
+        # self.filter_cn_kws = (
+        #     dict(dtype="del") if filter_cn_kws is None else filter_cn_kws
+        # )
+        # self.filter_cn_kws["subset"] = self.samples
+        #
         # Load and filter data-sets
         self.gexp = self.gexp_obj.filter(**self.filter_gexp_kws)
         self.logger.info(f"Gene-expression={self.gexp.shape}")
 
-        self.prot = self.prot_obj.filter(**self.filter_prot_kws)
-        self.logger.info(f"Proteomics={self.prot.shape}")
-
-        self.crispr = self.crispr_obj.filter(**self.filter_crispr_kws)
-        self.logger.info(f"CRISPR-Cas9={self.crispr.shape}")
-
-        self.wes = self.wes_obj.filter(**self.filter_wes_kws)
-        self.logger.info(f"WES={self.wes.shape}")
-
-        self.cn = self.cn_obj.filter(**self.filter_cn_kws)
-        self.logger.info(f"Copy-number={self.cn.shape}")
+        # self.prot = self.prot_obj.filter(**self.filter_prot_kws)
+        # self.logger.info(f"Proteomics={self.prot.shape}")
+        #
+        # self.crispr = self.crispr_obj.filter(**self.filter_crispr_kws)
+        # self.logger.info(f"CRISPR-Cas9={self.crispr.shape}")
+        #
+        # self.wes = self.wes_obj.filter(**self.filter_wes_kws)
+        # self.logger.info(f"WES={self.wes.shape}")
+        #
+        # self.cn = self.cn_obj.filter(**self.filter_cn_kws)
+        # self.logger.info(f"Copy-number={self.cn.shape}")
 
     def get_covariates(
         self,
@@ -220,10 +221,13 @@ class SLethal:
 
         # Random effects matrix
         if k is None:
-            K = SLethal.kinship(x.loc[Y.index])
+            K = SLethal.kinship(x.loc[Y.index]).values
+
+        elif k is False:
+            K = None
 
         else:
-            K = k.loc[Y.index, Y.index]
+            K = k.loc[Y.index, Y.index].values
 
         # Covariates
         if m is not None:
@@ -234,7 +238,7 @@ class SLethal:
                 m = m.loc[:, m.std() > 0]
 
         # Linear Mixed Model
-        lmm = scan(X, Y, K=K.values, M=m, lik=lik, verbose=False)
+        lmm = scan(X, Y, K=K, M=m, lik=lik, verbose=False)
 
         return lmm, dict(x=X, y=Y, k=K, m=m)
 
@@ -281,7 +285,9 @@ class SLethal:
         """
 
         # - Kinship matrix (random effects)
-        if k is None:
+        if k is False:
+            k = None
+        elif k is None:
             k = self.kinship(x)
 
         # - GLM regression kws

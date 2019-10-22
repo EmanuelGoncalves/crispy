@@ -108,5 +108,5 @@ for i, x_var in enumerate(x_vars):
         ax.legend(prop={"size": 5}, frameon=False, loc=3)
 
 plt.subplots_adjust(hspace=0.05, wspace=0.05)
-plt.savefig(f"{RPATH}/ky_v11_guides_metrics_scatter.pdf", bbox_inches="tight")
+plt.savefig(f"{RPATH}/ky_v11_guides_metrics_scatter.pdf", bbox_inches="tight", transparent=True)
 plt.close("all")

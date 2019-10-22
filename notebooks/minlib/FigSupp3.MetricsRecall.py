@@ -160,62 +160,60 @@ metrics_recall.to_excel(f"{RPATH}/KosukeYusa_v1.1_benchmark_recall.xlsx", index=
 # Boxplot the benchmark scores
 #
 
-plot_df = pd.melt(
-    metrics_recall,
-    id_vars=["metric", "nguides"],
-    value_vars=[
-        "ess_aroc",
-        "recall",
-        "precision",
-    ],
+n_cols = len(set(metrics_recall["metric"]))
+n_rows = len(set(metrics_recall["nguides"]))
+
+order = ["KS", "JACKS_min", "combined"]
+order_col = ["ess_aroc", "precision", "recall"]
+
+pal = dict(
+    KS=CrispyPlot.PAL_DBGD[0],
+    JACKS_min=CrispyPlot.PAL_DBGD[2],
+    combined=CrispyPlot.PAL_DBGD[1],
 )
-
-n_cols = len(set(plot_df["nguides"]))
-n_rows = len(set(plot_df["variable"]))
-
-xorder = ["KS", "JACKS_min", "combined"]
-
-pal = {
-    "KS": CrispyPlot.PAL_DBGD[0],
-    "JACKS_min": CrispyPlot.PAL_DBGD[2],
-    "combined": CrispyPlot.PAL_DBGD[1],
-}
 
 f, axs = plt.subplots(
-    n_rows, n_cols, sharey="row", sharex="col", figsize=(.5 * n_cols, 2. * n_rows)
+    n_rows, n_cols, sharey="all", sharex="col", figsize=(2. * n_cols, .75 * n_rows)
 )
 
-for i, (var, var_df) in enumerate(plot_df.groupby("variable")):
-    for j, (nguides, guide_df) in enumerate(var_df.groupby("nguides")):
+for i, nguides in enumerate(set(metrics_recall["nguides"])):
+    for j, metric in enumerate(order_col):
         ax = axs[i][j]
 
-        sns.boxplot(
-            "metric",
-            "value",
-            data=guide_df,
-            order=xorder,
-            palette=pal,
-            saturation=1,
-            showcaps=False,
-            boxprops=dict(linewidth=0.3),
-            whiskerprops=dict(linewidth=0.3),
-            flierprops=dict(
-                marker="o",
-                markerfacecolor="black",
-                markersize=1.0,
-                linestyle="none",
-                markeredgecolor="none",
-                alpha=0.6,
-            ),
-            notch=True,
-            ax=ax,
-        )
+        df = pd.pivot_table(
+            metrics_recall.query(f"nguides == '{nguides}'").drop(columns=["nguides"]),
+            index="sample", columns="metric"
+        )[metric]
 
-        ax.set_ylabel(var if j == 0 else None)
-        ax.set_xlabel(None)
-        ax.set_title(f"{'All' if nguides == 100 else nguides} sgRNAs" if i == 0 else None, fontsize=6)
+        for z, v in enumerate(order):
+            ax.boxplot(
+                df[v],
+                positions=[z],
+                vert=False,
+                showcaps=False,
+                patch_artist=True,
+                boxprops=dict(linewidth=0.3, facecolor=pal[v]),
+                whiskerprops=dict(linewidth=0.3),
+                flierprops=dict(
+                    marker="o",
+                    markerfacecolor="black",
+                    markersize=1.0,
+                    linestyle="none",
+                    markeredgecolor="none",
+                    alpha=0.6,
+                ),
+                notch=True,
+                widths=.8,
+            )
 
-        ax.grid(True, ls=":", lw=0.1, alpha=1.0, zorder=0, axis="y")
+        ax.set_yticklabels(order)
+
+        ax.set_xlim(right=1.05)
+
+        ax.set_xlabel(metric if i == (n_rows - 1) else "")
+        ax.set_ylabel(f"{'All' if nguides == 100 else nguides} sgRNAs" if j == 0 else None)
+
+        ax.grid(True, ls="-", lw=0.1, alpha=1.0, zorder=0, axis="x")
 
         plt.setp(ax.xaxis.get_majorticklabels(), rotation=90)
 
