@@ -73,18 +73,25 @@ for ltype in libraries:
 
     counts = org_count[org_count.index.isin(lib.index)]
 
-    fc = counts.norm_rpm().foldchange(org_data.plasmids)
-    fc = fc.groupby([c.split("_")[0] for c in fc], axis=1).mean()
-    fc = fc.groupby(lib["Approved_Symbol"]).mean()
+    fc_sgrna = counts.norm_rpm().foldchange(org_data.plasmids)
+    fc_gene = fc_sgrna.groupby(lib["Approved_Symbol"]).mean()
+
+    fc_sgrna_avg = fc_sgrna.groupby([c.split("_")[0] for c in fc_sgrna], axis=1).mean()
+    fc_gene_avg = fc_sgrna_avg.groupby(lib["Approved_Symbol"]).mean()
 
     libraries[ltype]["counts"] = counts
-    libraries[ltype]["fc"] = fc
+
+    libraries[ltype]["fc_sgrna"] = fc_sgrna
+    libraries[ltype]["fc_gene"] = fc_gene
+
+    libraries[ltype]["fc_sgrna_avg"] = fc_sgrna_avg
+    libraries[ltype]["fc_gene_avg"] = fc_gene_avg
 
 
 # Genes overlap
 #
 
-genes = set(libraries["All"]["fc"].index).intersection(libraries["Minimal"]["fc"].index)
+genes = set(libraries["All"]["fc_gene_avg"].index).intersection(libraries["Minimal"]["fc_gene_avg"].index)
 LOG.info(f"Genes={len(genes)}")
 
 
@@ -93,24 +100,25 @@ LOG.info(f"Genes={len(genes)}")
 
 metrics_arocs = []
 for ltype in libraries:
-    for s in libraries[ltype]["fc"]:
+    for s in libraries[ltype]["fc_gene_avg"]:
         LOG.info(f"Library={ltype}; Organoid={s}")
 
         metrics_arocs.append(
             dict(
                 library=ltype,
                 sample=s,
-                aroc=QCplot.aroc_threshold(libraries[ltype]["fc"][s], fpr_thres=0.2)[0],
+                aroc=QCplot.aroc_threshold(libraries[ltype]["fc_gene_avg"][s], fpr_thres=0.2)[0],
             )
         )
 metrics_arocs = pd.DataFrame(metrics_arocs)
 
 
 # Plot essential genes recall
+#
 
 pal = dict(All="#e34a33", Minimal="#fee8c8")
 
-n = libraries["All"]["fc"].shape[1]
+n = libraries["All"]["fc_gene_avg"].shape[1]
 
 fig, ax = plt.subplots(1, 1, figsize=(0.6 * n, 2.0), dpi=600)
 
@@ -128,32 +136,77 @@ plt.savefig(f"{RPATH}/organoids_ess_barplot.pdf", bbox_inches="tight", transpare
 plt.close("all")
 
 
+# Plot essential genes recall
+#
+
+fig, axs = plt.subplots(1, len(libraries), sharex="none", sharey="row", figsize=(2 * len(libraries), 2))
+
+for i, ltype in enumerate(libraries):
+    ax = axs[i]
+
+    x_var = libraries[ltype]["fc_gene"]["CAM338_R1"]
+    y_var = libraries[ltype]["fc_gene"]["CAM338_R2"]
+
+    x_min = min(x_var.min(), y_var.min()) * 1.05
+    x_max = max(x_var.max(), y_var.max()) * 1.05
+
+    ax.hexbin(
+        x_var,
+        y_var,
+        cmap="Spectral_r",
+        gridsize=100,
+        mincnt=1,
+        bins="log",
+        lw=0,
+    )
+
+    ax.set_xlabel(f"{x_var.name}\nGene fold-change")
+    ax.set_ylabel(f"{y_var.name}\nGene fold-change" if i == 0 else "")
+    ax.set_title(ltype)
+
+    ax.grid(True, ls=":", lw=0.1, alpha=1.0, zorder=0)
+
+    lims = [x_max, x_min]
+    ax.plot(lims, lims, "k-", lw=0.3, zorder=0)
+    ax.set_xlim(x_min, x_max)
+    ax.set_ylim(x_min, x_max)
+
+    rmse = sqrt(mean_squared_error(x_var, y_var))
+    cor, _ = spearmanr(x_var, y_var)
+    annot_text = f"Spearman's R={cor:.2g}; RMSE={rmse:.2f}"
+    ax.text(0.95, 0.05, annot_text, fontsize=4, transform=ax.transAxes, ha="right")
+
+fig.subplots_adjust(hspace=0.05, wspace=0.05)
+plt.savefig(
+    f"{RPATH}/organoids_cam338_reps_scatter.pdf", bbox_inches="tight", transparent=True
+)
+plt.close("all")
+
+
 # Gene fold-change scatter
 #
 
-x_min = min([libraries[m]["fc"].min().min() for m in libraries])
-x_max = max([libraries[m]["fc"].max().max() for m in libraries])
+x_min = min([libraries[m]["fc_gene_avg"].min().min() for m in libraries]) * 1.05
+x_max = max([libraries[m]["fc_gene_avg"].max().max() for m in libraries]) * 1.05
 
-n = libraries["All"]["fc"].shape[1]
+n = libraries["All"]["fc_gene_avg"].shape[1]
 
 f, axs = plt.subplots(1, n, sharex="all", sharey="all", figsize=(2 * n, 2), dpi=600)
 
-for i, s in enumerate(libraries["All"]["fc"]):
+for i, s in enumerate(libraries["All"]["fc_gene_avg"]):
     ax = axs[i]
 
-    x_var = libraries["All"]["fc"].loc[genes, s]
-    y_var = libraries["Minimal"]["fc"].loc[genes, s]
-    z_var = density_interpolate(x_var, y_var)
+    x_var = libraries["All"]["fc_gene_avg"].loc[genes, s]
+    y_var = libraries["Minimal"]["fc_gene_avg"].loc[genes, s]
 
-    ax.scatter(
+    ax.hexbin(
         x_var,
         y_var,
-        c=z_var,
-        marker="o",
-        edgecolor="",
         cmap="Spectral_r",
-        s=3,
-        alpha=0.7,
+        gridsize=100,
+        mincnt=1,
+        bins="log",
+        lw=0,
     )
 
     ax.set_xlabel(f"Kosuke Yusa V1.1 (5 sgRNAs/Gene)\nGene fold-change")

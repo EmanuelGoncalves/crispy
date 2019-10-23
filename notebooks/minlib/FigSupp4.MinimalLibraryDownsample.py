@@ -50,8 +50,11 @@ ky_lib = ky_lib[ky_lib.index.isin(ky_counts.index)]
 # Minimal library (top 2)
 #
 
-ml_lib = Library.load_library("MinimalLib_top2.csv.gz").query("Library == 'KosukeYusa'")
+NGUIDES, REMOVE_DISCORDANT = 2, True
+ml_lib_name = f"MinimalLib_top{NGUIDES}{'_disconcordant' if REMOVE_DISCORDANT else ''}.csv.gz"
+ml_lib = Library.load_library(ml_lib_name).query("Library == 'KosukeYusa'")
 ml_lib = ml_lib[ml_lib.index.isin(ky_counts.index)]
+ml_lib = ml_lib.loc[[i for i in ml_lib.index if not i.startswith("CTRL0")]]
 
 
 # Genes overlap

@@ -110,8 +110,8 @@ LOG.info(f"Genes={len(genes)}")
 
 dif_cols = ["Dif10d", "Dif14d", "Dif18d", "Dif21d"]
 
-x_min = dabraf_limma[dif_cols].mean(1).min()
-x_max = dabraf_limma[dif_cols].mean(1).max()
+x_min = dabraf_limma[dif_cols].mean(1).min() * 1.05
+x_max = dabraf_limma[dif_cols].mean(1).max() * 1.05
 
 plot_df = pd.DataFrame(
     dict(
@@ -125,20 +125,17 @@ plot_df = pd.DataFrame(
         .mean(1),
     )
 ).dropna()
-plot_df["z"] = density_interpolate(plot_df["x"], plot_df["y"])
-plot_df = plot_df.sort_values("z")
 
 fig, ax = plt.subplots(1, 1, figsize=(2.0, 2.0), dpi=600)
 
-ax.scatter(
+ax.hexbin(
     plot_df["x"],
     plot_df["y"],
-    c=plot_df["z"],
-    marker="o",
-    edgecolor="",
     cmap="Spectral_r",
-    s=3,
-    alpha=0.7,
+    gridsize=100,
+    mincnt=1,
+    bins="log",
+    lw=0,
 )
 
 rmse = sqrt(mean_squared_error(plot_df["x"], plot_df["y"]))
@@ -150,8 +147,8 @@ lims = [x_max, x_min]
 ax.plot(lims, lims, "k-", lw=0.3, zorder=0)
 ax.grid(True, ls=":", lw=0.1, alpha=1.0, zorder=0)
 
-ax.set_xlabel("All sgRNAs")
-ax.set_ylabel("Minimal Library")
+ax.set_xlabel("Kosuke Yusa V1.1 (5 sgRNAs/Gene)")
+ax.set_ylabel("MinLibCas9 (2 sgRNAs/Gene)")
 ax.set_title("CRISPR + Dabrafinib (fold-change)")
 
 plt.savefig(
