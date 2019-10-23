@@ -101,5 +101,5 @@ plt.ylabel("Minimal Library - 2 sgRNAs")
 plt.title("AROC essential genes")
 
 plt.gcf().set_size_inches(2, 2)
-plt.savefig(f"{RPATH}/MinimalLib_downsample_scatter.pdf", bbox_inches="tight")
+plt.savefig(f"{RPATH}/MinimalLib_downsample_scatter.pdf", bbox_inches="tight", transparent=True)
 plt.close("all")

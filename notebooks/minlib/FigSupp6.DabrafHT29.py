@@ -40,6 +40,13 @@ RPATH = pkg_resources.resource_filename("notebooks", "minlib/reports/")
 # Libraries
 #
 
+NGUIDES, REMOVE_DISCORDANT = 2, True
+ml_lib_name = (
+    f"MinimalLib_top{NGUIDES}{'_disconcordant' if REMOVE_DISCORDANT else ''}.csv.gz"
+)
+ml_lib = Library.load_library(ml_lib_name).query("Library == 'KosukeYusa'")
+ml_lib = ml_lib.loc[[i for i in ml_lib.index if not i.startswith("CTRL0")]]
+
 libraries = dict(
     All=dict(
         name="All",
@@ -47,12 +54,7 @@ libraries = dict(
             "Library == 'KosukeYusa'"
         ),
     ),
-    Minimal=dict(
-        name="Minimal",
-        lib=Library.load_library("MinimalLib_top2.csv.gz").query(
-            "Library == 'KosukeYusa'"
-        ),
-    ),
+    Minimal=dict(name="Minimal", lib=ml_lib),
 )
 
 
@@ -111,10 +113,18 @@ dif_cols = ["Dif10d", "Dif14d", "Dif18d", "Dif21d"]
 x_min = dabraf_limma[dif_cols].mean(1).min()
 x_max = dabraf_limma[dif_cols].mean(1).max()
 
-plot_df = pd.DataFrame(dict(
-    x=dabraf_limma.query(f"library == 'All'").set_index(["Approved_Symbol"]).loc[genes, dif_cols].mean(1),
-    y=dabraf_limma.query(f"library == 'Minimal'").set_index(["Approved_Symbol"]).loc[genes, dif_cols].mean(1),
-)).dropna()
+plot_df = pd.DataFrame(
+    dict(
+        x=dabraf_limma.query(f"library == 'All'")
+        .set_index(["Approved_Symbol"])
+        .loc[genes, dif_cols]
+        .mean(1),
+        y=dabraf_limma.query(f"library == 'Minimal'")
+        .set_index(["Approved_Symbol"])
+        .loc[genes, dif_cols]
+        .mean(1),
+    )
+).dropna()
 plot_df["z"] = density_interpolate(plot_df["x"], plot_df["y"])
 plot_df = plot_df.sort_values("z")
 
@@ -144,7 +154,9 @@ ax.set_xlabel("All sgRNAs")
 ax.set_ylabel("Minimal Library")
 ax.set_title("CRISPR + Dabrafinib (fold-change)")
 
-plt.savefig(f"{RPATH}/HT29_Dabraf_fc_scatter.pdf", bbox_inches="tight", transparent=True)
+plt.savefig(
+    f"{RPATH}/HT29_Dabraf_fc_scatter.pdf", bbox_inches="tight", transparent=True
+)
 plt.close("all")
 
 
@@ -219,5 +231,7 @@ for i, ltype in enumerate(libraries):
         ax.text(0.05, 0.05, annot_text, fontsize=4, transform=ax.transAxes, ha="left")
 
 plt.subplots_adjust(hspace=0.05, wspace=0.05)
-plt.savefig(f"{RPATH}/HT29_Dabraf_assoc_examples.pdf", bbox_inches="tight", transparent=True)
+plt.savefig(
+    f"{RPATH}/HT29_Dabraf_assoc_examples.pdf", bbox_inches="tight", transparent=True
+)
 plt.close("all")

@@ -47,6 +47,13 @@ org_count = org_data.counts.remove_low_counts(org_data.plasmids)
 # Libraries
 #
 
+NGUIDES, REMOVE_DISCORDANT = 2, True
+ml_lib_name = (
+    f"MinimalLib_top{NGUIDES}{'_disconcordant' if REMOVE_DISCORDANT else ''}.csv.gz"
+)
+ml_lib = Library.load_library(ml_lib_name).query("Library == 'KosukeYusa'")
+ml_lib = ml_lib.loc[[i for i in ml_lib.index if not i.startswith("CTRL0")]]
+
 libraries = dict(
     All=dict(
         name="All",
@@ -54,12 +61,7 @@ libraries = dict(
             "Library == 'KosukeYusa'"
         ),
     ),
-    Minimal=dict(
-        name="Minimal",
-        lib=Library.load_library("MinimalLib_top2.csv.gz").query(
-            "Library == 'KosukeYusa'"
-        ),
-    ),
+    Minimal=dict(name="Minimal", lib=ml_lib),
 )
 
 
@@ -72,6 +74,7 @@ for ltype in libraries:
     counts = org_count[org_count.index.isin(lib.index)]
 
     fc = counts.norm_rpm().foldchange(org_data.plasmids)
+    fc = fc.groupby([c.split("_")[0] for c in fc], axis=1).mean()
     fc = fc.groupby(lib["Approved_Symbol"]).mean()
 
     libraries[ltype]["counts"] = counts
@@ -109,17 +112,17 @@ pal = dict(All="#e34a33", Minimal="#fee8c8")
 
 n = libraries["All"]["fc"].shape[1]
 
-fig, ax = plt.subplots(1, 1, figsize=(.6 * n, 2.0), dpi=600)
+fig, ax = plt.subplots(1, 1, figsize=(0.6 * n, 2.0), dpi=600)
 
 sns.barplot("sample", "aroc", "library", metrics_arocs, ax=ax, palette=pal, linewidth=0)
 
-ax.grid(True, ls=":", lw=0.1, alpha=1.0, zorder=0)
+ax.grid(True, ls=":", lw=0.1, alpha=1.0, zorder=0, axis="y")
 
 ax.set_xlabel(None)
 ax.set_ylabel("AROC Essential (20% FDR)")
 
 ax.set_ylim(0.5, 1)
-plt.legend(frameon=False, loc='center left', bbox_to_anchor=(1, 0.5))
+plt.legend(frameon=False, loc="center left", bbox_to_anchor=(1, 0.5))
 
 plt.savefig(f"{RPATH}/organoids_ess_barplot.pdf", bbox_inches="tight", transparent=True)
 plt.close("all")
@@ -153,8 +156,8 @@ for i, s in enumerate(libraries["All"]["fc"]):
         alpha=0.7,
     )
 
-    ax.set_xlabel(f"All\nsgRNA fold-change")
-    ax.set_ylabel(f"Minimal\nsgRNA fold-change" if i == 0 else None)
+    ax.set_xlabel(f"Kosuke Yusa V1.1 (5 sgRNAs/Gene)\nGene fold-change")
+    ax.set_ylabel(f"MinLibCas9 (2 sgRNAs/Gene)\nGene fold-change" if i == 0 else None)
     ax.set_title(s)
 
     ax.grid(True, ls=":", lw=0.1, alpha=1.0, zorder=0)
@@ -170,5 +173,7 @@ for i, s in enumerate(libraries["All"]["fc"]):
     ax.text(0.95, 0.05, annot_text, fontsize=4, transform=ax.transAxes, ha="right")
 
 plt.subplots_adjust(hspace=0.05, wspace=0.05)
-plt.savefig(f"{RPATH}/organoids_gene_fc_scatter.png", bbox_inches="tight", transparent=True)
+plt.savefig(
+    f"{RPATH}/organoids_gene_fc_scatter.pdf", bbox_inches="tight", transparent=True
+)
 plt.close("all")

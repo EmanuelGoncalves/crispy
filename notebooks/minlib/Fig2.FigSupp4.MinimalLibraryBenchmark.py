@@ -67,6 +67,7 @@ NGUIDES, REMOVE_DISCORDANT = 2, True
 ml_lib_name = f"MinimalLib_top{NGUIDES}{'_disconcordant' if REMOVE_DISCORDANT else ''}.csv.gz"
 ml_lib = Library.load_library(ml_lib_name).query("Library == 'KosukeYusa'")
 ml_lib = ml_lib[ml_lib.index.isin(ky_counts.index)]
+ml_lib = ml_lib.loc[[i for i in ml_lib.index if not i.startswith("CTRL0")]]
 
 
 # Genes overlap
@@ -428,57 +429,6 @@ plt.savefig(
 plt.close("all")
 
 
-# Cumulative differences
-#
-
-plt.figure(figsize=(2.5, 1.5), dpi=600)
-sns.distplot(
-    gene_deps["difference"], kde=False, bins=100, color="k", hist_kws=dict(lw=0)
-)
-plt.xlabel("Difference between number of dependencies\n(All - Minimal)")
-plt.grid(True, ls=":", lw=0.1, alpha=1.0, zorder=0, axis="x")
-plt.savefig(
-    f"{RPATH}/{ml_lib_name.split('.')[0]}_benchmark_cum_diff_histogram.pdf",
-    bbox_inches="tight",
-    transparent=True,
-)
-plt.close("all")
-
-
-thres = [-250, -100, -50, 50, 100, 250]
-thres_labels = ["-100", "-50", "0", "+50", "+100"]
-gene_deps["difference_bins"] = pd.cut(gene_deps["difference"], thres, labels=thres_labels)
-
-plt.figure(figsize=(1.5, 1.5), dpi=600)
-sns.boxplot(
-    x=gene_deps["difference_bins"],
-    y=gene_deps["n_guides"],
-    order=thres_labels,
-    saturation=1,
-    showcaps=False,
-    color=CrispyPlot.PAL_DBGD[0],
-    boxprops=dict(linewidth=0.3),
-    whiskerprops=dict(linewidth=0.3),
-    flierprops=dict(
-        marker="o",
-        markerfacecolor="black",
-        markersize=1.0,
-        linestyle="none",
-        markeredgecolor="none",
-        alpha=0.6,
-    ),
-    notch=False,
-)
-plt.xlabel("Difference between number of dependencies\n(All - Minimal)")
-plt.grid(True, ls=":", lw=0.1, alpha=1.0, zorder=0, axis="y")
-plt.savefig(
-    f"{RPATH}/{ml_lib_name.split('.')[0]}_benchmark_cum_diff_boxplots.pdf",
-    bbox_inches="tight",
-    transparent=True,
-)
-plt.close("all")
-
-
 # Recover plot
 #
 
@@ -559,7 +509,7 @@ plt.close("all")
 #
 
 # g, g_diff = "VHL", -82
-for g, g_diff in gene_deps.iloc[np.r_[0:5, -5:0]].reset_index()[["index", "difference"]].values:
+for g, g_diff in gene_deps.sort_values("difference").iloc[np.r_[0:5, -5:0]].reset_index()[["index", "difference"]].values:
 
     g_metrics = ky_lib[ky_lib["Approved_Symbol"] == g].sort_values("KS")
     g_metrics["MinimalLib"] = g_metrics.index.isin(ml_lib.index).astype(int)
