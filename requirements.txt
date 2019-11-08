@@ -8,3 +8,4 @@ natsort>=5.1.0
 statsmodels>=0.8.0
 pybedtools>=0.7.10
 limix>=3.0.0
+xlrd>=1.0.0

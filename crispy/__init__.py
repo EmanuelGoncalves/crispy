@@ -11,7 +11,7 @@ from crispy.Enrichment import SSGSEA, GSEAplot
 from crispy.CopyNumberCorrection import Crispy, CrispyGaussian
 
 
-__version__ = "0.3.0"
+__version__ = "0.4.3"
 
 # - SET STYLE
 sns.set(

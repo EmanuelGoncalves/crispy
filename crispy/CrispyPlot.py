@@ -67,6 +67,7 @@ class CrispyPlot:
         if dtype == "gaussian":
             xy = np.vstack([xx, yy])
             zz = gaussian_kde(xy)(xy)
+
         else:
             data, x_e, y_e = np.histogram2d(xx, yy, bins=20)
 

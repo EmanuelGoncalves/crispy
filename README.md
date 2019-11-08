@@ -3,7 +3,7 @@
 [![License](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause) [![PyPI version](https://badge.fury.io/py/cy.svg)](https://badge.fury.io/py/cy) [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.2530755.svg)](https://doi.org/10.5281/zenodo.2530755)
 
 
-Method to correct gene independent copy-number effects on CRISPR-Cas9 screens.
+Module wih utility function to process CRISPR-based screens and method to correct gene independent copy-number effects.
 
 
 Description
@@ -21,8 +21,25 @@ conda install -c bioconda pybedtools
 pip install cy
 ```
 
-Example
+Examples
 --
+Support to library imports:
+```python
+from crispy.CRISPRData import Library
+
+# Master Library, standardised assembly of KosukeYusa V1.1, Avana, Brunello and TKOv3 CRISPR-Cas9 libraries.
+master_lib = Library.load_library("MasterLib_v1.csv.gz")
+
+
+# Genome-wide minimal CRISPR-Cas9 library. 
+minimal_lib = Library.load_library("MinLibCas9.csv.gz")
+
+# Some of the most broadly adopted CRISPR-Cas9 libraries:
+# 'Avana_v1.csv.gz', 'Brunello_v1.csv.gz', 'GeCKO_v2.csv.gz', 'Manjunath_Wu_v1.csv.gz', 'TKOv3.csv.gz', 'Yusa_v1.1.csv.gz'
+brunello_lib = Library.load_library("Brunello_v1.csv.gz")
+```
+
+Copy-number correction:
 ```python
 import crispy as cy
 import matplotlib.pyplot as plt
@@ -46,7 +63,6 @@ print(bed_df.head())
 # Gaussian Process Regression is stored
 crispy.gpr.plot(x_feature='ratio', y_feature='fold_change')
 plt.show()
-
 ```
 ![GPR](crispy/data/images/example_gp_fit.png)
 

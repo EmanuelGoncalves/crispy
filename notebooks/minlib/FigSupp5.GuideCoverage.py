@@ -84,6 +84,18 @@ pal = dict(All="#e34a33", Minimal="#fee8c8")
 order = ["25x (B)", "50x (B)", "75x (B)", "100x (B)", "100x (A)", "500x (A)"]
 
 
+# Export data
+#
+
+minlibcas9 = Library.load_library(ml_lib_name)
+kylib = Library.load_library("MasterLib_v1.csv.gz").query("Library == 'KosukeYusa'")
+
+data_export = ky.counts.copy()
+data_export.insert(0, "MinLibCas9_guide", data_export.index.isin(minlibcas9.index))
+data_export.insert(0, "Approved_Symbol", kylib.loc[data_export.index, "Approved_Symbol"])
+data_export.to_excel(f"{RPATH}/GuideCoverage_export_data.xlsx")
+
+
 # Essential genes AROC
 #
 

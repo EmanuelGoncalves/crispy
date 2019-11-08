@@ -29,7 +29,7 @@ from natsort import natsorted
 from crispy.QCPlot import QCplot
 from crispy.DataImporter import Sample
 from crispy.CrispyPlot import CrispyPlot
-from scipy.stats import spearmanr, pearsonr
+from scipy.stats import spearmanr, pearsonr, ttest_ind
 from crispy.CRISPRData import CRISPRDataSet, Library, ReadCounts
 from minlib.Utils import project_score_sample_map, density_interpolate
 from sklearn.metrics import (
@@ -64,7 +64,9 @@ ky_lib = ky_lib[ky_lib.index.isin(ky_counts.index)]
 #
 
 NGUIDES, REMOVE_DISCORDANT = 2, True
-ml_lib_name = f"MinimalLib_top{NGUIDES}{'_disconcordant' if REMOVE_DISCORDANT else ''}.csv.gz"
+ml_lib_name = (
+    f"MinimalLib_top{NGUIDES}{'_disconcordant' if REMOVE_DISCORDANT else ''}.csv.gz"
+)
 ml_lib = Library.load_library(ml_lib_name).query("Library == 'KosukeYusa'")
 ml_lib = ml_lib[ml_lib.index.isin(ky_counts.index)]
 ml_lib = ml_lib.loc[[i for i in ml_lib.index if not i.startswith("CTRL0")]]
@@ -179,20 +181,30 @@ samples_rep_corr = (
     .mean()
 )
 
-deprecovered = pd.concat(
-    [
-        deprecovered.set_index("samples"),
-        sample_qc["Transduction Efficiencty"],
-        sample_qc["Cas9 Activity"],
-        sample_qc["CellLine Passing LowLev QC"],
-        samples_rep_corr.rename("Replicates correlation"),
-        Sample().samplesheet["tissue"],
-    ],
-    axis=1,
-    sort=False,
-).dropna(subset=["ap"]).sort_values("ap", ascending=False)
-deprecovered["Efficacy"] = (deprecovered["Transduction Efficiencty"] / 100) * (deprecovered["Cas9 Activity"] / 100) * 100
-deprecovered.to_excel(f"{RPATH}/{ml_lib_name.split('.')[0]}_benchmark_qc_sample_metrics.xlsx")
+deprecovered = (
+    pd.concat(
+        [
+            deprecovered.set_index("samples"),
+            sample_qc["Transduction Efficiencty"],
+            sample_qc["Cas9 Activity"],
+            sample_qc["CellLine Passing LowLev QC"],
+            samples_rep_corr.rename("Replicates correlation"),
+            Sample().samplesheet["tissue"],
+        ],
+        axis=1,
+        sort=False,
+    )
+    .dropna(subset=["ap"])
+    .sort_values("ap", ascending=False)
+)
+deprecovered["Efficacy"] = (
+    (deprecovered["Transduction Efficiencty"] / 100)
+    * (deprecovered["Cas9 Activity"] / 100)
+    * 100
+)
+deprecovered.to_excel(
+    f"{RPATH}/{ml_lib_name.split('.')[0]}_benchmark_qc_sample_metrics.xlsx"
+)
 
 
 # Disconcordance between number of dependent cell lines found per gene
@@ -205,16 +217,27 @@ gene_deps = pd.concat(
 ).dropna()
 gene_deps["difference"] = gene_deps.eval("All - Minimal")
 gene_deps = gene_deps.loc[gene_deps.sort_values("difference").index]
-gene_deps["match"] = (gene_deps["difference"].abs() > 100).replace({True: "Disconcordant", False: "Concordant"})
-gene_deps["n_guides"] = ky_lib["Approved_Symbol"].dropna().value_counts().loc[gene_deps.index].values
-gene_deps.to_excel(f"{RPATH}/{ml_lib_name.split('.')[0]}_benchmark_gene_concordance.xlsx")
+gene_deps["match"] = (gene_deps["difference"].abs() > 100).replace(
+    {True: "Disconcordant", False: "Concordant"}
+)
+gene_deps["n_guides"] = (
+    ky_lib["Approved_Symbol"].dropna().value_counts().loc[gene_deps.index].values
+)
+gene_deps.to_excel(
+    f"{RPATH}/{ml_lib_name.split('.')[0]}_benchmark_gene_concordance.xlsx"
+)
 
 
 # Sample QC scatter plots
 #
 
 y_var = "ap"
-x_vars = ["Transduction Efficiencty", "Cas9 Activity", "Replicates correlation", "Efficacy"]
+x_vars = [
+    "Transduction Efficiencty",
+    "Cas9 Activity",
+    "Replicates correlation",
+    "Efficacy",
+]
 
 f, axs = plt.subplots(
     1, len(x_vars), sharex="none", sharey="row", figsize=(len(x_vars) * 2, 2)
@@ -306,6 +329,12 @@ plot_df["Recap"] = [
 ]
 plot_df["Recap"] = plot_df["Recap"].replace({2: "Yes", 1: "No", 0: "NA"})
 
+ttest_ind(
+    plot_df.query("Recap == 'Yes'")["All_fc"],
+    plot_df.query("Recap == 'No'")["All_fc"],
+    equal_var=False,
+)
+
 order = ["Yes", "No"]
 pal = {"Yes": CrispyPlot.PAL_DBGD[1], "No": CrispyPlot.PAL_DBGD[0]}
 samples = set(plot_df["model_id"])
@@ -387,7 +416,9 @@ for metric in ["auc", "thres"]:
 #
 
 gene_deps["density"] = density_interpolate(gene_deps["All"], gene_deps["Minimal"])
-gene_deps["n_guides"] = ky_lib["Approved_Symbol"].dropna().value_counts().loc[gene_deps.index].values
+gene_deps["n_guides"] = (
+    ky_lib["Approved_Symbol"].dropna().value_counts().loc[gene_deps.index].values
+)
 gene_deps = gene_deps.sort_values("density")
 
 x_min, x_max = gene_deps.iloc[:, :2].min().min(), gene_deps.iloc[:, :2].max().max()
@@ -453,7 +484,7 @@ plt.grid(True, ls=":", lw=0.1, alpha=1.0, zorder=0, axis="y")
 plt.xlabel("Number of cell lines")
 plt.ylabel(f"Average precission score")
 
-plt.legend(frameon=False, prop={'size': 4}, loc='center left', bbox_to_anchor=(1, 0.5))
+plt.legend(frameon=False, prop={"size": 4}, loc="center left", bbox_to_anchor=(1, 0.5))
 
 plt.savefig(
     f"{RPATH}/{ml_lib_name.split('.')[0]}_benchmark_recall_plot.pdf",
@@ -509,7 +540,12 @@ plt.close("all")
 #
 
 # g, g_diff = "VHL", -82
-for g, g_diff in gene_deps.sort_values("difference").iloc[np.r_[0:5, -5:0]].reset_index()[["index", "difference"]].values:
+for g, g_diff in (
+    gene_deps.sort_values("difference")
+    .iloc[np.r_[0:5, -5:0]]
+    .reset_index()[["index", "difference"]]
+    .values
+):
 
     g_metrics = ky_lib[ky_lib["Approved_Symbol"] == g].sort_values("KS")
     g_metrics["MinimalLib"] = g_metrics.index.isin(ml_lib.index).astype(int)
@@ -536,7 +572,12 @@ for g, g_diff in gene_deps.sort_values("difference").iloc[np.r_[0:5, -5:0]].rese
     for i, ax in enumerate(axs):
         if i == 0:
             sns.heatmap(
-                gx.data2d, xticklabels=False, cmap="Spectral", center=0, cbar=False, ax=ax
+                gx.data2d,
+                xticklabels=False,
+                cmap="Spectral",
+                center=0,
+                cbar=False,
+                ax=ax,
             )
 
         else:
@@ -562,7 +603,10 @@ for g, g_diff in gene_deps.sort_values("difference").iloc[np.r_[0:5, -5:0]].rese
         ax.set_ylabel(None)
         ax.set_title("Fold-change" if i == 0 else metric)
 
-    plt.suptitle(f"{g}\nDifference between number of dependencies\n(All - Minimal = {g_diff})", y=1.2)
+    plt.suptitle(
+        f"{g}\nDifference between number of dependencies\n(All - Minimal = {g_diff})",
+        y=1.2,
+    )
 
     plt.savefig(
         f"{RPATH}/{ml_lib_name.split('.')[0]}_benchmark_mismatch_example_{g}.pdf",

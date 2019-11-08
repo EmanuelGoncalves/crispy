@@ -68,6 +68,18 @@ dabraf_ss = pd.read_csv(
 )
 
 
+# Export data
+#
+
+minlibcas9 = Library.load_library(ml_lib_name)
+kylib = Library.load_library("MasterLib_v1.csv.gz").query("Library == 'KosukeYusa'")
+
+data_export = dabraf_data.counts.copy()
+data_export.insert(0, "MinLibCas9_guide", data_export.index.isin(minlibcas9.index))
+data_export.insert(0, "Approved_Symbol", kylib.loc[data_export.index, "Approved_Symbol"])
+data_export.to_excel(f"{RPATH}/DrugCRISPR_export_data.xlsx")
+
+
 # Calculate and export gene fold-changes
 #
 
