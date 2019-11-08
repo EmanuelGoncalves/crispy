@@ -3,7 +3,7 @@
 [![License](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause) [![PyPI version](https://badge.fury.io/py/cy.svg)](https://badge.fury.io/py/cy) [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.2530755.svg)](https://doi.org/10.5281/zenodo.2530755)
 
 
-Module wih utility function to process CRISPR-based screens and method to correct gene independent copy-number effects.
+Module with utility functions to process CRISPR-based screens and method to correct gene independent copy-number effects.
 
 
 Description
