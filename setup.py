@@ -65,7 +65,7 @@ setuptools.setup(
     description="Modelling CRISPR dropout data",
     long_description_content_type="text/markdown",
     url="https://github.com/EmanuelGoncalves/crispy",
-    packages=setuptools.find_packages(),
+    packages=["crispy", "test"],
     include_package_data=True,
     package_data=included_files,
     install_requires=requirements,

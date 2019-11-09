@@ -135,12 +135,12 @@ class QCplot(CrispyPlot):
     @classmethod
     def bias_boxplot(
             cls, data, x='copy_number', y='auc', hue=None, despine=False, notch=True, add_n=False, n_text_y=None,
-            n_text_offset=.05, palette=None, ax=None, tick_base=.1, hue_order=None, n_fontsize=3.5
+            n_text_offset=.05, palette=None, ax=None, tick_base=.1, order=None, hue_order=None, n_fontsize=3.5
     ):
         if ax is None:
             ax = plt.gca()
 
-        order = natsorted(set(data[x]))
+        order = natsorted(set(data[x])) if order is None else order
 
         if palette is None and hue is not None:
             hue_order = natsorted(set(data[hue])) if hue_order is None else hue_order
