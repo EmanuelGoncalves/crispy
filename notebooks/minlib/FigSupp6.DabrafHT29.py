@@ -175,7 +175,7 @@ highlights = ["GRB2", "CSK", "EGFR", "ERBB2", "STK11", "SHC1", "NF1", "PTEN"]
 conditions = [("DMSO", "#E1E1E1"), ("Dabraf", "#d62728")]
 
 f, axs = plt.subplots(
-    2, len(highlights), sharex="all", sharey="all", figsize=(len(highlights) * 2, 4)
+    2, len(highlights), sharex="all", sharey="all", figsize=(len(highlights) * 1.25, 2.5)
 )
 
 for i, ltype in enumerate(libraries):
@@ -201,16 +201,25 @@ for i, ltype in enumerate(libraries):
             plot_df_mrk = plot_df.query(f"medium == '{mdm}'")
             plot_df_mrk = plot_df_mrk.assign(
                 time=plot_df_mrk["time"].apply(lambda x: int(x[1:]))
+            ).sort_values("time")
+            ax.scatter(
+                plot_df_mrk["time"],
+                plot_df_mrk[gene],
+                c=clr,
+                s=10,
+                lw=.3,
+                edgecolor="white",
+                zorder=3,
             )
-            plot_df_mrk = plot_df_mrk.groupby("time")[gene].agg([min, max, np.mean])
-            plot_df_mrk = plot_df_mrk.assign(time=[f"D{i}" for i in plot_df_mrk.index])
 
+            plot_df_mrk = plot_df_mrk.groupby("time")[gene].agg([min, max, np.mean])
             ax.errorbar(
                 plot_df_mrk.index,
                 plot_df_mrk["mean"],
                 c=clr,
                 fmt="--o",
                 label=mdm,
+                ms=2,
                 capthick=0.5,
                 capsize=2,
                 elinewidth=1,
@@ -224,7 +233,7 @@ for i, ltype in enumerate(libraries):
 
         ax.grid(True, ls=":", lw=0.1, alpha=1.0, zorder=0)
 
-        ax.set_xlabel("Days" if i == 2 else "")
+        ax.set_xlabel("Days" if i == 1 else "")
         ax.set_ylabel(f"sgRNA {ltype}\nfold-change" if j == 0 else "")
         ax.set_title(f"{gene}" if i == 0 else "")
         ax.legend(loc=2, frameon=False, prop={"size": 4})
@@ -237,9 +246,9 @@ for i, ltype in enumerate(libraries):
         annot_text = (
             f"Mean FC={g_limma[dif_cols].mean():.1f}; FDR={g_limma['adj.P.Val']:.1e}"
         )
-        ax.text(0.05, 0.05, annot_text, fontsize=4, transform=ax.transAxes, ha="left")
+        ax.text(0.05, 0.05, annot_text, fontsize=5, transform=ax.transAxes, ha="left")
 
-plt.subplots_adjust(hspace=0.05, wspace=0.05)
+plt.subplots_adjust(hspace=0, wspace=0)
 plt.savefig(
     f"{RPATH}/HT29_Dabraf_assoc_examples.pdf", bbox_inches="tight", transparent=True
 )

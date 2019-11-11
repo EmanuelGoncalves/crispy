@@ -173,14 +173,6 @@ sample_qc["Cas9 Activity"] = sample_qc["Cas9 Activity"].apply(
     )
 )
 
-samples_rep_corr = (
-    pd.read_csv(f"{RPATH}/KosukeYusa_v1.1_benchmark_rep_correlation.csv.gz")
-    .query("(library == 'All') & (replicate == True)")
-    .set_index("sample_1")
-    .groupby(ky_smap["model_id"])["corr"]
-    .mean()
-)
-
 deprecovered = (
     pd.concat(
         [
@@ -188,7 +180,6 @@ deprecovered = (
             sample_qc["Transduction Efficiencty"],
             sample_qc["Cas9 Activity"],
             sample_qc["CellLine Passing LowLev QC"],
-            samples_rep_corr.rename("Replicates correlation"),
             Sample().samplesheet["tissue"],
         ],
         axis=1,

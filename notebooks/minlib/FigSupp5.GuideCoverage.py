@@ -190,6 +190,21 @@ sns.barplot(
     hue_order=hue_order,
 )
 
+sns.stripplot(
+    "coverage",
+    "corr",
+    "library",
+    plot_df,
+    ax=ax,
+    split=True,
+    size=3,
+    edgecolor="white",
+    color="black",
+    linewidth=.3,
+    order=order,
+    hue_order=hue_order,
+)
+
 ax.grid(True, ls=":", lw=0.1, alpha=1.0, zorder=0)
 
 ax.set_xlabel(None)
