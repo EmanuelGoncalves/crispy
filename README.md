@@ -27,7 +27,8 @@ Support to library imports:
 ```python
 from crispy.CRISPRData import Library
 
-# Master Library, standardised assembly of KosukeYusa V1.1, Avana, Brunello and TKOv3 CRISPR-Cas9 libraries.
+# Master Library, standardised assembly of KosukeYusa V1.1, Avana, Brunello and TKOv3 
+# CRISPR-Cas9 libraries.
 master_lib = Library.load_library("MasterLib_v1.csv.gz")
 
 
@@ -35,7 +36,8 @@ master_lib = Library.load_library("MasterLib_v1.csv.gz")
 minimal_lib = Library.load_library("MinLibCas9.csv.gz")
 
 # Some of the most broadly adopted CRISPR-Cas9 libraries:
-# 'Avana_v1.csv.gz', 'Brunello_v1.csv.gz', 'GeCKO_v2.csv.gz', 'Manjunath_Wu_v1.csv.gz', 'TKOv3.csv.gz', 'Yusa_v1.1.csv.gz'
+# 'Avana_v1.csv.gz', 'Brunello_v1.csv.gz', 'GeCKO_v2.csv.gz', 'Manjunath_Wu_v1.csv.gz', 
+# 'TKOv3.csv.gz', 'Yusa_v1.1.csv.gz'
 brunello_lib = Library.load_library("Brunello_v1.csv.gz")
 ```
 
