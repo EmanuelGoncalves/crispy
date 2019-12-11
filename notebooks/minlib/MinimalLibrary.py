@@ -223,9 +223,9 @@ for g in pgenes["symbol"]:
             library="Brunello",
             gene=g,
             offtarget=[1],
+            n_guides=NGUIDES - g_guides.shape[0],
             sortby="RuleSet2",
             ascending=False,
-            n_guides=NGUIDES - g_guides.shape[0],
             qflag="Amber",
             sgrnas_exclude=set(g_guides["sgRNA_ID"])
         )

@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 from scipy import stats
 from natsort import natsorted
 from sklearn.metrics import roc_curve, roc_auc_score
-from sklearn.model_selection import ShuffleSplit, StratifiedShuffleSplit
+from sklearn.model_selection import StratifiedShuffleSplit
 
 LOG = logging.getLogger("Crispy")
 DPATH = pkg_resources.resource_filename("crispy", "data/")
@@ -57,7 +57,8 @@ class GExp:
         ax.set_title(x.name)
         return ax
 
-    def benchmark(self, y_true, y_score, max_fpr, return_curve=False):
+    @staticmethod
+    def benchmark(y_true, y_score, max_fpr, return_curve=False):
         fpr, tpr, thres = roc_curve(y_true, y_score)
 
         auc = roc_auc_score(y_true, y_score)
@@ -71,7 +72,6 @@ class GExp:
         x,
         n_splits=100,
         train_size=0.7,
-        min_observations=10,
         decimal_places=2,
         max_fpr=0.05,
         verbose=0,

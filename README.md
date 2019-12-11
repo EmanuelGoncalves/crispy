@@ -39,6 +39,22 @@ minimal_lib = Library.load_library("MinLibCas9.csv.gz")
 brunello_lib = Library.load_library("Brunello_v1.csv.gz")
 ```
 
+Select sgRNAs (across multiple CRISPR-Cas9 libraries) for a given gene:
+```python
+from crispy.GuideSelection import GuideSelection
+
+# sgRNA selection class
+gselection = GuideSelection()
+
+# Select 5 optimal sgRNAs for MCL1 across multiple libraries 
+gene_guides = gselection.select_sgrnas(
+    "MCL1", n_guides=5, offtarget=[1, 0], jacks_thres=1, ruleset2_thres=.4
+)
+
+# Perform different rounds of sgRNA selection with increasingly relaxed efficiency thresholds 
+gene_guides = gselection.selection_rounds("TRIM49", n_guides=5, do_amber_round=True, do_red_round=True)
+```
+
 Copy-number correction:
 ```python
 import crispy as cy
