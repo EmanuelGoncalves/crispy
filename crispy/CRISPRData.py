@@ -23,6 +23,9 @@ DATASETS = {
         read_counts="Yusa_v1_Score_readcount.csv.gz",
         library="Yusa_v1.csv.gz",
         plasmids=["ERS717283.plasmid"],
+        exclude_samples=set(
+            pd.read_csv(f"{MANIFESTS_DIR}/project_score_all_qc_failed_samples.csv")["sample"]
+        ),
     ),
     "Yusa_v1.1": dict(
         name="Yusa v1.1",

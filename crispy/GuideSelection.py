@@ -4,6 +4,7 @@
 import ast
 import numpy as np
 import pandas as pd
+from crispy import logger as LOG
 from crispy.CRISPRData import Library
 
 
@@ -162,7 +163,7 @@ class GuideSelection:
 
         return g_guides
 
-    def selection_rounds(self, gene, n_guides=5, do_amber_round=True, do_red_round=True):
+    def selection_rounds(self, gene, n_guides=5, do_amber_round=True, do_red_round=True, verbose=1):
         # - Stringest sgRNA selection round
         gguides = self.select_sgrnas(gene=gene, n_guides=n_guides, **self.GREEN)
         gguides = gguides.assign(Confidence="Green")
@@ -177,6 +178,9 @@ class GuideSelection:
             ).assign(Confidence="Amber")
             gguides = pd.concat([gguides, gguides_amber], sort=False)
 
+            if verbose > 0:
+                LOG.warn(f"{len(gguides_amber)} Amber guides selected for gene {gene}")
+
         # - Lose sgRNA selection round
         if do_red_round and (len(gguides) < n_guides):
             gguides_red = self.get_sgrnas(
@@ -186,5 +190,8 @@ class GuideSelection:
                 **self.RED,
             ).assign(Confidence="Red")
             gguides = pd.concat([gguides, gguides_red], sort=False)
+
+            if verbose > 0:
+                LOG.warn(f"{len(gguides_red)} Red guides selected for gene {gene}")
 
         return gguides
