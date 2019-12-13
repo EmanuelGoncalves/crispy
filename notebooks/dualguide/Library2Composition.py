@@ -32,6 +32,7 @@ LIBNAME = "2gCRISPR_Pilot_library_v2.0.0.xlsx"
 LINKER = "GCAGAG"
 TRNA = "GCATTGGTGGTTCAGTGGTAGAATTCTCGCCTCCCACGCGGGAGACCCGGGTTCAATTCCCGGCCAATGCA"
 SCAFFOLDS = pd.read_excel(f"{DPATH}/{LIBNAME}", sheet_name="Scaffolds", index_col=0)["Sequence"].to_dict()
+CLONING_ARMS = pd.read_excel(f"{DPATH}/{LIBNAME}", sheet_name="Cloning Arms", index_col=0)["sequence"].to_dict()
 
 LIB_COLUMNS = [
     "WGE_ID",
@@ -53,7 +54,9 @@ def get_nontargeting_sgrnas():
 
 
 def get_intergenic_sgrnas():
-    return pd.read_excel(f"{DPATH}/{LIBNAME}", sheet_name="Intergenic sgRNAs").loc[:, LIB_COLUMNS]
+    sgrnas = pd.read_excel(f"{DPATH}/{LIBNAME}", sheet_name="Intergenic sgRNAs").loc[:, LIB_COLUMNS]
+    sgrnas = sgrnas[["TTTT" not in g for g in sgrnas["WGE_Sequence"]]]
+    return sgrnas
 
 
 def get_nonessential_sgrnas(n_guides=2):
@@ -124,8 +127,6 @@ def generate_negative_controls(n_guides=2):
         ],
         axis=1,
     )[LIB_COLUMNS_EXP]
-
-    pindex = np.arange(int(len(noess) / n_guides)).repeat(n_guides)
 
     # Non-targeting vs Non-targeting
     ntarg = get_nontargeting_sgrnas()
@@ -343,7 +344,19 @@ def generate_anchors(n_guides=4):
 
 def generate_cut_distance():
     # Read cut distance vectors from previous library iteration
-    return pd.read_excel(f"{DPATH}/{LIBNAME}", sheet_name="Cut Distance Vectors")
+    sgrnas = pd.read_excel(f"{DPATH}/{LIBNAME}", sheet_name="Cut Distance Vectors")
+    sgrnas = sgrnas[["TTTT" not in g for g in sgrnas["sgRNA1_WGE_Sequence"]]]
+    sgrnas = sgrnas[["TTTT" not in g for g in sgrnas["sgRNA2_WGE_Sequence"]]]
+    return sgrnas
+
+
+def generate_oligo(sgrna1, scaffold, linker, trna, sgrna2):
+    sgrna1 = sgrna1[1:-3] if len(sgrna1) == 23 else sgrna1
+    sgrna2 = sgrna2[1:-3] if len(sgrna2) == 23 else sgrna2
+
+    oligo = f"{CLONING_ARMS['left']}G{sgrna1}{scaffold}{linker}{trna}G{sgrna2}{CLONING_ARMS['right']}"
+
+    return oligo
 
 
 if __name__ == "__main__":
@@ -386,15 +399,17 @@ if __name__ == "__main__":
     lib = lib.assign(tRNA=TRNA)
 
     # Drop duplicates
-    lib = lib.drop_duplicates(
-        subset=["sgRNA1_WGE_Sequence", "Scaffold_Sequence", "Linker", "tRNA", "sgRNA2_WGE_Sequence"]
-    )
+    vids = ["sgRNA1_WGE_Sequence", "Scaffold_Sequence", "Linker", "tRNA", "sgRNA2_WGE_Sequence"]
+    lib = lib.drop_duplicates(subset=vids)
 
     # Add 2gCRISPR ids to each vector
     lib["ID"] = [f"DG{i:07d}" for i in np.arange(1, len(lib) + 1)]
 
     # Order columns
     lib = lib[["ID", "Notes", "Scaffold"] + LIB_COLUMNS_EXP + ["Scaffold_Sequence", "Linker", "tRNA"]]
+
+    # Oligo sequences
+    lib["Oligo_Sequence"] = [generate_oligo(sg1, s, l, t, sg2) for sg1, s, l, t, sg2 in lib[vids].values]
 
     # Export
     lib.to_excel(f"{DPATH}/{LIBNAME[:-5]}_guides_only.xlsx", index=False)

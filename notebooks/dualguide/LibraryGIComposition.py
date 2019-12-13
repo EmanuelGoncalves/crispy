@@ -51,6 +51,7 @@ TRNA = "GCATTGGTGGTTCAGTGGTAGAATTCTCGCCTCCCACGCGGGAGACCCGGGTTCAATTCCCGGCCAATGCA"
 SCAFFOLD = pd.read_excel(
     f"{DPATH}/{PILOTLIBNAME}", sheet_name="Scaffolds", index_col=0
 ).loc["Wildtype", "Sequence"]
+CLONING_ARMS = pd.read_excel(f"{DPATH}/{PILOTLIBNAME}", sheet_name="Cloning Arms", index_col=0)["sequence"].to_dict()
 
 
 def genes_master_check(geneset):
@@ -172,9 +173,11 @@ def define_controls(
 
     ness_sgrnas_fc_ds = ness_sgrnas_fc.T.describe().T.dropna()
     ness_sgrnas_fc_ds = ness_sgrnas_fc_ds[ness_sgrnas_fc_ds["25%"] >= crisp_min]
-    ness_sgrnas_fc_ds["Approved_Symbol"] = ness_sgrnas.set_index("sgRNA_ID").loc[
-        ness_sgrnas_fc_ds.index, "Approved_Symbol"
-    ].values
+    ness_sgrnas_fc_ds["Approved_Symbol"] = (
+        ness_sgrnas.set_index("sgRNA_ID")
+        .loc[ness_sgrnas_fc_ds.index, "Approved_Symbol"]
+        .values
+    )
 
     ness_sgrnas = ness_sgrnas.set_index("sgRNA_ID").loc[ness_sgrnas_fc_ds.index]
 
@@ -207,7 +210,10 @@ def define_controls(
     )
 
     control_genes = list(
-        controls.groupby("Approved_Symbol")["min_crispr"].mean().sort_values(ascending=False)[:n_genes].index
+        controls.groupby("Approved_Symbol")["min_crispr"]
+        .mean()
+        .sort_values(ascending=False)[:n_genes]
+        .index
     )
     controls = controls[controls["Approved_Symbol"].isin(control_genes)]
     controls["location"] = hgnc.loc[controls["Approved_Symbol"], "location"].values
@@ -219,6 +225,15 @@ def define_controls(
     return control_guides.sort_values("Approved_Symbol")
 
 
+def generate_oligo(sgrna1, scaffold, linker, trna, sgrna2):
+    sgrna1 = sgrna1[1:-3] if len(sgrna1) == 23 else sgrna1
+    sgrna2 = sgrna2[1:-3] if len(sgrna2) == 23 else sgrna2
+
+    oligo = f"{CLONING_ARMS['left']}G{sgrna1}{scaffold}{linker}{trna}G{sgrna2}{CLONING_ARMS['right']}"
+
+    return oligo
+
+
 if __name__ == "__main__":
     # Guide selection
     #
@@ -226,7 +241,7 @@ if __name__ == "__main__":
 
     # Control guides
     #
-    control_sgrnas = define_controls(n_genes=4)
+    control_sgrnas = define_controls(n_genes=3)
 
     # Anchor guides
     #
@@ -263,7 +278,7 @@ if __name__ == "__main__":
     anchors_sing = pair_sgrnas(control_sgrnas, anchors_sgrnas[4]).assign(
         Notes="AnchorSingletons"
     )
-    libraries_sing = pair_sgrnas(control_sgrnas, libraries_sgrnas).assign(
+    libraries_sing = pair_sgrnas(libraries_sgrnas, control_sgrnas).assign(
         Notes="LibrarySingletons"
     )
 
@@ -310,15 +325,8 @@ if __name__ == "__main__":
     gi_lib = gi_lib.assign(Scaffold=SCAFFOLD).assign(Linker=LINKER).assign(tRNA=TRNA)
 
     # Drop duplicates
-    gi_lib = gi_lib.drop_duplicates(
-        subset=[
-            "sgRNA1_WGE_Sequence",
-            "Scaffold",
-            "Linker",
-            "tRNA",
-            "sgRNA2_WGE_Sequence",
-        ]
-    )
+    vids = ["sgRNA1_WGE_Sequence", "Scaffold", "Linker", "tRNA", "sgRNA2_WGE_Sequence"]
+    gi_lib = gi_lib.drop_duplicates(subset=vids)
 
     # Add 2gCRISPR ids to each vector
     gi_lib["ID"] = [f"GI{i:09d}" for i in np.arange(1, len(gi_lib) + 1)]
@@ -326,5 +334,8 @@ if __name__ == "__main__":
     # Order columns
     gi_lib = gi_lib[["ID", "Notes"] + LIB_COLUMNS_EXP + ["Scaffold", "Linker", "tRNA"]]
 
+    # Oligo sequences
+    gi_lib["Oligo_Sequence"] = [generate_oligo(sg1, s, l, t, sg2) for sg1, s, l, t, sg2 in gi_lib[vids].values]
+
     # Export
-    gi_lib.to_excel(f"{DPATH}/ENCORE_GI_Library_1_guides_only.xlsx", index=False)
+    gi_lib.to_excel(f"{DPATH}/{GILIB1NAME[:-5]}_guides_only.xlsx", index=False)

@@ -33,6 +33,9 @@ class GuideSelection:
         # Remove sgRNAs with no alignment to GRCh38
         df = df.dropna(subset=["Approved_Symbol", "Off_Target"])
 
+        # Remove sgRNAs with U6 stop codon
+        df = df[["TTTT" not in g for g in df["WGE_Sequence"]]]
+
         # Remove duplicates (sgRNAs shared across multiple libraries)
         df["Library"] = pd.Categorical(
             df["Library"], ["KosukeYusa", "Avana", "Brunello", "TKOv3"]
