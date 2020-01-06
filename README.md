@@ -93,3 +93,6 @@ For citation please refer to:
 
 [Gonçalves E, Behan FM, Louzada S, Arnol D, Stronach EA, Yang F, Yusa K, Stegle O, Iorio F, Garnett MJ (2019) Structural 
 rearrangements generate cell-specific, gene-independent CRISPR-Cas9 loss of fitness effects. Genome Biol 20: 27](https://doi.org/10.1186/s13059-019-1637-z)
+
+[Gonçalves E, Thomas M, Behan FM, Picco G, Pacini C, Allen F, Parry-Smith D, Iorio F, Parts L, Yusa K, Garnett MJ (2019) 
+Minimal genome-wide human CRISPR-Cas9 library. bioRxiv](https://www.biorxiv.org/content/10.1101/848895v1)
