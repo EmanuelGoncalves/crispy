@@ -87,7 +87,7 @@ plt.show()
 
 Credits and License
 --
-Developed at the [Wellcome Sanger Institue](https://www.sanger.ac.uk/) (2017-2019).
+Developed at the [Wellcome Sanger Institue](https://www.sanger.ac.uk/) (2017-2020).
 
 For citation please refer to:
 

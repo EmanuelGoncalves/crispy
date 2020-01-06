@@ -31,8 +31,12 @@ LIBNAME = "2gCRISPR_Pilot_library_v2.0.0.xlsx"
 
 LINKER = "GCAGAG"
 TRNA = "GCATTGGTGGTTCAGTGGTAGAATTCTCGCCTCCCACGCGGGAGACCCGGGTTCAATTCCCGGCCAATGCA"
-SCAFFOLDS = pd.read_excel(f"{DPATH}/{LIBNAME}", sheet_name="Scaffolds", index_col=0)["Sequence"].to_dict()
-CLONING_ARMS = pd.read_excel(f"{DPATH}/{LIBNAME}", sheet_name="Cloning Arms", index_col=0)["sequence"].to_dict()
+SCAFFOLDS = pd.read_excel(f"{DPATH}/{LIBNAME}", sheet_name="Scaffolds", index_col=0)[
+    "Sequence"
+].to_dict()
+CLONING_ARMS = pd.read_excel(
+    f"{DPATH}/{LIBNAME}", sheet_name="Cloning Arms", index_col=0
+)["sequence"].to_dict()
 
 LIB_COLUMNS = [
     "WGE_ID",
@@ -49,18 +53,31 @@ LIB_COLUMNS = [
 LIB_COLUMNS_EXP = [f"{p}_{i}" for p in ["sgRNA1", "sgRNA2"] for i in LIB_COLUMNS]
 
 
+def pair_sgrnas(sgrnas_pos1, sgrnas_pos2):
+    sgrnas1 = sgrnas_pos1[LIB_COLUMNS].add_prefix("sgRNA1_").assign(dummy=1)
+    sgrnas2 = sgrnas_pos2[LIB_COLUMNS].add_prefix("sgRNA2_").assign(dummy=1)
+    sgrnas = sgrnas1.merge(sgrnas2, how="outer", on="dummy")[LIB_COLUMNS_EXP]
+    return sgrnas
+
+
 def get_nontargeting_sgrnas():
-    return pd.read_excel(f"{DPATH}/{LIBNAME}", sheet_name="Non-targeting sgRNAs").loc[:, LIB_COLUMNS]
+    return pd.read_excel(f"{DPATH}/{LIBNAME}", sheet_name="Non-targeting sgRNAs").loc[
+        :, LIB_COLUMNS
+    ]
 
 
 def get_intergenic_sgrnas():
-    sgrnas = pd.read_excel(f"{DPATH}/{LIBNAME}", sheet_name="Intergenic sgRNAs").loc[:, LIB_COLUMNS]
+    sgrnas = pd.read_excel(f"{DPATH}/{LIBNAME}", sheet_name="Intergenic sgRNAs").loc[
+        :, LIB_COLUMNS
+    ]
     sgrnas = sgrnas[["TTTT" not in g for g in sgrnas["WGE_Sequence"]]]
     return sgrnas
 
 
 def get_nonessential_sgrnas(n_guides=2):
-    genes = set(pd.read_excel(f"{DPATH}/{LIBNAME}", sheet_name="Non-essential Genes")["Genes"])
+    genes = set(
+        pd.read_excel(f"{DPATH}/{LIBNAME}", sheet_name="Non-essential Genes")["Genes"]
+    )
 
     sgrnas = []
     for g in genes:
@@ -85,26 +102,29 @@ def generate_guides_gi(n_guides=5):
     # Original gene interaction pairs
     gi_pairs = pd.read_excel(f"{DPATH}/{LIBNAME}", sheet_name="Gene Interaction Pairs")
 
+    # Controls
+    controls = generate_nonessential_controls()
+
     # Build sgRNAs
     gi_sgrnas = []
 
     for g1, g2 in gi_pairs[["Gene1", "Gene2"]].values:
         LOG.info(f"Gene-interations sgRNAs: {g1}, {g2}")
 
-        g1_sgrnas = (
-            gselection.selection_rounds(g1, n_guides=n_guides)[LIB_COLUMNS]
-            .add_prefix("sgRNA1_")
-            .assign(dummy=1)
-        )
-        g2_sgrnas = (
-            gselection.selection_rounds(g2, n_guides=n_guides)[LIB_COLUMNS]
-            .add_prefix("sgRNA2_")
-            .assign(dummy=1)
-        )
+        # sgRNAs Gene Position 1
+        g1_sgrnas = gselection.selection_rounds(g1, n_guides=n_guides)[LIB_COLUMNS]
 
-        gi_sgrnas.append(
-            g1_sgrnas.merge(g2_sgrnas, how="outer", on="dummy")[LIB_COLUMNS_EXP]
-        )
+        # sgRNAs Gene Position 2
+        g2_sgrnas = gselection.selection_rounds(g2, n_guides=n_guides)[LIB_COLUMNS]
+
+        # sgRNAs Position 1 x sgRNAs Position 2
+        gi_sgrnas.append(pair_sgrnas(g1_sgrnas, g2_sgrnas))
+
+        # sgRNAs Position 1 x non-essential controls
+        gi_sgrnas.append(pair_sgrnas(g1_sgrnas, controls))
+
+        # non-essential controls x sgRNAs Position 2
+        gi_sgrnas.append(pair_sgrnas(controls, g2_sgrnas))
 
     gi_sgrnas = pd.concat(gi_sgrnas)[LIB_COLUMNS_EXP].reset_index(drop=True)
 
@@ -244,7 +264,9 @@ def generate_vector_position(n_guides=2):
     """
 
     # Read loss of fitness genes used on previous library iteration
-    genes = set(pd.read_excel(f"{DPATH}/{LIBNAME}", sheet_name="Essential Genes")["Genes"])
+    genes = set(
+        pd.read_excel(f"{DPATH}/{LIBNAME}", sheet_name="Essential Genes")["Genes"]
+    )
 
     # Get sgRNAs
     vpos_sgrnas = []
@@ -344,10 +366,24 @@ def generate_anchors(n_guides=4):
 
 def generate_cut_distance():
     # Read cut distance vectors from previous library iteration
-    sgrnas = pd.read_excel(f"{DPATH}/{LIBNAME}", sheet_name="Cut Distance Vectors")
-    sgrnas = sgrnas[["TTTT" not in g for g in sgrnas["sgRNA1_WGE_Sequence"]]]
-    sgrnas = sgrnas[["TTTT" not in g for g in sgrnas["sgRNA2_WGE_Sequence"]]]
-    return sgrnas
+    cutdist = pd.read_excel(f"{DPATH}/{LIBNAME}", sheet_name="Cut Distance Vectors")
+    cutdist = cutdist[["TTTT" not in g for g in cutdist["sgRNA1_WGE_Sequence"]]]
+    cutdist = cutdist[["TTTT" not in g for g in cutdist["sgRNA2_WGE_Sequence"]]]
+
+    # Build in cut distance anchors controls
+    controls = generate_nonessential_controls()
+
+    cdanchors = cutdist[cutdist["sgRNA2_Start"] - cutdist["sgRNA1_Start"] > 0]
+    cdanchors = cdanchors[[c for c in cdanchors if c.startswith("sgRNA1_")]].drop_duplicates()
+    cdanchors.columns = [c.replace("sgRNA1_", "") for c in cdanchors]
+    cdanchors = cdanchors.loc[:, LIB_COLUMNS]
+
+    cutdist_controls = pair_sgrnas(cdanchors, controls)
+
+    # Merge
+    cutdist = pd.concat([cutdist, cutdist_controls], sort=False, ignore_index=True)[LIB_COLUMNS_EXP]
+
+    return cutdist
 
 
 def generate_oligo(sgrna1, scaffold, linker, trna, sgrna2):
@@ -357,6 +393,27 @@ def generate_oligo(sgrna1, scaffold, linker, trna, sgrna2):
     oligo = f"{CLONING_ARMS['left']}G{sgrna1}{scaffold}{linker}{trna}G{sgrna2}{CLONING_ARMS['right']}"
 
     return oligo
+
+
+def generate_nonessential_controls(sgrna_ids=None):
+    sgrna_ids = (
+        [
+            "ADAD1_CCDS34058.1_ex3_4:123314766-123314789:-_5-4",
+            "ADAD1_CCDS34058.1_ex1_4:123302262-123302285:-_5-3",
+            "CYLC2_CCDS35085.1_ex2_9:105765473-105765496:+_5-1",
+            "CYLC2_CCDS35085.1_ex3_9:105767015-105767038:-_5-3",
+            "KLK12_CCDS12820.1_ex4_19:51537327-51537350:-_6-6",
+            "KLK12_CCDS12820.1_ex4_19:51537267-51537290:-_6-4",
+        ]
+        if sgrna_ids is None
+        else sgrna_ids
+    )
+
+    control_guides = gselection.masterlib[
+        gselection.masterlib["sgRNA_ID"].isin(sgrna_ids)
+    ].assign(Confidence="Control")[LIB_COLUMNS]
+
+    return control_guides
 
 
 if __name__ == "__main__":
@@ -399,17 +456,29 @@ if __name__ == "__main__":
     lib = lib.assign(tRNA=TRNA)
 
     # Drop duplicates
-    vids = ["sgRNA1_WGE_Sequence", "Scaffold_Sequence", "Linker", "tRNA", "sgRNA2_WGE_Sequence"]
+    vids = [
+        "sgRNA1_WGE_Sequence",
+        "Scaffold_Sequence",
+        "Linker",
+        "tRNA",
+        "sgRNA2_WGE_Sequence",
+    ]
     lib = lib.drop_duplicates(subset=vids)
 
     # Add 2gCRISPR ids to each vector
     lib["ID"] = [f"DG{i:07d}" for i in np.arange(1, len(lib) + 1)]
 
     # Order columns
-    lib = lib[["ID", "Notes", "Scaffold"] + LIB_COLUMNS_EXP + ["Scaffold_Sequence", "Linker", "tRNA"]]
+    lib = lib[
+        ["ID", "Notes", "Scaffold"]
+        + LIB_COLUMNS_EXP
+        + ["Scaffold_Sequence", "Linker", "tRNA"]
+    ]
 
     # Oligo sequences
-    lib["Oligo_Sequence"] = [generate_oligo(sg1, s, l, t, sg2) for sg1, s, l, t, sg2 in lib[vids].values]
+    lib["Oligo_Sequence"] = [
+        generate_oligo(sg1, s, l, t, sg2) for sg1, s, l, t, sg2 in lib[vids].values
+    ]
 
     # Export
     lib.to_excel(f"{DPATH}/{LIBNAME[:-5]}_guides_only.xlsx", index=False)
