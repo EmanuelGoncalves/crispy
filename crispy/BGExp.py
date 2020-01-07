@@ -7,6 +7,7 @@ import pandas as pd
 import pkg_resources
 import seaborn as sns
 import matplotlib.pyplot as plt
+from crispy.CrispyPlot import CrispyPlot
 from scipy import stats
 from natsort import natsorted
 from sklearn.metrics import roc_curve, roc_auc_score
@@ -58,14 +59,17 @@ class GExp:
         return ax
 
     @staticmethod
-    def benchmark(y_true, y_score, max_fpr, return_curve=False):
+    def benchmark(y_true, y_score, max_fpr, ax=None):
         fpr, tpr, thres = roc_curve(y_true, y_score)
 
         auc = roc_auc_score(y_true, y_score)
 
         fpr_thres = min(thres[fpr <= max_fpr])
 
-        return (auc, fpr_thres, fpr, tpr, thres) if return_curve else (auc, fpr_thres)
+        if ax is not None:
+            ax.plot(fpr, tpr, c=CrispyPlot.PAL_DBGD[0])
+
+        return auc, fpr_thres
 
     def discretise(
         self,
@@ -89,6 +93,9 @@ class GExp:
         x_labels = pd.Series([0] * len(x), index=x.index)
         x_labels.loc[x_labels.index.isin(genesets["low"])] = -1
         x_labels.loc[x_labels.index.isin(genesets["high"])] = 1
+
+        # Verbose plots
+        axs = plt.subplots(1, 2, figsize=(8.0, 4.0), dpi=600)[1] if verbose > 1 else [None, None]
 
         # Cross-validation
         x_lr, x_stats = [], []
@@ -125,16 +132,28 @@ class GExp:
             x_lr.append(x_test_lr)
 
             # Benchmark
-            for gset in genesets:
+            for i, gset in enumerate(genesets):
                 y_test_score = x_test_lr if gset == "high" else -x_test_lr
                 y_test_true = y_test_score.index.isin(genesets[gset]).astype(int)
 
                 y_test_auc, y_test_thres = self.benchmark(
-                    y_test_true, y_test_score, max_fpr=max_fpr
+                    y_test_true, y_test_score, max_fpr=max_fpr, ax=axs[i]
                 )
                 y_test_thres = y_test_thres if gset == "high" else -y_test_thres
 
                 x_stats.append(dict(auc=y_test_auc, thres=y_test_thres, gtype=gset))
+
+        # Verbose plots
+        if verbose > 1:
+            for i, gset in enumerate(genesets):
+                axs[i].set_xlabel("False Positive Rate")
+                axs[i].set_ylabel("True Positive Rate")
+                axs[i].set_title(f"Geneset = {gset.capitalize()}")
+                axs[i].grid(True, ls="-", lw=0.1, alpha=1.0, zorder=0)
+                axs[i].plot((0, 1), (0, 1), "k-", lw=0.3, zorder=0)
+
+            plt.subplots_adjust(hspace=0.05, wspace=0.05)
+            plt.show()
 
         # Aggregate
         x_lr = pd.concat(x_lr, axis=1, sort=False)

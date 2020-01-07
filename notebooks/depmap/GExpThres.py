@@ -115,33 +115,6 @@ class GTEXGexp:
         )
 
 
-def discretise_genes(sample, genes_lh, pdf_thres=(0.1, 0.1), verbose=0):
-    df = sample.sort_values()
-
-    if verbose > 0:
-        LOG.info(f"Sample: {df.name}")
-
-    # Kernels
-    k_low = stats.gaussian_kde(df.loc[genes_lh["low"]])
-    k_high = stats.gaussian_kde(df.loc[genes_lh["high"]])
-
-    # Low
-    df_low = k_low.pdf(df)
-    df_low_n = np.argwhere(df_low > pdf_thres[0])
-    df_low_n = 0 if len(df_low_n) == 0 else df_low_n[-1][0]
-    df_low_disc = [1] * df_low_n + [0] * (len(df) - df_low_n)
-
-    # High
-    df_high = k_high.pdf(df)
-    df_high_n = np.argwhere(df_high > pdf_thres[1])
-    df_high_n = 0 if len(df_high_n) == 0 else df_high_n[0][0]
-    df_high_disc = [0] * df_high_n + [1] * (len(df) - df_high_n)
-
-    return pd.DataFrame(
-        {f"{df.name}_low": df_low_disc, f"{df.name}_high": df_high_disc}, index=df.index
-    )
-
-
 def pc_labels(n):
     return [f"PC{i}" for i in np.arange(1, n + 1)]
 
@@ -408,7 +381,7 @@ if __name__ == "__main__":
         sample = gdsc.gexp[s]
         LOG.info(f"Sample={s}")
 
-        sample_disc = gexp.discretise(sample, max_fpr=0.05)
+        sample_disc = gexp.discretise(sample, max_fpr=0.1)
         LOG.info(sample_disc[gexp.genesets].sum())
 
         # Export report
@@ -434,6 +407,24 @@ if __name__ == "__main__":
             for s in gdsc.gexp
         }
     )
+
+    # Assemble discretised table
+    #
+    def sample_melt_df(sample):
+        df = pd.read_csv(f"{RPATH}/bgexp/bgexp_{sample}.csv", index_col=0)
+        df = df.query("(high != 0) | (low != 0)")[["low", "high"]]
+        df = pd.melt(df.reset_index(), id_vars="index").query("value == 1").drop(columns=["value"])
+        df = df.rename(columns={"variable": "dtype", "index": "gene"}).assign(sample=sample)
+        return df
+
+    gdsc_disc_table = pd.concat([sample_melt_df(s) for s in gdsc.gexp])
+
+    gdsc_disc_table = gdsc_disc_table.assign(value=1)
+    gdsc_disc_table = gdsc_disc_table.assign(name=gdsc_disc_table["gene"] + "_" + gdsc_disc_table["dtype"].values)
+
+    gdsc_disc_table = pd.pivot_table(gdsc_disc_table, index="name", columns="sample", values="value", fill_value=0)
+
+    gdsc_disc_table.to_csv(f"{DPATH}/GDSC_discretised_table.csv", compression="gzip")
 
     # Number of diff expressed genes
     #
@@ -559,8 +550,8 @@ if __name__ == "__main__":
 
     #
     #
-    gdsc_low_skew = pd.Series(skewtest(gdsc.gexp.loc[genes_lh["low"]], 1)[1], index=genes_lh["low"])
-    tcga_low_skew = pd.Series(skewtest(tcga.gexp.loc[genes_lh["low"]], 1)[1], index=genes_lh["low"])
+    gdsc_low_skew = pd.Series(skewtest(gdsc.gexp.loc[genes_lh["high"]], 1)[0], index=genes_lh["high"])
+    tcga_low_skew = pd.Series(skewtest(tcga.gexp.loc[genes_lh["high"]], 1)[0], index=genes_lh["high"])
 
     plot_df = pd.concat([
         gdsc_low_skew.rename("GDSC"), tcga_low_skew.rename("TCGA")
@@ -571,9 +562,11 @@ if __name__ == "__main__":
 
     # Example
     #
-    s = "SIDM00907"
+    s = "SIDM00424"
+
     sample = gdsc.gexp[s]
-    sample_disc = gexp.discretise(sample, max_fpr=0.05, genesets=genes_lh)
+    sample_disc = gexp.discretise(sample, max_fpr=0.1, genesets=genes_lh, verbose=2)
+    LOG.info(f"Sample low={sample_disc['low'].sum()}; Sample high={sample_disc['high'].sum()}")
 
     # Sample voom histogram
     ax = gexp.plot_histogram(sample)
