@@ -74,8 +74,11 @@ class GExp:
         train_size=0.7,
         decimal_places=2,
         max_fpr=0.05,
+        genesets=None,
         verbose=0,
     ):
+        genesets = self.genesets if genesets is None else genesets
+
         # Round x values
         x = x.round(decimal_places)
 
@@ -84,8 +87,8 @@ class GExp:
 
         # x values labels
         x_labels = pd.Series([0] * len(x), index=x.index)
-        x_labels.loc[x_labels.index.isin(self.genesets["low"])] = -1
-        x_labels.loc[x_labels.index.isin(self.genesets["high"])] = 1
+        x_labels.loc[x_labels.index.isin(genesets["low"])] = -1
+        x_labels.loc[x_labels.index.isin(genesets["high"])] = 1
 
         # Cross-validation
         x_lr, x_stats = [], []
@@ -96,8 +99,8 @@ class GExp:
             x_train, x_test = x.iloc[idx_train], x.iloc[idx_test]
 
             # High and low gene-expression values
-            x_train_low = x_train.reindex(self.genesets["low"]).dropna()
-            x_train_high = x_train.reindex(self.genesets["high"]).dropna()
+            x_train_low = x_train.reindex(genesets["low"]).dropna()
+            x_train_high = x_train.reindex(genesets["high"]).dropna()
 
             if verbose > 0:
                 LOG.info(
@@ -122,9 +125,9 @@ class GExp:
             x_lr.append(x_test_lr)
 
             # Benchmark
-            for gset in self.genesets:
+            for gset in genesets:
                 y_test_score = x_test_lr if gset == "high" else -x_test_lr
-                y_test_true = y_test_score.index.isin(self.genesets[gset]).astype(int)
+                y_test_true = y_test_score.index.isin(genesets[gset]).astype(int)
 
                 y_test_auc, y_test_thres = self.benchmark(
                     y_test_true, y_test_score, max_fpr=max_fpr
