@@ -178,12 +178,14 @@ class LMModels:
         X,
         M,
         K,
+        x_feature_type="all",
         lik="normal",
         transform_y="scale",
         transform_x="scale",
         filter_std=True,
         min_events=10,
         pval_adj="fdr_bh",
+        pval_adj_overall=False,
         verbose=1,
     ):
         # Sample intersection
@@ -193,31 +195,58 @@ class LMModels:
         LOG.info(f"Samples: {len(samples)}")
 
         # Iterate through X variables
-        res = pd.concat(
-            [
-                LMModels.limix_lmm(
-                    y=Y.loc[samples, [idx]],
-                    x=X.loc[samples].drop(columns=idx),
-                    m=M.loc[samples],
-                    k=K.loc[samples, samples],
-                    lik=lik,
-                    transform_y=transform_y,
-                    transform_x=transform_x,
-                    filter_std=filter_std,
-                    min_events=min_events,
-                    parse_results=True,
-                    verbose=verbose,
-                )
-                for idx in Y
-            ],
-            ignore_index=True,
-        )
+        res = []
+        for idx in Y:
+            # Y array
+            y = Y.loc[samples, [idx]]
+
+            # X matrix
+            x = X.loc[samples]
+
+            if x_feature_type == "drop_y":
+                x = x.drop(columns=idx)
+
+            elif x_feature_type == "same_y":
+                if idx not in x.columns:
+                    LOG.warning(f"[same_y option] Y feature not in X: {idx}")
+                    continue
+
+                x = x[[idx]]
+
+            # LMM
+            res_idx = LMModels.limix_lmm(
+                y=y,
+                x=x,
+                m=M.loc[samples],
+                k=K.loc[samples, samples],
+                lik=lik,
+                transform_y=transform_y,
+                transform_x=transform_x,
+                filter_std=filter_std,
+                min_events=min_events,
+                parse_results=True,
+                verbose=verbose,
+            )
+            res.append(res_idx)
+        res = pd.concat(res, ignore_index=True)
 
         # Multiple p-value correction
-        res = LMModels.multipletests(res, field="pval", pval_method=pval_adj)
+        if pval_adj_overall:
+            res = res.assign(fdr=multipletests(res["pval"], method=pval_adj)[1])
+        else:
+            res = LMModels.multipletests(res, field="pval", pval_method=pval_adj)
 
         # Order columns
-        order = ["y_id", "x_id", "beta", "beta_se", "pval", "fdr", "samples", "ncovariates"]
+        order = [
+            "y_id",
+            "x_id",
+            "beta",
+            "beta_se",
+            "pval",
+            "fdr",
+            "samples",
+            "ncovariates",
+        ]
 
         return res[order].sort_values("fdr")
 
