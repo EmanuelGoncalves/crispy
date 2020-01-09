@@ -33,14 +33,14 @@ rpath = pkg_resources.resource_filename("notebooks", "swath_proteomics/reports/"
 
 data = Proteomics()
 
-dtypes = ["peptide", "protein", "imputed"]
+dtypes = ["protein"]
 
 
 # ## Initial QC
 
 # Number of replicates of cell line per machine
 
-machine = pd.pivot_table(data.manifest, index="CellLine", columns="Machine", aggfunc=len, fill_value=0)["Date"]
+machine = pd.pivot_table(data.manifest, index="SIDM", columns="Instrument", aggfunc=len, fill_value=0)["Date"]
 machine["Total"] = machine.sum(1)
 machine.sort_values("Total").head(10)
 
@@ -48,11 +48,12 @@ machine.sort_values("Total").head(10)
 # Plot the distributions of the peptides intensites
 
 for dtype in dtypes:
-    f, axs = plt.subplots(2, 1, dpi=300, figsize=(12, 3), sharex="none", sharey="all")
+    n_rows = len(set(data.manifest["Instrument"]))
+    f, axs = plt.subplots(n_rows, 1, dpi=300, figsize=(12, 2 * n_rows), sharex="none", sharey="all")
 
-    for i, (m, df) in enumerate(data.manifest.groupby("Machine")):
+    for i, (m, df) in enumerate(data.manifest.groupby("Instrument")):
         plot_df = data.get_data(dtype, average_replicates=False, map_ids=False)
-        plot_df = plot_df[df.index].dropna(how="all")
+        plot_df = plot_df.reindex(columns=df.index).dropna(how="all")
         plot_df = np.log10(plot_df)
 
         sns.boxplot(
@@ -80,27 +81,29 @@ for dtype in dtypes:
 
 corr = {}
 for dtype in dtypes:
-    samples_corr = np.log10(data.get_data(dtype)).corr()
+    samples_corr = np.log10(data.get_data(dtype, average_replicates=False)).corr()
+    samples_corr.columns.name = "sample2"
+    samples_corr.index.name = "sample1"
 
     keep = np.triu(np.ones(samples_corr.shape), 1).astype("bool").reshape(samples_corr.size)
     samples_corr = samples_corr.stack()[keep].reset_index()
 
-    samples_corr = samples_corr.rename(
-        columns={"level_0": "sample1", "level_1": "sample2", 0: "pearson"}
-    )
+    samples_corr = samples_corr.rename(columns={0: "pearson"})
 
-    headers = ["CellLine", "Tissue", "Cancer", "Machine"]
+    headers = ["Cell_line", "Tissue_type", "Cancer_type", "Instrument"]
     samples_corr = pd.concat([
         samples_corr,
         data.manifest.loc[samples_corr["sample1"], headers].add_suffix("_1").reset_index(drop=True),
         data.manifest.loc[samples_corr["sample2"], headers].add_suffix("_2").reset_index(drop=True),
     ], axis=1, sort=False)
 
-    samples_corr["same_cell_line"] = (samples_corr["CellLine_1"] == samples_corr["CellLine_2"]).astype(int)
-    samples_corr["same_cancer_type"] = (samples_corr["Cancer_1"] == samples_corr["Cancer_2"]).astype(int)
-    samples_corr["same_machine"] = (samples_corr["Machine_1"] == samples_corr["Machine_2"]).astype(int)
+    samples_corr["same_cell_line"] = (samples_corr["Cell_line_1"] == samples_corr["Cell_line_2"]).astype(int)
+    samples_corr["same_cancer_type"] = (samples_corr["Tissue_type_1"] == samples_corr["Tissue_type_2"]).astype(int)
+    samples_corr["same_machine"] = (samples_corr["Instrument_1"] == samples_corr["Instrument_2"]).astype(int)
 
     corr[dtype] = samples_corr
+
+    samples_corr.to_csv(f"{rpath}/{dtype}_corr.csv", compression="gzip", index=False)
 
 
 # Sample correlation boxplots
@@ -108,7 +111,7 @@ for dtype in dtypes:
 for dtype in dtypes:
     comparisons = ["same_cell_line", "same_cancer_type", "same_machine"]
 
-    f, axs = plt.subplots(1, len(comparisons), dpi=300, figsize=(2, 1.5), sharex="none", sharey="all")
+    f, axs = plt.subplots(1, len(comparisons), dpi=600, figsize=(2, 1.5), sharex="none", sharey="all")
     for i, n in enumerate(comparisons):
         label = n[5:]
 
@@ -126,16 +129,68 @@ for dtype in dtypes:
         )
 
         axs[i].set_title(label)
-
         axs[i].set_xlabel("Replicate")
-
         if i != 0:
             axs[i].set_ylabel("")
+
+        axs[i].grid(True, ls="-", lw=0.1, alpha=1.0, zorder=0)
 
     plt.suptitle(dtype, y=1.05)
     plt.subplots_adjust(wspace=0.075, hspace=0.075)
     plt.savefig(
-        f"{rpath}/{dtype}_corr_boxplot.pdf", bbox_inches="tight", transparent=True
+        f"{rpath}/{dtype}_corr_boxplot.png", bbox_inches="tight", transparent=True
+    )
+    plt.close("all")
+
+
+# Histogram of number of measurements per protein
+
+for dtype in dtypes:
+    plot_df = data.get_data(dtype=dtype)
+
+    _, ax = plt.subplots(1, 1, figsize=(2.5, 1.5), dpi=600)
+
+    sns.distplot(
+        plot_df.count(1),
+        color=CrispyPlot.PAL_DBGD[0],
+        kde=False,
+        hist_kws=dict(lw=0, alpha=1),
+        label=None,
+        ax=ax,
+    )
+
+    ax.set_xlabel("Number of measurements")
+    ax.set_ylabel("Number of proteins")
+    ax.grid(True, ls="-", lw=0.1, alpha=1.0, zorder=0)
+
+    plt.savefig(
+        f"{rpath}/{dtype}_protein_measurements_histogram.pdf", bbox_inches="tight", transparent=True
+    )
+    plt.close("all")
+
+
+# Histogram of number of measurements per cell line
+
+for dtype in dtypes:
+    plot_df = data.get_data(dtype=dtype)
+
+    _, ax = plt.subplots(1, 1, figsize=(2.5, 1.5), dpi=600)
+
+    sns.distplot(
+        plot_df.count(0),
+        color=CrispyPlot.PAL_DBGD[0],
+        kde=False,
+        hist_kws=dict(lw=0, alpha=1),
+        label=None,
+        ax=ax,
+    )
+
+    ax.set_xlabel("Number of measurements")
+    ax.set_ylabel("Number of cell lines")
+    ax.grid(True, ls="-", lw=0.1, alpha=1.0, zorder=0)
+
+    plt.savefig(
+        f"{rpath}/{dtype}_cell_lines_measurements_histogram.pdf", bbox_inches="tight", transparent=True
     )
     plt.close("all")
 

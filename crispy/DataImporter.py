@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import pkg_resources
 import seaborn as sns
+import itertools as it
 import matplotlib.pyplot as plt
 from crispy.Utils import Utils
 from pybedtools import BedTool
@@ -26,9 +27,7 @@ class Sample:
 
     """
 
-    def __init__(
-        self, index="model_id", samplesheet_file="model_list_2018-09-28_1452.csv"
-    ):
+    def __init__(self, index="model_id", samplesheet_file="model_list_20200107.csv"):
         self.index = index
 
         # Import samplesheet
@@ -155,102 +154,76 @@ class GeneExpression:
         return rpkm
 
 
+class CORUM:
+    def __init__(self, corum_file="coreComplexes.txt", organism="Human"):
+        self.organism = organism
+
+        # Load CORUM DB
+        self.db = pd.read_csv(f"{DPATH}/{corum_file}", sep="\t")
+        self.db = self.db.query(f"Organism == '{organism}'")
+
+        # Melt into list of protein pairs (both directions, i.e. p1-p2, p2-p1)
+        self.db_melt = self.melt_ppi()
+
+        # Map to gene symbols
+        self.gmap = self.map_gene_name()
+        self.db_melt_symbol = list({
+            (self.gmap.loc[p1, "GeneSymbol"], self.gmap.loc[p2, "GeneSymbol"])
+            for p1, p2 in self.db_melt
+            if p1 in self.gmap.index and p2 in self.gmap.index
+        })
+
+    def melt_ppi(self):
+        db_melt = self.db["subunits(UniProt IDs)"].copy()
+        db_melt = db_melt.apply(lambda v: list(it.permutations(v.split(";"), 2)))
+        db_melt = list({p for c in db_melt for p in c})
+        return db_melt
+
+    @staticmethod
+    def map_gene_name(index_col="Entry"):
+        idmap = pd.read_csv(f"{DPATH}/uniprot_human_idmap.tab.gz", sep="\t")
+
+        if index_col is not None:
+            idmap = idmap.dropna(subset=[index_col]).set_index(index_col)
+
+        idmap["GeneSymbol"] = idmap["Gene names  (primary )"].apply(
+            lambda v: v.split("; ")[0] if str(v).lower() != "nan" else v
+        )
+
+        return idmap
+
+
 class Proteomics:
     def __init__(
         self,
-        protein_matrix="proteomics/Cosmic_Cell_Lines_Project_Batch2_protein_matrix.txt",
-        protein_matrix_noimputation="proteomics/Cosmic_Cell_Lines_Project_Batch2_protein_matrix_noImputation.tsv",
-        peptide_matrix="proteomics/Cosmic_Cell_Lines_Project_Batch2_raw_petide_matrix_afterQC.txt",
-        manifest="proteomics/Cosmic_Cell_Lines_Project_Batch2_sample_mapping_updated.txt",
+        protein_matrix="proteomics/E0022_P02-P03_protein_matrix.txt",
+        manifest="proteomics/E0022_P02-P03_sample_mapping.txt",
     ):
         deprecated_ids = self.map_deprecated()
 
         # Import imputed protein levels
-        self.imputed = pd.read_csv(f"{DPATH}/{protein_matrix}", sep="\t")
-        self.imputed["Protein"] = self.imputed["Protein"].replace(
-            deprecated_ids["Entry name"]
+        self.protein = pd.read_csv(f"{DPATH}/{protein_matrix}", sep="\t", index_col=0).T
+        self.protein["Protein"] = (
+            self.protein.reset_index()["index"]
+            .replace(deprecated_ids["Entry name"])
+            .values
         )
-        self.imputed = self.imputed.set_index("Protein")
-
-        # Import not imputed protein levels
-        self.noimputed = pd.read_csv(f"{DPATH}/{protein_matrix_noimputation}", sep="\t")
-        self.noimputed["Protein"] = self.noimputed["Protein"].replace(
-            deprecated_ids["Entry name"]
-        )
-        self.noimputed = self.noimputed.set_index("Protein")
-        self.noimputed = self.noimputed.drop(
-            columns=["N.Pept", "Q.Pept", "S/N", "P(PECA)"]
-        )
-
-        # Import peptide levels
-        self.peptide = pd.read_csv(f"{DPATH}/{peptide_matrix}", sep="\t")
-        self.peptide["Protein"] = self.peptide["Protein"].replace(
-            deprecated_ids["Entry name"]
-        )
-        self.peptide = self.peptide.set_index(["Protein", "Peptide"])
+        self.protein = self.protein.set_index("Protein")
 
         # Import manifest
-        self.manifest = pd.read_csv(f"{DPATH}/{manifest}", index_col=0, sep="\t")
-
-    def get_peptides_abundance(self, intensities=None, map_ids=False):
-        intensities = (
-            np.log10(self.peptide.copy()) if intensities is None else intensities
-        )
-
-        peptides = (
-            intensities.mean(1)
-            .sort_values(ascending=False)
-            .rename("mean")
-            .dropna()
-            .reset_index()
-        )
-
-        if map_ids:
-            peptides["GeneSymbol"] = (
-                self.map_gene_name().loc[peptides["Protein"], "GeneSymbol"].values
-            )
-
-        return peptides
-
-    def count_peptides(self, groupby="GeneSymbol"):
-        peptides = self.get_peptides_abundance(map_ids=True)
-        return peptides.groupby(groupby)["Peptide"].count()
-
-    def from_peptide_to_protein(self, ptop=3):
-        intensities = np.log10(self.peptide.copy())
-
-        peptides = self.get_peptides_abundance()
-
-        protein_intensities = {
-            protein: intensities.loc[
-                [(protein, peptide) for peptide in df.head(ptop)["Peptide"]]
-            ].mean()
-            for protein, df in peptides.groupby("Protein")
-        }
-        protein_intensities = pd.DataFrame(protein_intensities).T
-
-        return protein_intensities
+        self.manifest = pd.read_csv(f"{DPATH}/{manifest}", index_col=0)
 
     def get_data(self, dtype="protein", average_replicates=True, map_ids=True):
         if dtype.lower() == "protein":
-            data = self.from_peptide_to_protein()
-
-        elif dtype.lower() == "peptide":
-            data = self.peptide.copy()
-
-        elif dtype.lower() == "imputed":
-            data = np.log10(self.imputed.copy())
-
-        elif dtype.lower() == "noimputed":
-            data = self.noimputed.copy()
+            data = self.protein.copy()
 
         else:
             assert False, f"{dtype} not supported"
 
         if average_replicates:
-            data = data.groupby(
-                self.manifest.loc[data.columns, "model_id"], axis=1
-            ).mean()
+            data = data.groupby(self.manifest.loc[data.columns, "SIDM"], axis=1).agg(
+                np.nanmean
+            )
 
         if map_ids:
             pmap = self.map_gene_name().loc[data.index, "GeneSymbol"].dropna()
@@ -302,12 +275,14 @@ class Proteomics:
 
         return df
 
-    def map_deprecated(self):
+    @staticmethod
+    def map_deprecated():
         return pd.read_csv(
             f"{DPATH}/uniprot_human_idmap_deprecated.tab", sep="\t", index_col=0
         )
 
-    def map_gene_name(self, index_col="Entry name"):
+    @staticmethod
+    def map_gene_name(index_col="Entry name"):
         idmap = pd.read_csv(f"{DPATH}/uniprot_human_idmap.tab.gz", sep="\t")
 
         if index_col is not None:
