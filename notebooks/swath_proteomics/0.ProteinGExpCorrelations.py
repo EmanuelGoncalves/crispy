@@ -20,18 +20,38 @@
 
 import logging
 import numpy as np
+import pandas as pd
 import pkg_resources
 import seaborn as sns
+from scipy import stats
 import matplotlib.pyplot as plt
 from crispy.QCPlot import QCplot
 from crispy.CrispyPlot import CrispyPlot
+from swath_proteomics.GIPlot import GIPlot
 from swath_proteomics.LMModels import LMModels
 from sklearn.metrics import roc_auc_score, roc_curve
 from crispy.DataImporter import Proteomics, CORUM, GeneExpression
 
 
 LOG = logging.getLogger("Crispy")
+DPATH = pkg_resources.resource_filename("crispy", "data")
 RPATH = pkg_resources.resource_filename("notebooks", "swath_proteomics/reports/")
+
+
+def gkn(values):
+    kernel = stats.gaussian_kde(values.dropna())
+    return {
+        k: np.log(kernel.integrate_box_1d(-1e8, v) / kernel.integrate_box_1d(v, 1e8))
+        if not np.isnan(v)
+        else np.nan
+        for k, v in values.to_dict().items()
+    }
+
+
+# Protein abundance attenuation
+#
+
+p_attenuated = pd.read_csv(f"{DPATH}/protein_attenuation_table.csv", index_col=0)
 
 
 # SWATH-Proteomics
@@ -57,6 +77,13 @@ genes = list(set(prot.index).intersection(gexp.index))
 LOG.info(f"Genes: {len(genes)}; Samples: {len(samples)}")
 
 
+# Normalise
+#
+
+prot_norm = pd.DataFrame({g: gkn(prot.loc[g, samples]) for g in genes}).T
+gexp_norm = pd.DataFrame({g: gkn(gexp.loc[g, samples]) for g in genes}).T
+
+
 # Protein-Protein LMMs
 #
 
@@ -66,13 +93,18 @@ lmm = LMModels()
 m = lmm.define_covariates()
 
 # Matrices
-y, x = prot.copy().T, gexp.copy().T
+y, x = prot_norm.copy().T, gexp_norm.copy().T
 
 # Kinship matrix (random effects)
 k = lmm.kinship(x)
 
 # Protein associations
-res = lmm.matrix_limix_lmm(Y=y, X=x, M=m, K=k, x_feature_type="same_y", pval_adj_overall=True)
+res = lmm.matrix_limix_lmm(
+    Y=y, X=x, M=m, K=k, x_feature_type="same_y", pval_adj_overall=True
+)
+
+# Protein attenuation
+res["attenuation"] = p_attenuated.reindex(res["y_id"])["attenuation_potential"].replace(np.nan, "NA").values
 
 # Export
 res.to_csv(f"{RPATH}/lmm_protein_gexp.csv", index=False, compression="gzip")
@@ -98,8 +130,54 @@ ax.set_xlabel("Association beta")
 ax.set_ylabel("Density")
 
 plt.savefig(
-    f"{RPATH}/lmm_protein_gexp_histogram.pdf",
-    bbox_inches="tight",
-    transparent=True,
+    f"{RPATH}/lmm_protein_gexp_histogram.pdf", bbox_inches="tight", transparent=True
 )
 plt.close("all")
+
+
+# Protein attenuation
+#
+
+pal = dict(zip(*(["Low", "High", "NA"], CrispyPlot.PAL_DBGD.values())))
+
+_, ax = plt.subplots(1, 1, figsize=(1.0, 1.5), dpi=600)
+sns.boxplot(
+    x="attenuation",
+    y="beta",
+    notch=True,
+    data=res,
+    boxprops=dict(linewidth=0.3),
+    whiskerprops=dict(linewidth=0.3),
+    medianprops=CrispyPlot.MEDIANPROPS,
+    flierprops=CrispyPlot.FLIERPROPS,
+    palette=pal,
+    showcaps=False,
+    saturation=1,
+    ax=ax,
+)
+ax.set_xlabel("Attenuation")
+ax.set_ylabel("Transcript ~ Protein")
+ax.axhline(0, ls="-", lw=0.1, c="black", zorder=0)
+ax.grid(axis="both", lw=0.1, color="#e1e1e1", zorder=0)
+plt.savefig(f"{RPATH}/lmm_protein_gexp_attenuation_boxplot.pdf", bbox_inches="tight")
+plt.close("all")
+
+
+# Representative examples
+#
+
+for gene in ["VIM", "EGFR", "IDH2", "NRAS", "SMARCB1", "ERBB2", "STAG1", "STAG2", "TP53"]:
+    plot_df = pd.concat(
+        [
+            prot.loc[gene, samples].rename("protein"),
+            gexp.loc[gene, samples].rename("transcript"),
+        ],
+        axis=1,
+        sort=False,
+    ).dropna()
+
+    grid = GIPlot.gi_regression("protein", "transcript", plot_df)
+    grid.set_axis_labels(f"Protein", f"Transcript")
+    grid.ax_marg_x.set_title(gene)
+    plt.savefig(f"{RPATH}/lmm_protein_gexp_scatter_{gene}.pdf", bbox_inches="tight")
+    plt.close("all")

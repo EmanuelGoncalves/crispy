@@ -2,6 +2,7 @@
 # Copyright (C) 2019 Emanuel Goncalves
 
 import os
+import gc
 import logging
 import numpy as np
 import pandas as pd
@@ -301,70 +302,13 @@ class CRISPR:
 
     """
 
-    LOW_QUALITY_SAMPLES = ["SIDM00096", "SIDM01085", "SIDM00958"]
-
     def __init__(
         self,
-        sanger_fc_file="crispr/sanger_depmap18_fc_corrected.csv.gz",
-        sanger_qc_file="crispr/sanger_depmap18_fc_ess_aucs.csv.gz",
-        broad_fc_file="crispr/broad_depmap18q4_fc_corrected.csv.gz",
-        broad_qc_file="crispr/broad_depmap18q4_fc_ess_aucs.csv.gz",
+        fc_file="crispr/CRISPR_corrected_qnorm_20191108.csv.gz",
+        institute_file="crispr/CRISPR_Institute_Origin_20191108.csv.gz",
     ):
-        self.SANGER_FC_FILE = sanger_fc_file
-        self.SANGER_QC_FILE = sanger_qc_file
-
-        self.BROAD_FC_FILE = broad_fc_file
-        self.BROAD_QC_FILE = broad_qc_file
-
-        self.crispr, self.institute = self.__merge_matricies()
-
-        self.crispr = self.crispr.drop(columns=self.LOW_QUALITY_SAMPLES)
-
-        self.qc_ess = self.__merge_qc_arrays()
-
-    def __merge_qc_arrays(self):
-        gdsc_qc = pd.read_csv(
-            f"{DPATH}/{self.SANGER_QC_FILE}", header=None, index_col=0
-        ).iloc[:, 0]
-        broad_qc = pd.read_csv(
-            f"{DPATH}/{self.BROAD_QC_FILE}", header=None, index_col=0
-        ).iloc[:, 0]
-
-        qcs = pd.concat(
-            [
-                gdsc_qc[self.institute[self.institute == "Sanger"].index],
-                broad_qc[self.institute[self.institute == "Broad"].index],
-            ]
-        )
-
-        return qcs
-
-    def import_sanger_foldchanges(self):
-        return pd.read_csv(f"{DPATH}/{self.SANGER_FC_FILE}", index_col=0)
-
-    def import_broad_foldchanges(self):
-        return pd.read_csv(f"{DPATH}/{self.BROAD_FC_FILE}", index_col=0)
-
-    def __merge_matricies(self):
-        gdsc_fc = self.import_sanger_foldchanges().dropna()
-        broad_fc = self.import_broad_foldchanges().dropna()
-
-        genes = list(set(gdsc_fc.index).intersection(broad_fc.index))
-
-        merged_matrix = pd.concat(
-            [
-                gdsc_fc.loc[genes],
-                broad_fc.loc[genes, [i for i in broad_fc if i not in gdsc_fc.columns]],
-            ],
-            axis=1,
-            sort=False,
-        )
-
-        institute = pd.Series(
-            {s: "Sanger" if s in gdsc_fc.columns else "Broad" for s in merged_matrix}
-        )
-
-        return merged_matrix, institute
+        self.crispr = pd.read_csv(f"{DPATH}/{fc_file}", index_col=0)
+        self.institute = pd.read_csv(f"{DPATH}/{institute_file}", index_col=0, header=None).iloc[:, 0]
 
     def get_data(self, scale=True):
         df = self.crispr.copy()
@@ -378,48 +322,17 @@ class CRISPR:
         self,
         subset=None,
         scale=True,
-        normality=False,
-        iqr_range=None,
-        iqr_range_thres=None,
         abs_thres=None,
         drop_core_essential=False,
         min_events=5,
         drop_core_essential_broad=False,
-        context_specific_only=False,
     ):
-        df = self.get_data(scale=scale)
+        df = self.get_data(scale=True)
 
         # - Filters
         # Subset matrices
         if subset is not None:
             df = df.loc[:, df.columns.isin(subset)]
-
-        # Filter by IQR
-        if iqr_range is not None:
-            iqr_ranges = (
-                df.apply(lambda v: iqr(v, rng=iqr_range), axis=1)
-                .rename("iqr")
-                .to_frame()
-            )
-
-            if iqr_range_thres is None:
-                gm_iqr = GaussianMixture(n_components=2).fit(iqr_ranges[["iqr"]])
-                iqr_ranges["gm"] = gm_iqr.predict(iqr_ranges[["iqr"]])
-
-                df = df.loc[iqr_ranges["gm"] != gm_iqr.means_.argmin()]
-                LOG.info(iqr_ranges.groupby("gm").agg({"min", "mean", "median", "max"}))
-
-            else:
-                df = df.loc[iqr_ranges["iqr"] > iqr_range_thres]
-                LOG.info(f"IQR threshold {iqr_range_thres}")
-
-            LOG.info(f"IQR {iqr_range}")
-
-        # Filter by normality
-        if normality:
-            normality = df.apply(lambda v: shapiro(v)[1], axis=1)
-            normality = multipletests(normality, method="bonferroni")
-            df = df.loc[normality[0]]
 
         # Filter by scaled scores
         if abs_thres is not None:
@@ -432,17 +345,8 @@ class CRISPR:
         if drop_core_essential_broad:
             df = df[~df.index.isin(Utils.get_broad_core_essential())]
 
-        # Consider only contxt-specific genes
-        if context_specific_only:
-            csgenes = set(
-                pd.read_csv(f"{DPATH}/context_specific_genes.csv.gz").query(
-                    "not core_essential"
-                )["symbol"]
-            )
-            df = df.loc[list(set(df.index).intersection(csgenes))]
-
         # - Subset matrices
-        return df
+        return self.get_data(scale=scale).loc[df.index].reindex(columns=df.columns)
 
     @staticmethod
     def scale(df, essential=None, non_essential=None, metric=np.median):

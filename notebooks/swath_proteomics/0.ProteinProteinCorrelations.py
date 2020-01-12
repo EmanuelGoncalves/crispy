@@ -34,7 +34,7 @@ LOG = logging.getLogger("Crispy")
 RPATH = pkg_resources.resource_filename("notebooks", "swath_proteomics/reports/")
 
 
-# GDSC baseline cancer cell lines SWATH-Proteomics analysis
+# SWATH-Proteomics
 #
 
 data = Proteomics().filter(perc_measures=0.75)
