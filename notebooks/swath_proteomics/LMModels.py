@@ -2,11 +2,9 @@
 # Copyright (C) 2019 Emanuel Goncalves
 
 import logging
+import numpy as np
 import pandas as pd
 import pkg_resources
-from limix.qtl import scan
-from crispy.DataImporter import Sample
-from sklearn.preprocessing import StandardScaler
 from statsmodels.stats.multitest import multipletests
 
 
@@ -26,49 +24,238 @@ class LMModels:
         "ncovariates",
     ]
 
+    def __init__(
+        self,
+        y,
+        x,
+        k=None,
+        m=None,
+        x_feature_type="all",
+        add_intercept=True,
+        lik="normal",
+        transform_y="scale",
+        transform_x="scale",
+        x_min_events=None,
+        institute=True,
+        verbose=1,
+    ):
+        # Misc
+        self.verbose = verbose
+        self.x_feature_type = x_feature_type
+        self.add_intercept = add_intercept
+
+        # LIMIX parameters
+        self.lik = lik
+
+        # Preprocessing steps
+        self.transform_y = transform_y
+        self.transform_x = transform_x
+        self.x_min_events = x_min_events
+
+        # Build random effects and covariates matrices
+        self.k = self.kinship(x) if k is None else k.copy()
+        self.m = self.define_covariates(institute=institute) if m is None else m.copy()
+
+        # Samples overlap
+        self.samples = list(
+            set.intersection(
+                set(y.index), set(x.index), set(self.m.index), set(self.k.index)
+            )
+        )
+        LOG.info(f"Samples: {len(self.samples)}")
+
+        # Y matrix
+        self.y, self.y_columns = self.__build_y(y)
+        LOG.info(f"Y: {self.y.shape}")
+
+        # X matrix
+        self.x, self.x_columns = self.__build_x(x)
+        LOG.info(f"X: {self.x.shape}")
+
+        # Covariates
+        self.m = self.m.loc[self.samples, self.m.std() > 0]
+        self.m, self.m_columns = self.m.values, np.array(list(self.m.columns))
+        LOG.info(f"M: {self.m.shape}")
+
+        # Random effects matrix
+        self.k = self.k.loc[self.samples, self.samples].values
+        LOG.info(f"K: {self.k.shape}")
+
+    def __build_y(self, y):
+        y = self.transform_matrix(y.loc[self.samples], t_type=self.transform_y)
+        return y.values, np.array(list(y.columns))
+
+    def __build_x(self, x):
+        x = x.loc[self.samples, x.std() > 0]
+
+        if self.x_min_events is not None:
+            x = x.loc[:, x.sum() >= self.x_min_events]
+        else:
+            x = self.transform_matrix(x, t_type=self.transform_x)
+
+        return x.values, np.array(list(x.columns))
+
+    def lmm(self, y_var):
+        from limix.qtl import scan
+
+        y_idx = list(self.y_columns).index(y_var)
+        y_nans_idx = np.isnan(self.y[:, y_idx])
+
+        if self.verbose > 0:
+            LOG.info(f"y_id: {y_var} ({y_idx}); N samples: {sum(1 - y_nans_idx)}")
+
+        # Remove NaNs from y
+        y_ = self.y.copy()[y_nans_idx == 0][:, [y_idx]]
+
+        # Subset X
+        x_ = self.x.copy()[y_nans_idx == 0]
+
+        if self.x_feature_type == "drop_y":
+            if y_var not in self.x_columns:
+                LOG.warning(f"[x_feature_type=drop_y] Y feature {y_idx} not in X")
+
+            x_ = x_[:, self.x_columns != y_var]
+            x_vars = self.x_columns[self.x_columns != y_var]
+
+        elif self.x_feature_type == "same_y":
+            if y_var not in self.x_columns:
+                LOG.error(f"[x_feature_type=same_y] Y feature {y_idx} not in X")
+
+            x_ = x_[:, self.x_columns == y_var]
+            x_vars = self.x_columns[self.x_columns == y_var]
+
+        else:
+            x_ = x_[:, np.std(x_, axis=0) > 0]
+            x_vars = self.x_columns[np.std(x_, axis=0) > 0]
+
+        # Subset m
+        m_ = self.m.copy()[y_nans_idx == 0]
+        m_ = m_[:, np.std(m_, axis=0) > 0]
+
+        if self.add_intercept:
+            m_ = np.insert(m_, m_.shape[1], values=1, axis=1)
+
+        # Subset random effects matrix
+        k_ = self.k.copy()[:, y_nans_idx == 0][y_nans_idx == 0, :]
+
+        # Linear Mixed Model
+        lmm = scan(G=x_, Y=y_, K=k_, M=m_, lik=self.lik, verbose=False)
+
+        # Build results
+        lmm_betas = lmm.effsizes["h2"].copy().query("effect_type == 'candidate'")
+        lmm = pd.DataFrame(
+            dict(
+                y_id=y_var,
+                x_id=x_vars,
+                beta=lmm_betas["effsize"].round(5).values,
+                beta_se=lmm_betas["effsize_se"].round(5).values,
+                pval=lmm.stats.loc[lmm_betas["test"], "pv20"].values,
+                nsamples=sum(1 - y_nans_idx),
+                ncovariates=m_.shape[1],
+            )
+        )
+
+        return lmm
+
+    def matrix_lmm(self, pval_adj="fdr_bh", pval_adj_overall=False):
+        # Iterate through Y variables
+        res = pd.concat([self.lmm(y_var=i) for i in self.y_columns], ignore_index=True)
+
+        # Multiple p-value correction
+        if pval_adj_overall:
+            res = res.assign(fdr=multipletests(res["pval"], method=pval_adj)[1])
+        else:
+            res = self.multipletests(res, field="pval", pval_method=pval_adj)
+
+        return res.sort_values("fdr")[self.RES_ORDER]
+
+    def write_lmm(self, output_folder):
+        for i in self.y_columns:
+            self.lmm(y_var=i).to_csv(
+                f"{output_folder}/{i}.csv.gz", index=False, compression="gzip"
+            )
+
+    @staticmethod
+    def multipletests(
+        parsed_results, pval_method="fdr_bh", field="pval", idx_cols=None
+    ):
+        idx_cols = ["y_id"] if idx_cols is None else idx_cols
+
+        parsed_results_adj = []
+
+        for idx, df in parsed_results.groupby(idx_cols):
+            df = df.assign(fdr=multipletests(df[field], method=pval_method)[1])
+            parsed_results_adj.append(df)
+
+        parsed_results_adj = pd.concat(parsed_results_adj, ignore_index=True)
+
+        return parsed_results_adj
+
+    @staticmethod
+    def transform_matrix(matrix, t_type="scale"):
+        from sklearn.preprocessing import StandardScaler
+
+        if t_type == "scale":
+            matrix = pd.DataFrame(
+                StandardScaler().fit_transform(matrix),
+                index=matrix.index,
+                columns=matrix.columns,
+            )
+
+        elif t_type == "rank":
+            matrix = matrix.rank(axis=1).values
+
+        else:
+            LOG.warning(
+                f"{t_type} transformation not supported. Original matrix returned."
+            )
+
+        return matrix
+
     @staticmethod
     def define_covariates(
         std_filter=True,
-        add_institute=False,
-        add_medium=True,
-        add_cancertype=True,
-        add_mburden=True,
-        add_ploidy=True,
-        crispr_institute_file="crispr/CRISPR_Institute_Origin_20191108.csv.gz",
+        medium=True,
+        cancertype=True,
+        mburden=True,
+        ploidy=True,
+        institute=False,
+        institute_file="crispr/CRISPR_Institute_Origin_20191108.csv.gz",
     ):
+        from crispy.DataImporter import Sample
+
         # Imports
         samplesheet = Sample().samplesheet
-        institute = pd.read_csv(
-            f"{DPATH}/{crispr_institute_file}", index_col=0, header=None
+        cinstitute = pd.read_csv(
+            f"{DPATH}/{institute_file}", index_col=0, header=None
         ).iloc[:, 0]
 
         # Covariates
         covariates = []
 
         # CRISPR institute of origin
-        if add_institute:
-            institute = pd.get_dummies(institute).astype(int)
-            covariates.append(institute)
+        if institute:
+            covariates.append(pd.get_dummies(cinstitute).astype(int))
 
         # Cell lines culture conditions
-        if add_medium:
+        if medium:
             culture = pd.get_dummies(samplesheet["growth_properties"]).drop(
                 columns=["Unknown"]
             )
             covariates.append(culture)
 
         # Cancer type
-        if add_cancertype:
+        if cancertype:
             ctype = pd.get_dummies(samplesheet["cancer_type"])
             covariates.append(ctype)
 
         # Mutation burden
-        if add_mburden:
+        if mburden:
             m_burdern = samplesheet["mutational_burden"]
             covariates.append(m_burdern)
 
         # Ploidy
-        if add_ploidy:
+        if ploidy:
             ploidy = samplesheet["ploidy"]
             covariates.append(ploidy)
 
@@ -86,215 +273,3 @@ class LMModels:
         K = k.dot(k.T)
         K /= K.values.diagonal().mean()
         return K.round(decimal_places)
-
-    @staticmethod
-    def limix_lmm(
-        y,
-        x,
-        m=None,
-        k=None,
-        lik="normal",
-        transform_y="scale",
-        transform_x="scale",
-        filter_std=True,
-        min_events=10,
-        parse_results=True,
-        output_file=None,
-        verbose=0,
-    ):
-        if verbose > 0:
-            LOG.info(f"y_id: {y.columns[0]}")
-
-        # Build Y
-        Y = y.dropna()
-        y_name = Y.columns[0]
-        y_obs = list(Y.index)
-
-        if transform_y == "scale":
-            Y = StandardScaler().fit_transform(Y)
-        elif transform_y == "rank":
-            Y = Y.rank(axis=1).values
-
-        # Build X
-        X = x.loc[y_obs]
-        X = X.loc[:, X.std() > 0]
-        x_columns = list(X.columns)
-
-        if transform_x == "scale":
-            X = StandardScaler().fit_transform(X)
-        elif transform_x == "rank":
-            X = X.rank(axis=1).values
-        elif transform_x == "min_events":
-            X = X.loc[:, X.sum() >= min_events]
-            x_columns = list(X.columns)
-            X = X.values
-
-        # Random effects matrix
-        if k is None:
-            K = None
-        elif k is False:
-            K = LMModels.kinship(x.loc[y_obs]).values
-        else:
-            K = k.loc[y_obs, y_obs].values
-
-        # Covariates + Intercept
-        if m is not None:
-            m = m.loc[y_obs]
-            if filter_std:
-                m = m.loc[:, m.std() > 0]
-            m = m.assign(intercept=1).values
-
-        # Linear Mixed Model
-        lmm = scan(X, Y, K=K, M=m, lik=lik, verbose=False)
-
-        # Build melted data-frame of associations
-        if parse_results:
-            res = lmm.effsizes["h2"].query("effect_type == 'candidate'")
-            res = pd.DataFrame(
-                dict(
-                    y_id=y_name,
-                    x_id=x_columns,
-                    beta=res["effsize"].round(5).values,
-                    beta_se=res["effsize_se"].round(5).values,
-                    pval=lmm.stats.loc[res["test"], "pv20"].values,
-                    nsamples=Y.shape[0],
-                    ncovariates=0 if m is None else m.shape[1],
-                )
-            )
-
-            if output_file is None:
-                return res
-
-            else:
-                res.to_csv(output_file, index=False, compression="gzip")
-
-        else:
-            return lmm, dict(x=X, y=Y, k=K, m=m)
-
-    @staticmethod
-    def matrix_limix_lmm(
-        Y,
-        X,
-        M,
-        K,
-        x_feature_type="all",
-        lik="normal",
-        transform_y="scale",
-        transform_x="scale",
-        filter_std=True,
-        min_events=10,
-        pval_adj="fdr_bh",
-        pval_adj_overall=False,
-        verbose=1,
-    ):
-
-        # Sample intersection
-        samples = list(
-            set.intersection(set(Y.index), set(X.index), set(M.index), set(K.index))
-        )
-        LOG.info(f"Samples: {len(samples)}")
-
-        # Prepare X
-        x = X.loc[samples]
-
-        # Iterate through Y variables
-        lmm_res = []
-
-        for idx in Y:
-            if x_feature_type == "drop_y":
-                x = x.drop(columns=idx)
-
-            elif x_feature_type == "same_y":
-                if idx not in x.columns:
-                    LOG.warning(f"[same_y option] Y feature not in X: {idx}")
-                    continue
-
-                x = x[[idx]]
-
-            # LMM
-            lmm_res.append(
-                LMModels.limix_lmm(
-                    y=Y.loc[samples, [idx]],
-                    x=x,
-                    m=M,
-                    k=K,
-                    lik=lik,
-                    transform_y=transform_y,
-                    transform_x=transform_x,
-                    filter_std=filter_std,
-                    min_events=min_events,
-                    parse_results=True,
-                    verbose=verbose,
-                )
-            )
-
-        lmm_res = pd.concat(lmm_res, ignore_index=True)
-
-        # Multiple p-value correction
-        if pval_adj_overall:
-            lmm_res = lmm_res.assign(
-                fdr=multipletests(lmm_res["pval"], method=pval_adj)[1]
-            )
-
-        else:
-            lmm_res = LMModels.multipletests(
-                lmm_res, field="pval", pval_method=pval_adj
-            )
-
-        return lmm_res.sort_values("fdr")[LMModels.RES_ORDER]
-
-    @staticmethod
-    def write_limix_lmm(
-            Y,
-            X,
-            M,
-            K,
-            output_folder,
-            lik="normal",
-            transform_y="scale",
-            transform_x="scale",
-            filter_std=True,
-            min_events=10,
-            verbose=1,
-    ):
-        # Sample intersection
-        samples = list(
-            set.intersection(set(Y.index), set(X.index), set(M.index), set(K.index))
-        )
-        LOG.info(f"Samples: {len(samples)}")
-
-        for idx in Y:
-            LMModels.limix_lmm(
-                y=Y.loc[samples, [idx]],
-                x=X,
-                m=M,
-                k=K,
-                lik=lik,
-                transform_y=transform_y,
-                transform_x=transform_x,
-                filter_std=filter_std,
-                min_events=min_events,
-                parse_results=True,
-                output_file=f"{output_folder}/{idx}.csv.gz",
-                verbose=verbose,
-            )
-
-    @staticmethod
-    def multipletests(
-        parsed_results,
-        pval_method="fdr_bh",
-        field="pval",
-        fdr_field="fdr",
-        idx_cols=None,
-    ):
-        idx_cols = ["y_id"] if idx_cols is None else idx_cols
-
-        parsed_results_adj = []
-
-        for idx, df in parsed_results.groupby(idx_cols):
-            df[fdr_field] = multipletests(df[field], method=pval_method)[1]
-            parsed_results_adj.append(df)
-
-        parsed_results_adj = pd.concat(parsed_results_adj, ignore_index=True)
-
-        return parsed_results_adj
