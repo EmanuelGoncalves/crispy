@@ -65,21 +65,19 @@ class LMModels:
         LOG.info(f"Samples: {len(self.samples)}")
 
         # Y matrix
-        self.y, self.y_columns = self.__build_y(y)
-        LOG.info(f"Y: {self.y.shape}")
+        self.y, self.y_columns = self.__build_y(y.copy())
 
         # X matrix
-        self.x, self.x_columns = self.__build_x(x)
-        LOG.info(f"X: {self.x.shape}")
+        self.x, self.x_columns = self.__build_x(x.copy())
 
         # Covariates
         self.m = self.m.loc[self.samples, self.m.std() > 0]
         self.m, self.m_columns = self.m.values, np.array(list(self.m.columns))
-        LOG.info(f"M: {self.m.shape}")
 
         # Random effects matrix
         self.k = self.k.loc[self.samples, self.samples].values
-        LOG.info(f"K: {self.k.shape}")
+
+        LOG.info(f"Y: {self.y.shape[1]}; X: {self.x.shape[1]}; M: {self.m.shape[1]}; K: {self.k.shape[1]}")
 
     def __build_y(self, y):
         y = self.transform_matrix(y.loc[self.samples], t_type=self.transform_y)
@@ -96,8 +94,9 @@ class LMModels:
         return x.values, np.array(list(x.columns))
 
     def lmm(self, y_var):
-        from limix.qtl import scan
+        import limix
 
+        # Define samples with NaNs
         y_idx = list(self.y_columns).index(y_var)
         y_nans_idx = np.isnan(self.y[:, y_idx])
 
@@ -105,10 +104,10 @@ class LMModels:
             LOG.info(f"y_id: {y_var} ({y_idx}); N samples: {sum(1 - y_nans_idx)}")
 
         # Remove NaNs from y
-        y_ = self.y.copy()[y_nans_idx == 0][:, [y_idx]]
+        y_ = self.y[y_nans_idx == 0][:, [y_idx]]
 
         # Subset X
-        x_ = self.x.copy()[y_nans_idx == 0]
+        x_ = self.x[y_nans_idx == 0]
 
         if self.x_feature_type == "drop_y":
             if y_var not in self.x_columns:
@@ -129,27 +128,27 @@ class LMModels:
             x_vars = self.x_columns[np.std(x_, axis=0) > 0]
 
         # Subset m
-        m_ = self.m.copy()[y_nans_idx == 0]
+        m_ = self.m[y_nans_idx == 0]
         m_ = m_[:, np.std(m_, axis=0) > 0]
 
         if self.add_intercept:
             m_ = np.insert(m_, m_.shape[1], values=1, axis=1)
 
         # Subset random effects matrix
-        k_ = self.k.copy()[:, y_nans_idx == 0][y_nans_idx == 0, :]
+        k_ = self.k[:, y_nans_idx == 0][y_nans_idx == 0, :]
 
         # Linear Mixed Model
-        lmm = scan(G=x_, Y=y_, K=k_, M=m_, lik=self.lik, verbose=False)
+        lmm = limix.qtl.scan(G=x_, Y=y_, K=k_, M=m_, lik=self.lik, verbose=False)
 
         # Build results
-        lmm_betas = lmm.effsizes["h2"].copy().query("effect_type == 'candidate'")
+        lmm_betas = lmm.effsizes["h2"].query("effect_type == 'candidate'")
         lmm = pd.DataFrame(
             dict(
                 y_id=y_var,
                 x_id=x_vars,
-                beta=lmm_betas["effsize"].round(5).values,
-                beta_se=lmm_betas["effsize_se"].round(5).values,
-                pval=lmm.stats.loc[lmm_betas["test"], "pv20"].values,
+                beta=list(lmm_betas["effsize"].round(5)),
+                beta_se=list(lmm_betas["effsize_se"].round(5)),
+                pval=list(lmm.stats.loc[lmm_betas["test"], "pv20"]),
                 nsamples=sum(1 - y_nans_idx),
                 ncovariates=m_.shape[1],
             )
@@ -193,9 +192,8 @@ class LMModels:
 
     @staticmethod
     def transform_matrix(matrix, t_type="scale"):
-        from sklearn.preprocessing import StandardScaler
-
         if t_type == "scale":
+            from sklearn.preprocessing import StandardScaler
             matrix = pd.DataFrame(
                 StandardScaler().fit_transform(matrix),
                 index=matrix.index,

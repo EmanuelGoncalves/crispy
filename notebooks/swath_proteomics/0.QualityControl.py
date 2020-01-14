@@ -54,7 +54,6 @@ for dtype in dtypes:
     for i, (m, df) in enumerate(data.manifest.groupby("Instrument")):
         plot_df = data.get_data(dtype, average_replicates=False, map_ids=False)
         plot_df = plot_df.reindex(columns=df.index).dropna(how="all")
-        plot_df = np.log10(plot_df)
 
         sns.boxplot(
             data=plot_df,
@@ -81,7 +80,7 @@ for dtype in dtypes:
 
 corr = {}
 for dtype in dtypes:
-    samples_corr = np.log10(data.get_data(dtype, average_replicates=False)).corr()
+    samples_corr = data.get_data(dtype, average_replicates=False).corr()
     samples_corr.columns.name = "sample2"
     samples_corr.index.name = "sample1"
 
