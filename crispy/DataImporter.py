@@ -15,6 +15,7 @@ from pybedtools import BedTool
 from crispy.QCPlot import QCplot
 from scipy.stats import shapiro, iqr
 from sklearn.mixture import GaussianMixture
+from sklearn.preprocessing import quantile_transform
 from statsmodels.stats.multitest import multipletests
 
 
@@ -155,9 +156,71 @@ class GeneExpression:
         return rpkm
 
 
-class CORUM:
-    def __init__(self, corum_file="coreComplexes.txt", organism="Human"):
+class BioGRID:
+    def __init__(
+        self,
+        biogrid_file="BIOGRID-ALL-3.5.180.tab2.zip",
+        organism=9606,
+        etype="physical",
+        stypes_exclude=None,
+        homodymers_exclude=True,
+    ):
+        self.etype = etype
         self.organism = organism
+        self.homodymers_exclude = homodymers_exclude
+        self.stypes_exclude = (
+            {"Affinity Capture-RNA", "Protein-RNA"}
+            if stypes_exclude is None
+            else stypes_exclude
+        )
+
+        # Import
+        self.biogrid = pd.read_csv(f"{DPATH}/{biogrid_file}", sep="\t")
+
+        # Filter by organism
+        self.biogrid = self.biogrid[
+            self.biogrid["Organism Interactor A"] == self.organism
+        ]
+        self.biogrid = self.biogrid[
+            self.biogrid["Organism Interactor B"] == self.organism
+        ]
+
+        # Filter by type of interaction
+        if self.etype is not None:
+            self.biogrid = self.biogrid[
+                self.biogrid["Experimental System Type"] == self.etype
+            ]
+
+        # Exlude experimental systems
+        self.biogrid = self.biogrid[
+            ~self.biogrid["Experimental System"].isin(self.stypes_exclude)
+        ]
+
+        # Exclude homodymers
+        if self.homodymers_exclude:
+            self.biogrid = self.biogrid[
+                self.biogrid["Official Symbol Interactor A"]
+                != self.biogrid["Official Symbol Interactor B"]
+            ]
+
+        # Build set of interactions (both directions, i.e. p1-p2, p2-p1)
+        self.biogrid = {
+            (p1, p2)
+            for p1, p2 in self.biogrid[
+                ["Official Symbol Interactor A", "Official Symbol Interactor B"]
+            ].values
+        }
+        self.biogrid = list(
+            {(p1, p2) for p in self.biogrid for p1, p2 in [(p[0], p[1]), (p[1], p[0])]}
+        )
+
+
+class CORUM:
+    def __init__(
+        self, corum_file="coreComplexes.txt", organism="Human", homodymers_exclude=True
+    ):
+        self.organism = organism
+        self.homodymers_exclude = homodymers_exclude
 
         # Load CORUM DB
         self.db = pd.read_csv(f"{DPATH}/{corum_file}", sep="\t")
@@ -168,11 +231,19 @@ class CORUM:
 
         # Map to gene symbols
         self.gmap = self.map_gene_name()
-        self.db_melt_symbol = list({
-            (self.gmap.loc[p1, "GeneSymbol"], self.gmap.loc[p2, "GeneSymbol"])
-            for p1, p2 in self.db_melt
-            if p1 in self.gmap.index and p2 in self.gmap.index
-        })
+        self.db_melt_symbol = list(
+            {
+                (self.gmap.loc[p1, "GeneSymbol"], self.gmap.loc[p2, "GeneSymbol"])
+                for p1, p2 in self.db_melt
+                if p1 in self.gmap.index and p2 in self.gmap.index
+            }
+        )
+
+        # Exclude homodymers
+        if self.homodymers_exclude:
+            self.db_melt_symbol = [
+                (p1, p2) for p1, p2 in self.db_melt_symbol if p1 != p2
+            ]
 
     def melt_ppi(self):
         db_melt = self.db["subunits(UniProt IDs)"].copy()
@@ -214,12 +285,24 @@ class Proteomics:
         # Import manifest
         self.manifest = pd.read_csv(f"{DPATH}/{manifest}", index_col=0)
 
-    def get_data(self, dtype="protein", average_replicates=True, map_ids=True):
+    def get_data(
+        self,
+        dtype="protein",
+        average_replicates=True,
+        map_ids=True,
+        quantile_normalise=False,
+    ):
         if dtype.lower() == "protein":
             data = self.protein.copy()
-
         else:
             assert False, f"{dtype} not supported"
+
+        if quantile_normalise:
+            data = pd.DataFrame(
+                quantile_transform(data, ignore_implicit_zeros=True),
+                index=data.index,
+                columns=data.columns,
+            )
 
         if average_replicates:
             data = data.groupby(self.manifest.loc[data.columns, "SIDM"], axis=1).agg(
@@ -240,9 +323,10 @@ class Proteomics:
         subset=None,
         normality=False,
         iqr_range=None,
-        perc_measures=0.85,
+        perc_measures=0.75,
+        quantile_normalise=False,
     ):
-        df = self.get_data(dtype=dtype)
+        df = self.get_data(dtype=dtype, quantile_normalise=quantile_normalise)
 
         # Subset matrices
         if subset is not None:
@@ -308,7 +392,9 @@ class CRISPR:
         institute_file="crispr/CRISPR_Institute_Origin_20191108.csv.gz",
     ):
         self.crispr = pd.read_csv(f"{DPATH}/{fc_file}", index_col=0)
-        self.institute = pd.read_csv(f"{DPATH}/{institute_file}", index_col=0, header=None).iloc[:, 0]
+        self.institute = pd.read_csv(
+            f"{DPATH}/{institute_file}", index_col=0, header=None
+        ).iloc[:, 0]
 
     def get_data(self, scale=True):
         df = self.crispr.copy()

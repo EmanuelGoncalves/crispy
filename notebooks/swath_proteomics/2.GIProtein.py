@@ -29,7 +29,7 @@ from crispy.CrispyPlot import CrispyPlot
 from swath_proteomics.GIPlot import GIPlot
 from swath_proteomics.LMModels import LMModels
 from sklearn.metrics import roc_auc_score, roc_curve
-from crispy.DataImporter import Proteomics, CORUM, GeneExpression, CRISPR, Sample
+from crispy.DataImporter import Proteomics, CORUM, BioGRID, GeneExpression, CRISPR, Sample
 
 
 FDR_THRES = 0.05
@@ -69,13 +69,22 @@ lmm_prot = pd.read_csv(f"{RPATH}/lmm_protein_crispr.csv.gz")
 
 lmm_prot_signif = lmm_prot.query(f"fdr < {FDR_THRES}")
 
-# CORUM interactions
+# Protein interactions
 corum = set(CORUM().db_melt_symbol)
+biogrid = set(BioGRID().biogrid)
+
 lmm_prot_signif = lmm_prot_signif.assign(
     corum=[
         int((p1, p2) in corum) for p1, p2 in lmm_prot_signif[["y_id", "x_id"]].values
     ]
 )
+
+lmm_prot_signif = lmm_prot_signif.assign(
+    biogrid=[
+        int((p1, p2) in biogrid) for p1, p2 in lmm_prot_signif[["y_id", "x_id"]].values
+    ]
+)
+
 
 # GExp associations
 gexp_signif = {
@@ -97,11 +106,14 @@ lmm_prot_signif["x_cgene"] = lmm_prot_signif["x_id"].isin(cgenes).astype(int).va
 # Representative examples
 #
 
-pairs = [("MBD1", "TFAP2C"), ("SMC1A", "STAG1"), ("ERBB2", "ERBB2"), ("NDUFV1", "GPI")]
+pairs = [("MBD1", "TFAP2C"), ("SMC1A", "STAG1"), ("ERBB2", "ERBB2"), ("NDUFV1", "GPI"), ("VPS4B", "VPS4A")]
 
-prot_y, crispr_x = "NDUFS7", "GPI"
+prot_y, crispr_x = "MDM2", "TP53"
 
 for prot_y, crispr_x in pairs:
+    if prot_y not in prot.index or crispr_x not in crispr.index:
+        continue
+
     plot_df = (
         pd.concat(
             [
@@ -120,7 +132,6 @@ for prot_y, crispr_x in pairs:
     grid.set_axis_labels(
         f"{crispr_x}\nCRISPR (scaled FC)", f"{prot_y}\nProtein (mean intensity)"
     )
-    grid.ax_marg_x.set_title(f"Prot: {prot_y} ~ CRISPR: {crispr_x}")
     plt.savefig(
         f"{RPATH}/lmm_protein_scatter_{crispr_x}_{prot_y}.pdf", bbox_inches="tight"
     )

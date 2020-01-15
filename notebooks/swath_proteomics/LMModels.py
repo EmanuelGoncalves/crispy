@@ -30,11 +30,14 @@ class LMModels:
         x,
         k=None,
         m=None,
+        m2=None,
         x_feature_type="all",
+        m2_feature_type="same_y",
         add_intercept=True,
         lik="normal",
         transform_y="scale",
         transform_x="scale",
+        transform_m2="scale",
         x_min_events=None,
         institute=True,
         verbose=1,
@@ -42,6 +45,7 @@ class LMModels:
         # Misc
         self.verbose = verbose
         self.x_feature_type = x_feature_type
+        self.m2_feature_type = m2_feature_type
         self.add_intercept = add_intercept
 
         # LIMIX parameters
@@ -50,6 +54,7 @@ class LMModels:
         # Preprocessing steps
         self.transform_y = transform_y
         self.transform_x = transform_x
+        self.transform_m2 = transform_m2
         self.x_min_events = x_min_events
 
         # Build random effects and covariates matrices
@@ -59,7 +64,7 @@ class LMModels:
         # Samples overlap
         self.samples = list(
             set.intersection(
-                set(y.index), set(x.index), set(self.m.index), set(self.k.index)
+                set(y.index), set(x.index), set(self.m.index), set(self.k.index), set(y.index) if m2 is None else set(m2.index)
             )
         )
         LOG.info(f"Samples: {len(self.samples)}")
@@ -79,19 +84,31 @@ class LMModels:
 
         LOG.info(f"Y: {self.y.shape[1]}; X: {self.x.shape[1]}; M: {self.m.shape[1]}; K: {self.k.shape[1]}")
 
+        # Second covariates matrix
+        if m2 is not None:
+            self.m2, self.m2_columns = self.__build_m2(m2.copy())
+            LOG.info(f"M2: {self.m2.shape[1]}")
+
+        else:
+            self.m2, self.m2_columns = None, None
+
     def __build_y(self, y):
-        y = self.transform_matrix(y.loc[self.samples], t_type=self.transform_y)
-        return y.values, np.array(list(y.columns))
+        y_ = self.transform_matrix(y.loc[self.samples], t_type=self.transform_y)
+        return y_.values, np.array(list(y_.columns))
+
+    def __build_m2(self, m2):
+        m2_ = self.transform_matrix(m2.loc[self.samples], t_type=self.transform_m2)
+        return m2_.values, np.array(list(m2_.columns))
 
     def __build_x(self, x):
-        x = x.loc[self.samples, x.std() > 0]
+        x_ = x.loc[self.samples, x.std() > 0]
 
         if self.x_min_events is not None:
-            x = x.loc[:, x.sum() >= self.x_min_events]
+            x_ = x_.loc[:, x_.sum() >= self.x_min_events]
         else:
-            x = self.transform_matrix(x, t_type=self.transform_x)
+            x_ = self.transform_matrix(x_, t_type=self.transform_x)
 
-        return x.values, np.array(list(x.columns))
+        return x_.values, np.array(list(x_.columns))
 
     def lmm(self, y_var):
         import limix
@@ -130,6 +147,9 @@ class LMModels:
         # Subset m
         m_ = self.m[y_nans_idx == 0]
         m_ = m_[:, np.std(m_, axis=0) > 0]
+
+        if (self.m2 is not None) and (self.m2_feature_type == "same_y"):
+            m_ = np.append(m_, self.m2[y_nans_idx == 0][:, self.m2_columns == y_var], axis=1)
 
         if self.add_intercept:
             m_ = np.insert(m_, m_.shape[1], values=1, axis=1)

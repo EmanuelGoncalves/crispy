@@ -80,3 +80,12 @@ cnv_gexp = LMModels(
     y=gexp.T[genes], x=cnv.T[genes], institute=False, transform_x="None", x_feature_type="same_y"
 ).matrix_lmm().sort_values("fdr")
 cnv_gexp.to_csv(f"{RPATH}/lmm_gexp_cnv.csv.gz", index=False, compression="gzip")
+
+
+# Regressions Prot ~ CNV + GExp
+#
+
+cnv_prot_gexp = LMModels(
+    y=prot.T[genes], x=cnv.T[genes], m2=gexp.T[genes], institute=False, transform_x="None", x_feature_type="same_y"
+).matrix_lmm().sort_values("fdr")
+cnv_prot_gexp.to_csv(f"{RPATH}/lmm_protein_cnv_gexp.csv.gz", index=False, compression="gzip")

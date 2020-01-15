@@ -77,6 +77,7 @@ LOG.info(f"Genes: {len(genes)}")
 #
 cnv_prot = pd.read_csv(f"{RPATH}/lmm_protein_cnv.csv.gz", index_col=0)
 cnv_gexp = pd.read_csv(f"{RPATH}/lmm_gexp_cnv.csv.gz", index_col=0)
+cnv_prot_gexp = pd.read_csv(f"{RPATH}/lmm_protein_cnv_gexp.csv.gz")
 
 
 # Assemble attenuation data-frame

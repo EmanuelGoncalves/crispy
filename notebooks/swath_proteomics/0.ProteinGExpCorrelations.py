@@ -57,8 +57,7 @@ p_attenuated = pd.read_csv(f"{DPATH}/protein_attenuation_table.csv", index_col=0
 # SWATH-Proteomics
 #
 
-prot = Proteomics().filter(perc_measures=0.75)
-prot = prot.drop(columns=["HEK", "h002"])
+prot = Proteomics().filter(perc_measures=0.75).drop(columns=["HEK", "h002"])
 LOG.info(f"Proteomics: {prot.shape}")
 
 
@@ -87,27 +86,16 @@ gexp_norm = pd.DataFrame({g: gkn(gexp.loc[g, samples]) for g in genes}).T
 # Protein-Protein LMMs
 #
 
-lmm = LMModels()
-
-# Covariates
-m = lmm.define_covariates()
-
-# Matrices
-y, x = prot_norm.copy().T, gexp_norm.copy().T
-
-# Kinship matrix (random effects)
-k = lmm.kinship(x)
+lmm = LMModels(y=prot_norm.T, x=gexp_norm.T, institute=False, x_feature_type="same_y")
 
 # Protein associations
-res = lmm.matrix_limix_lmm(
-    Y=y, X=x, M=m, K=k, x_feature_type="same_y", pval_adj_overall=True
-)
+res = lmm.matrix_lmm(pval_adj_overall=True)
 
 # Protein attenuation
 res["attenuation"] = p_attenuated.reindex(res["y_id"])["attenuation_potential"].replace(np.nan, "NA").values
 
 # Export
-res.to_csv(f"{RPATH}/lmm_protein_gexp.csv", index=False, compression="gzip")
+res.to_csv(f"{RPATH}/corr_protein_gexp.csv", index=False, compression="gzip")
 
 
 # Protein ~ GExp correlation histogram
@@ -130,7 +118,7 @@ ax.set_xlabel("Association beta")
 ax.set_ylabel("Density")
 
 plt.savefig(
-    f"{RPATH}/lmm_protein_gexp_histogram.pdf", bbox_inches="tight", transparent=True
+    f"{RPATH}/corr_protein_gexp_histogram.pdf", bbox_inches="tight", transparent=True
 )
 plt.close("all")
 
@@ -159,7 +147,7 @@ ax.set_xlabel("Attenuation")
 ax.set_ylabel("Transcript ~ Protein")
 ax.axhline(0, ls="-", lw=0.1, c="black", zorder=0)
 ax.grid(axis="both", lw=0.1, color="#e1e1e1", zorder=0)
-plt.savefig(f"{RPATH}/lmm_protein_gexp_attenuation_boxplot.pdf", bbox_inches="tight")
+plt.savefig(f"{RPATH}/corr_protein_gexp_attenuation_boxplot.pdf", bbox_inches="tight")
 plt.close("all")
 
 
@@ -179,5 +167,5 @@ for gene in ["VIM", "EGFR", "IDH2", "NRAS", "SMARCB1", "ERBB2", "STAG1", "STAG2"
     grid = GIPlot.gi_regression("protein", "transcript", plot_df)
     grid.set_axis_labels(f"Protein", f"Transcript")
     grid.ax_marg_x.set_title(gene)
-    plt.savefig(f"{RPATH}/lmm_protein_gexp_scatter_{gene}.pdf", bbox_inches="tight")
+    plt.savefig(f"{RPATH}/corr_protein_gexp_scatter_{gene}.pdf", bbox_inches="tight")
     plt.close("all")

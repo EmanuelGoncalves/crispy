@@ -37,7 +37,7 @@ RPATH = pkg_resources.resource_filename("notebooks", "swath_proteomics/reports/"
 # SWATH-Proteomics
 #
 
-data = Proteomics().filter(perc_measures=0.75)
+data = Proteomics().filter()
 data = data.drop(columns=["HEK", "h002"])
 data = data.T.fillna(data.T.mean()).T
 LOG.info(f"Proteomics: {data.shape}")
