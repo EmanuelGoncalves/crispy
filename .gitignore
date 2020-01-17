@@ -98,5 +98,6 @@ ChangeLog
 figures/*
 tables/*
 notebooks/*/reports/*
+notebooks/*/figures/*
 notebooks/minlib/reports/KosukeYusa_v1.1_crispy/*
 notebooks/minlib/reports/KosukeYusa_v1.1_crisprcleanr/*
