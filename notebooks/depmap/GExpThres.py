@@ -425,6 +425,7 @@ if __name__ == "__main__":
     gdsc_disc_table = pd.pivot_table(gdsc_disc_table, index="name", columns="sample", values="value", fill_value=0)
 
     gdsc_disc_table.to_csv(f"{DPATH}/GDSC_discretised_table.csv", compression="gzip")
+    # gdsc_disc_table = pd.read_csv(f"{DPATH}/GDSC_discretised_table.csv.gz", index_col=0)
 
     # Number of diff expressed genes
     #
@@ -593,3 +594,25 @@ if __name__ == "__main__":
 
     plt.savefig(f"{RPATH}/bgexp_{s}_lr_hist.pdf", bbox_inches="tight", transparent=True)
     plt.close("all")
+
+    #
+    #
+    plot_df = gdsc_disc_table.sum(1)
+
+    for dtype in ["high", "low"]:
+        plt.figure(figsize=(2.5, 1.5), dpi=600)
+        sns.distplot(
+            plot_df[[i.endswith(f"_{dtype}") for i in plot_df.index]],
+            kde=False,
+            bins=100,
+            hist_kws={"linewidth": 0},
+            color=CrispyPlot.PAL_DBGD[0],
+        )
+        plt.grid(True, ls="-", lw=0.1, alpha=1.0, zorder=0, axis="x")
+        plt.xlabel("Number of events (across cell lines)")
+        plt.ylabel("Number of genes")
+        plt.title(f"Gene-expression {dtype}")
+        plt.savefig(
+            f"{RPATH}/disc_histogram_{dtype}.pdf", bbox_inches="tight", transparent=True
+        )
+        plt.close("all")

@@ -65,6 +65,7 @@ if __name__ == "__main__":
     # Filter data-sets
     #
     prot = prot.filter(subset=samples, perc_measures=0.75)
+    prot = prot.T.fillna(prot.T.mean()).T
     LOG.info(f"Proteomics: {prot.shape}")
 
     gexp = gexp.filter(subset=samples)
@@ -83,47 +84,47 @@ if __name__ == "__main__":
 
         # Protein ~ CRISPR LMMs
         #
-        prot_lmm = LMModels(y=prot.T[args.genes], x=crispr.T).matrix_lmm()
+        prot_lmm = LMModels(y=crispr.T[args.genes], x=prot.T[genes]).matrix_lmm()
         prot_lmm.to_csv(
-            f"{RPATH}/lmm_protein_crispr/{'_'.join(args.genes)}.csv.gz",
+            f"{RPATH}/lmm_protein_crispr/{'_'.join(args.genes)}_fillna.csv.gz",
             index=False,
             compression="gzip",
         )
 
         # Gene-expression ~ CRISPR LMMs
         #
-        gexp_lmm = LMModels(y=gexp.T[args.genes], x=crispr.T).matrix_lmm()
+        gexp_lmm = LMModels(y=crispr.T[args.genes], x=gexp.T[genes]).matrix_lmm()
         gexp_lmm.to_csv(
-            f"{RPATH}/lmm_gexp_crispr/{'_'.join(args.genes)}.csv.gz",
+            f"{RPATH}/lmm_gexp_crispr/{'_'.join(args.genes)}_fillna.csv.gz",
             index=False,
             compression="gzip",
         )
 
-    elif args.gene == "Assemble":
+    elif args.genes == "Assemble":
         LOG.info(f"Assembling files")
 
         # Assemble protein
         #
         ddir = f"{RPATH}/lmm_protein_crispr/"
         prot_table = pd.concat(
-            [pd.read_csv(f"{ddir}/{f}") for f in os.listdir(ddir)],
+            [pd.read_csv(f"{ddir}/{f}") for f in os.listdir(ddir) if f.endswith("_fillna.csv.gz")],
             ignore_index=True,
             sort=False,
         ).sort_values("fdr")[LMModels.RES_ORDER]
         prot_table.to_csv(
-            f"{RPATH}/lmm_protein_crispr.csv.gz", index=False, compression="gzip"
+            f"{RPATH}/lmm_protein_crispr_fillna.csv.gz", index=False, compression="gzip"
         )
 
         # Assemble gexp
         #
         ddir = f"{RPATH}/lmm_gexp_crispr/"
         gexp_table = pd.concat(
-            [pd.read_csv(f"{ddir}/{f}") for f in os.listdir(ddir)],
+            [pd.read_csv(f"{ddir}/{f}") for f in os.listdir(ddir) if f.endswith("_fillna.csv.gz")],
             ignore_index=True,
             sort=False,
         )
         gexp_table.to_csv(
-            f"{RPATH}/lmm_gexp_crispr.csv.gz", index=False, compression="gzip"
+            f"{RPATH}/lmm_gexp_crispr_fillna.csv.gz", index=False, compression="gzip"
         )
 
     else:
@@ -133,7 +134,7 @@ if __name__ == "__main__":
             args = [iter(iterable)] * n
             return zip_longest(*args, fillvalue=fillvalue)
 
-        for args_genes in grouper(genes, 30, None):
+        for args_genes in grouper(list(crispr.index), 30, None):
             args_genes = [g for g in args_genes if g is not None]
             os.system(
                 f"python /Users/eg14/Projects/crispy/notebooks/swath_proteomics/1.SLinteractions.py --genes {' '.join(args_genes)}"

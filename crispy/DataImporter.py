@@ -29,7 +29,12 @@ class Sample:
 
     """
 
-    def __init__(self, index="model_id", samplesheet_file="model_list_20200107.csv"):
+    def __init__(
+        self,
+        index="model_id",
+        samplesheet_file="model_list_20200107.csv",
+        growth_file="GrowthRates_v1.3.0_20190222.csv",
+    ):
         self.index = index
 
         # Import samplesheet
@@ -37,6 +42,15 @@ class Sample:
             pd.read_csv(f"{DPATH}/{samplesheet_file}")
             .dropna(subset=[self.index])
             .set_index(self.index)
+        )
+
+        # Growth rates
+        self.growth = pd.read_csv(f"{DPATH}/{growth_file}")
+        self.samplesheet["growth"] = (
+            self.growth.groupby(self.index)["GROWTH_RATE"]
+            .mean()
+            .reindex(self.samplesheet.index)
+            .values
         )
 
     def get_covariates(self, culture_conditions=True, cancer_type=True):
@@ -85,7 +99,7 @@ class WES:
 
         return df
 
-    def filter(self, subset=None, min_events=5, as_matrix=False, mutation_class=None):
+    def filter(self, subset=None, min_events=5, as_matrix=True, mutation_class=None):
         df = self.get_data(as_matrix=as_matrix, mutation_class=mutation_class)
 
         # Subset samples

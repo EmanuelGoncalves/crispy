@@ -60,8 +60,8 @@ LOG.info(f"Samples: {len(samples)}")
 
 # Import Protein / Transcriptomics ~ CRISPR associations
 #
-lmm_gexp = pd.read_csv(f"{RPATH}/lmm_gexp_crispr.csv.gz")
-lmm_prot = pd.read_csv(f"{RPATH}/lmm_protein_crispr.csv.gz")
+lmm_gexp = pd.read_csv(f"{RPATH}/lmm_gexp_crispr_fillna.csv.gz")
+lmm_prot = pd.read_csv(f"{RPATH}/lmm_protein_crispr_fillna.csv.gz")
 
 
 # Assemble protein association data-frame
@@ -85,7 +85,6 @@ lmm_prot_signif = lmm_prot_signif.assign(
     ]
 )
 
-
 # GExp associations
 gexp_signif = {
     (y, x) for y, x in lmm_gexp.query(f"fdr < {FDR_THRES}")[["y_id", "x_id"]].values
@@ -108,7 +107,7 @@ lmm_prot_signif["x_cgene"] = lmm_prot_signif["x_id"].isin(cgenes).astype(int).va
 
 pairs = [("MBD1", "TFAP2C"), ("SMC1A", "STAG1"), ("ERBB2", "ERBB2"), ("NDUFV1", "GPI"), ("VPS4B", "VPS4A")]
 
-prot_y, crispr_x = "MDM2", "TP53"
+prot_y, crispr_x = "VPS4A", "VPS4B"
 
 for prot_y, crispr_x in pairs:
     if prot_y not in prot.index or crispr_x not in crispr.index:

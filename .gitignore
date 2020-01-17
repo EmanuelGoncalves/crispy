@@ -97,6 +97,6 @@ resources/*
 ChangeLog
 figures/*
 tables/*
-reports/*
+notebooks/*/reports/*
 notebooks/minlib/reports/KosukeYusa_v1.1_crispy/*
 notebooks/minlib/reports/KosukeYusa_v1.1_crisprcleanr/*
