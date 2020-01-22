@@ -89,10 +89,10 @@ samples_corr = samples_corr.stack()[keep].reset_index()
 
 samples_corr = samples_corr.rename(columns={0: "pearson"})
 
-headers = ["Cell_line", "Tissue_type", "Cancer_type", "Instrument"]
+headers = ["Cell_line", "Tissue_type", "Cancer_type", "Instrument", "SIDM"]
 samples_corr = pd.concat(
     [
-        samples_corr,
+        samples_corr.reset_index(drop=True),
         proteomics.manifest.loc[samples_corr["sample1"], headers]
         .add_suffix("_1")
         .reset_index(drop=True),
@@ -114,7 +114,7 @@ samples_corr["same_machine"] = (
     samples_corr["Instrument_1"] == samples_corr["Instrument_2"]
 ).astype(int)
 
-samples_corr.to_csv(f"{rpath}/protein_corr.csv", compression="gzip", index=False)
+samples_corr.to_csv(f"{rpath}/protein_corr.csv.gz", compression="gzip", index=False)
 
 
 # Sample correlation boxplots

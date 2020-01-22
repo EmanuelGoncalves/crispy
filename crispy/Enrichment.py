@@ -130,7 +130,12 @@ class Enrichment:
     def gsea(self, values, signature):
         return SSGSEA.gsea(values.to_dict(), signature, permutations=self.permutations)
 
-    def gsea_enrichments(self, values, gmt_file):
+    def gsea_enrichments(self, values):
+        return pd.concat(
+            [self.gsea_enrichment(values, gmt_file=g).assign(gmt=g) for g in self.gmts]
+        ).sort_values("e_score")
+
+    def gsea_enrichment(self, values, gmt_file):
         self.__assert_gmt_file(gmt_file)
 
         geneset = self.gmts[gmt_file]
@@ -253,7 +258,9 @@ class Enrichment:
 
 class GSEAplot(CrispyPlot):
     @classmethod
-    def plot_gsea(cls, hits, running_hit, dataset=None, vertical_lines=False, shade=False):
+    def plot_gsea(
+        cls, hits, running_hit, dataset=None, vertical_lines=False, shade=False
+    ):
         x, y = np.array(range(len(hits))), np.array(running_hit)
 
         if dataset is not None:
@@ -264,35 +271,37 @@ class GSEAplot(CrispyPlot):
             axs = [plt.gca()]
 
         # GSEA running hit
-        axs[0].plot(x, y, '-', c=cls.PAL_DBGD[0])
+        axs[0].plot(x, y, "-", c=cls.PAL_DBGD[0])
 
         if shade:
-            axs[0].fill_between(x, 0, y, alpha=.5, color=cls.PAL_DBGD[2])
+            axs[0].fill_between(x, 0, y, alpha=0.5, color=cls.PAL_DBGD[2])
 
         if vertical_lines:
-            for i in x[np.array(hits, dtype='bool')]:
-                axs[0].axvline(i, c=cls.PAL_DBGD[0], lw=.3, alpha=.2, zorder=0)
+            for i in x[np.array(hits, dtype="bool")]:
+                axs[0].axvline(i, c=cls.PAL_DBGD[0], lw=0.3, alpha=0.2, zorder=0)
 
-        axs[0].axhline(0, c=cls.PAL_DBGD[0], lw=.1, ls='-')
-        axs[0].set_ylabel('Enrichment score')
+        axs[0].axhline(0, c=cls.PAL_DBGD[0], lw=0.1, ls="-")
+        axs[0].set_ylabel("Enrichment score")
         axs[0].get_xaxis().set_visible(False)
         axs[0].set_xlim([0, len(x)])
 
         if dataset is not None:
-            dataset = list(zip(*sorted(dataset.items(), key=operator.itemgetter(1), reverse=False)))
+            dataset = list(
+                zip(*sorted(dataset.items(), key=operator.itemgetter(1), reverse=False))
+            )
 
             # Data
             axs[1].scatter(x, dataset[1], c=cls.PAL_DBGD[0], linewidths=0, s=2)
 
             if shade:
-                axs[1].fill_between(x, 0, dataset[1], alpha=.5, color=cls.PAL_DBGD[2])
+                axs[1].fill_between(x, 0, dataset[1], alpha=0.5, color=cls.PAL_DBGD[2])
 
             if vertical_lines:
-                for i in x[np.array(hits, dtype='bool')]:
-                    axs[1].axvline(i, c=cls.PAL_DBGD[0], lw=.3, alpha=.2, zorder=0)
+                for i in x[np.array(hits, dtype="bool")]:
+                    axs[1].axvline(i, c=cls.PAL_DBGD[0], lw=0.3, alpha=0.2, zorder=0)
 
-            axs[1].axhline(0, c='black', lw=.3, ls='-')
-            axs[1].set_ylabel('Data value')
+            axs[1].axhline(0, c="black", lw=0.3, ls="-")
+            axs[1].set_ylabel("Data value")
             axs[1].get_xaxis().set_visible(False)
             axs[1].set_xlim([0, len(x)])
 

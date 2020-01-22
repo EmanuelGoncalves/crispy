@@ -4,6 +4,7 @@
 import numpy as np
 import seaborn as sns
 import matplotlib.colors as colors
+from natsort import natsorted
 from scipy.interpolate import interpn
 from scipy.stats import gaussian_kde
 
@@ -26,6 +27,58 @@ class CrispyPlot:
 
     # PALETTES
     PAL_DBGD = {0: "#656565", 1: "#F2C500", 2: "#E1E1E1", 3: "#0570b0"}
+    PAL_SET2 = sns.color_palette("Set2", n_colors=8).as_hex()
+    PAL_DTRACE = {
+        0: "#E1E1E1",
+        1: PAL_SET2[1],
+        2: "#656565",
+        3: "#2b8cbe",
+        4: "#de2d26",
+    }
+
+    PAL_TISSUE = {
+        "Lung": "#c50092",
+        "Haematopoietic and Lymphoid": "#00ca5b",
+        "Large Intestine": "#c100ce",
+        "Central Nervous System": "#c3ce44",
+        "Skin": "#d869ff",
+        "Breast": "#496b00",
+        "Head and Neck": "#ff5ff2",
+        "Bone": "#004215",
+        "Esophagus": "#fa006f",
+        "Ovary": "#28d8fb",
+        "Peripheral Nervous System": "#ff2c37",
+        "Kidney": "#5ea5ff",
+        "Stomach": "#fcbb3b",
+        "Bladder": "#3e035f",
+        "Pancreas": "#f6bc62",
+        "Liver": "#df93ff",
+        "Thyroid": "#ae7400",
+        "Soft Tissue": "#f5aefa",
+        "Cervix": "#008464",
+        "Endometrium": "#980018",
+        "Biliary Tract": "#535d3c",
+        "Prostate": "#ff80b6",
+        "Uterus": "#482800",
+        "Vulva": "#ff7580",
+        "Placenta": "#994800",
+        "Testis": "#875960",
+        "Adrenal Gland": "#ff8155",
+    }
+
+    PAL_TISSUE_2 = dict(
+        zip(
+            *(
+                natsorted(list(PAL_TISSUE)),
+                sns.color_palette("tab20c").as_hex()
+                + sns.color_palette("tab20b").as_hex(),
+            )
+        )
+    )
+
+    PAL_GROWTH_CONDITIONS = {
+        "Adherent": "#fb8072", "Semi-Adherent": "#80b1d3", "Suspension": "#fdb462", "Unknown": "#d9d9d9"
+    }
 
     SV_PALETTE = {
         "tandem-duplication": "#377eb8",

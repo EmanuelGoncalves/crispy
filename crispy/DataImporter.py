@@ -34,6 +34,7 @@ class Sample:
         index="model_id",
         samplesheet_file="model_list_20200107.csv",
         growth_file="GrowthRates_v1.3.0_20190222.csv",
+        institute_file="crispr/CRISPR_Institute_Origin_20191108.csv.gz"
     ):
         self.index = index
 
@@ -52,6 +53,11 @@ class Sample:
             .reindex(self.samplesheet.index)
             .values
         )
+
+        # CRISPR institute
+        self.samplesheet["institute"] = pd.read_csv(
+            f"{DPATH}/{institute_file}", index_col=0, header=None
+        ).iloc[:, 0].reindex(self.samplesheet.index).values
 
     def get_covariates(self, culture_conditions=True, cancer_type=True):
         covariates = []
@@ -113,7 +119,8 @@ class WES:
             assert df.shape[1] != 0, "No columns after filter by subset"
 
         # Minimum number of events
-        df = df[df.sum(1) >= min_events]
+        if min_events is not None:
+            df = df[df.sum(1) >= min_events]
 
         return df
 
@@ -284,8 +291,12 @@ class Proteomics:
         self,
         protein_matrix="proteomics/E0022_P02-P03_protein_matrix.txt",
         manifest="proteomics/E0022_P02-P03_sample_mapping.txt",
+        replicates_corr="proteomics/replicates_corr.csv.gz"
     ):
         deprecated_ids = self.map_deprecated()
+
+        # Import replicates correlation
+        self.rep_corrs = pd.read_csv(f"{DPATH}/{replicates_corr}")
 
         # Import imputed protein levels
         self.protein = pd.read_csv(f"{DPATH}/{protein_matrix}", sep="\t", index_col=0).T
@@ -304,12 +315,18 @@ class Proteomics:
         dtype="protein",
         average_replicates=True,
         map_ids=True,
+        replicate_thres=0.8,
         quantile_normalise=False,
     ):
         if dtype.lower() == "protein":
             data = self.protein.copy()
         else:
             assert False, f"{dtype} not supported"
+
+        if replicate_thres is not None:
+            reps = self.rep_corrs.query(f"pearson > {replicate_thres}")
+            reps = set(reps["sample1"]).union(set(reps["sample2"]))
+            data = data[reps]
 
         if quantile_normalise:
             data = pd.DataFrame(
@@ -338,9 +355,10 @@ class Proteomics:
         normality=False,
         iqr_range=None,
         perc_measures=0.75,
+        replicate_thres=0.8,
         quantile_normalise=False,
     ):
-        df = self.get_data(dtype=dtype, quantile_normalise=quantile_normalise)
+        df = self.get_data(dtype=dtype, quantile_normalise=quantile_normalise, replicate_thres=replicate_thres)
 
         # Subset matrices
         if subset is not None:
@@ -561,8 +579,8 @@ class CopyNumber:
     def __init__(
         self,
         cnv_file="copy_number/copynumber_total_new_map.csv.gz",
-        calculate_deletions=True,
-        calculate_amplifications=True,
+        calculate_deletions=False,
+        calculate_amplifications=False,
     ):
         self.ss_obj = Sample()
 
@@ -668,6 +686,36 @@ class CopyNumber:
 
         else:
             return 0
+
+
+class Methylation:
+    """
+    Import module for Illumina Methylation 450k arrays
+    """
+
+    def __init__(self, methy_gene_promoter="methylation/methy_beta_gene_promoter.csv.gz"):
+        self.methy_promoter = pd.read_csv(f"{DPATH}/{methy_gene_promoter}", index_col=0)
+
+    def get_data(self):
+        return self.methy_promoter.copy()
+
+    def filter(self, subset=None):
+        df = self.get_data()
+
+        # Subset matrices
+        if subset is not None:
+            df = df.loc[:, df.columns.isin(subset)]
+
+        return df
+
+    @staticmethod
+    def discretise(beta):
+        if beta < 0.33:
+            return "umethylated"
+        elif beta > 0.66:
+            return "methylated"
+        else:
+            return "hemimethylated"
 
 
 class CopyNumberSegmentation:

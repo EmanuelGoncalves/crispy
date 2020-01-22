@@ -13,12 +13,19 @@ from matplotlib.patches import Arc
 from collections import OrderedDict
 from sklearn.metrics.ranking import auc
 from crispy.CrispyPlot import CrispyPlot
-from sklearn.metrics import roc_auc_score, roc_curve, precision_recall_curve, average_precision_score
+from sklearn.metrics import (
+    roc_auc_score,
+    roc_curve,
+    precision_recall_curve,
+    average_precision_score,
+)
 
 
 class QCplot(CrispyPlot):
     @staticmethod
-    def aroc_threshold(values, true_set=None, false_set=None, fpr_thres=0.01, return_curve=False):
+    def aroc_threshold(
+        values, true_set=None, false_set=None, fpr_thres=0.01, return_curve=False
+    ):
         if true_set is None:
             true_set = Utils.get_essential_genes(return_series=False)
 
@@ -35,12 +42,18 @@ class QCplot(CrispyPlot):
         auc_fpr = roc_auc_score(y_true, -rank, max_fpr=fpr_thres)
         fc_thres_fpr = -min(thres[fpr <= fpr_thres])
 
-        res = (auc_fpr, fc_thres_fpr, fpr, tpr) if return_curve else (auc_fpr, fc_thres_fpr)
+        res = (
+            (auc_fpr, fc_thres_fpr, fpr, tpr)
+            if return_curve
+            else (auc_fpr, fc_thres_fpr)
+        )
 
         return res
 
     @staticmethod
-    def precision_recall_curve(values, true_set=None, false_set=None, fdr_thres=0.01, return_curve=False):
+    def precision_recall_curve(
+        values, true_set=None, false_set=None, fdr_thres=0.01, return_curve=False
+    ):
         if true_set is None:
             true_set = Utils.get_essential_genes(return_series=False)
 
@@ -57,7 +70,11 @@ class QCplot(CrispyPlot):
         precision, recall, thres = precision_recall_curve(y_true, -rank)
         recall_fdr = recall[precision > (1 - fdr_thres)].max()
 
-        res = (ap, recall_fdr, precision, recall, thres) if return_curve else (ap, recall_fdr)
+        res = (
+            (ap, recall_fdr, precision, recall, thres)
+            if return_curve
+            else (ap, recall_fdr)
+        )
 
         return res
 
@@ -123,19 +140,34 @@ class QCplot(CrispyPlot):
     def recall_curve_discretise(cls, rank, discrete, thres, min_events=10):
         discrete = discrete.apply(Utils.bin_cnv, args=(thres,))
 
-        aucs = pd.DataFrame([
-            {
-                discrete.name: g,
-                'auc': cls.recall_curve(rank, df.index)[2]
-            } for g, df in discrete.groupby(discrete) if df.shape[0] >= min_events
-        ])
+        aucs = pd.DataFrame(
+            [
+                {discrete.name: g, "auc": cls.recall_curve(rank, df.index)[2]}
+                for g, df in discrete.groupby(discrete)
+                if df.shape[0] >= min_events
+            ]
+        )
 
         return aucs
 
     @classmethod
     def bias_boxplot(
-            cls, data, x='copy_number', y='auc', hue=None, despine=False, notch=True, add_n=False, n_text_y=None,
-            n_text_offset=.05, palette=None, ax=None, tick_base=.1, order=None, hue_order=None, n_fontsize=3.5
+        cls,
+        data,
+        x="copy_number",
+        y="auc",
+        hue=None,
+        despine=False,
+        notch=True,
+        add_n=False,
+        n_text_y=None,
+        n_text_offset=0.05,
+        palette=None,
+        ax=None,
+        tick_base=0.1,
+        order=None,
+        hue_order=None,
+        n_fontsize=3.5,
     ):
         if ax is None:
             ax = plt.gca()
@@ -144,14 +176,29 @@ class QCplot(CrispyPlot):
 
         if palette is None and hue is not None:
             hue_order = natsorted(set(data[hue])) if hue_order is None else hue_order
-            palette = dict(zip(*(hue_order, cls.get_palette_continuous(len(hue_order)))))
+            palette = dict(
+                zip(*(hue_order, cls.get_palette_continuous(len(hue_order))))
+            )
 
         elif palette is None:
             palette = dict(zip(*(order, cls.get_palette_continuous(len(order)))))
 
         sns.boxplot(
-            x, y, data=data, hue=hue, notch=notch, order=order, palette=palette, saturation=1., showcaps=False, hue_order=hue_order,
-            medianprops=cls.MEDIANPROPS, flierprops=cls.FLIERPROPS, whiskerprops=cls.WHISKERPROPS, boxprops=cls.BOXPROPS, ax=ax
+            x,
+            y,
+            data=data,
+            hue=hue,
+            notch=notch,
+            order=order,
+            palette=palette,
+            saturation=1.0,
+            showcaps=False,
+            hue_order=hue_order,
+            medianprops=cls.MEDIANPROPS,
+            flierprops=cls.FLIERPROPS,
+            whiskerprops=cls.WHISKERPROPS,
+            boxprops=cls.BOXPROPS,
+            ax=ax,
         )
 
         if despine:
@@ -162,7 +209,9 @@ class QCplot(CrispyPlot):
 
             for i, c in enumerate(order):
                 n = np.sum(data[x] == c)
-                ax.text(i, text_y, f'N={n}', ha='center', va='bottom', fontsize=n_fontsize)
+                ax.text(
+                    i, text_y, f"N={n}", ha="center", va="bottom", fontsize=n_fontsize
+                )
 
             y_lim = ax.get_ylim()
             ax.set_ylim(text_y, y_lim[1])
@@ -172,7 +221,17 @@ class QCplot(CrispyPlot):
         return ax
 
     @classmethod
-    def plot_cumsum_auc(cls, df, index_set, ax=None, palette=None, legend=True, plot_mean=False, legend_prop=None, color="#484848"):
+    def plot_cumsum_auc(
+        cls,
+        df,
+        index_set,
+        ax=None,
+        palette=None,
+        legend=True,
+        plot_mean=False,
+        legend_prop=None,
+        color="#484848",
+    ):
         """
         Plot cumulative sum of values X considering index_set list.
 
@@ -182,6 +241,8 @@ class QCplot(CrispyPlot):
         :param dict palette: palette
         :param Bool legend: Plot legend
         :param Bool plot_mean: Plot curve with the mean across all columns in X
+        :param legend_prop:
+        :param color:
 
         :return matplotlib Axes, plot_stats dict:
         """
@@ -190,7 +251,7 @@ class QCplot(CrispyPlot):
             ax = plt.gca()
 
         if type(index_set) == set:
-            index_set = pd.Series(list(index_set)).rename('geneset')
+            index_set = pd.Series(list(index_set)).rename("geneset")
 
         plot_stats = dict(auc={})
 
@@ -202,30 +263,39 @@ class QCplot(CrispyPlot):
             x, y, xy_auc = xy_curves[f]
 
             # Calculate AUC
-            plot_stats['auc'][f] = xy_auc
+            plot_stats["auc"][f] = xy_auc
 
             # Plot
             c = color if palette is None else palette[f]
-            ax.plot(x, y, label='%s: %.2f' % (f, xy_auc) if (legend is True) else None, lw=1., c=c, alpha=.8)
+            ax.plot(
+                x,
+                y,
+                label="%s: %.2f" % (f, xy_auc) if (legend is True) else None,
+                lw=1.0,
+                c=c,
+                alpha=0.8,
+            )
 
         # Mean
         if plot_mean is True:
             x, y, xy_auc = cls.recall_curve(df.mean(1), index_set)
 
-            plot_stats['auc']['mean'] = xy_auc
+            plot_stats["auc"]["mean"] = xy_auc
 
-            ax.plot(x, y, label=f'Mean: {xy_auc:.2f}', ls='--', c='red', lw=2.5, alpha=.8)
+            ax.plot(
+                x, y, label=f"Mean: {xy_auc:.2f}", ls="--", c="red", lw=2.5, alpha=0.8
+            )
 
         # Random
-        ax.plot((0, 1), (0, 1), 'k--', lw=.3, alpha=.5)
+        ax.plot((0, 1), (0, 1), "k--", lw=0.3, alpha=0.5)
 
         # Limits
         ax.set_xlim(0, 1)
         ax.set_ylim(0, 1)
 
         # Labels
-        ax.set_xlabel('Ranked genes (fold-change)')
-        ax.set_ylabel(f'Recall {index_set.name}')
+        ax.set_xlabel("Ranked genes (fold-change)")
+        ax.set_ylabel(f"Recall {index_set.name}")
 
         if legend is True:
             ax.legend(loc=4, frameon=False, prop=legend_prop)
@@ -233,22 +303,36 @@ class QCplot(CrispyPlot):
         return ax, plot_stats
 
     @classmethod
-    def aucs_scatter(cls, x, y, data, diagonal_line=True, rugplot=False, s=4, marker='x', lw=.05):
+    def aucs_scatter(
+        cls, x, y, data, diagonal_line=True, rugplot=False, s=4, marker="x", lw=0.05
+    ):
         ax = plt.gca()
 
-        ax.scatter(data[x], data[y], c=cls.PAL_DBGD[0], s=s, marker=marker, lw=lw, edgecolor="white")
+        ax.scatter(
+            data[x],
+            data[y],
+            c=cls.PAL_DBGD[0],
+            s=s,
+            marker=marker,
+            lw=lw,
+            edgecolor="white",
+        )
 
         if rugplot:
-            sns.rugplot(data[x], height=.02, axis='x', c=cls.PAL_DBGD[0], lw=.3, ax=ax)
-            sns.rugplot(data[y], height=.02, axis='y', c=cls.PAL_DBGD[0], lw=.3, ax=ax)
+            sns.rugplot(
+                data[x], height=0.02, axis="x", c=cls.PAL_DBGD[0], lw=0.3, ax=ax
+            )
+            sns.rugplot(
+                data[y], height=0.02, axis="y", c=cls.PAL_DBGD[0], lw=0.3, ax=ax
+            )
 
         if diagonal_line:
             (x0, x1), (y0, y1) = ax.get_xlim(), ax.get_ylim()
             lims = [max(x0, y0), min(x1, y1)]
-            ax.plot(lims, lims, 'k-', lw=.3, zorder=0)
+            ax.plot(lims, lims, "k-", lw=0.3, zorder=0)
 
-        ax.set_xlabel('{} fold-changes AURCs'.format(x.capitalize()))
-        ax.set_ylabel('{} fold-changes AURCs'.format(y.capitalize()))
+        ax.set_xlabel("{} fold-changes AURCs".format(x.capitalize()))
+        ax.set_ylabel("{} fold-changes AURCs".format(y.capitalize()))
 
         return ax
 
@@ -256,33 +340,50 @@ class QCplot(CrispyPlot):
     def aucs_scatter_pairgrid(cls, data, set_lim=True, axhlines=True, axvlines=True):
         g = sns.PairGrid(data, despine=False)
 
-        g.map_offdiag(plt.scatter, color=cls.PAL_DBGD[0], s=4, marker='o', lw=0.5, alpha=.7)
+        g.map_offdiag(
+            plt.scatter, color=cls.PAL_DBGD[0], s=4, marker="o", lw=0.5, alpha=0.7
+        )
 
         g.map_diag(plt.hist, color=cls.PAL_DBGD[0])
 
         if set_lim:
             g.set(ylim=(0, 1), xlim=(0, 1))
 
-        for ax_indices in [np.tril_indices_from(g.axes, -1), np.triu_indices_from(g.axes, 1)]:
+        for ax_indices in [
+            np.tril_indices_from(g.axes, -1),
+            np.triu_indices_from(g.axes, 1),
+        ]:
             for i, j in zip(*ax_indices):
                 if axhlines:
-                    g.axes[i, j].axhline(.5, ls=':', lw=.3, zorder=0, color='black')
+                    g.axes[i, j].axhline(0.5, ls=":", lw=0.3, zorder=0, color="black")
 
                 if axvlines:
-                    g.axes[i, j].axvline(.5, ls=':', lw=.3, zorder=0, color='black')
+                    g.axes[i, j].axvline(0.5, ls=":", lw=0.3, zorder=0, color="black")
 
-        for ax_indices in [np.tril_indices_from(g.axes, -1), np.triu_indices_from(g.axes, 1)]:
+        for ax_indices in [
+            np.tril_indices_from(g.axes, -1),
+            np.triu_indices_from(g.axes, 1),
+        ]:
             for i, j in zip(*ax_indices):
                 (x0, x1), (y0, y1) = g.axes[i, j].get_xlim(), g.axes[i, j].get_ylim()
                 lims = [max(x0, y0), min(x1, y1)]
 
-                g.axes[i, j].plot(lims, lims, 'k-', lw=.3, zorder=0)
+                g.axes[i, j].plot(lims, lims, "k-", lw=0.3, zorder=0)
 
         return g
 
     @classmethod
     def plot_chromosome(
-            cls, crispy_bed, ascat_bed, chrm, highlight=None, ax=None, legend=False, scale=1e6, tick_base=1, legend_size=5
+        cls,
+        crispy_bed,
+        ascat_bed,
+        chrm,
+        highlight=None,
+        ax=None,
+        legend=False,
+        scale=1e6,
+        tick_base=1,
+        legend_size=5,
     ):
 
         if ax is None:
@@ -293,39 +394,73 @@ class QCplot(CrispyPlot):
         ascat_ = ascat_bed.query(f"chr == '{chrm}'")
 
         # CRISPR
-        crispr_ = crispy_bed[crispy_bed['chr'] == chrm]
-        crispr_ = crispr_.assign(location=crispr_[['sgrna_start', 'sgrna_end']].mean(1))
+        crispr_ = crispy_bed[crispy_bed["chr"] == chrm]
+        crispr_ = crispr_.assign(location=crispr_[["sgrna_start", "sgrna_end"]].mean(1))
 
-        crispr_gene_ = crispr_.groupby('gene')[['fold_change', 'location']].mean()
+        crispr_gene_ = crispr_.groupby("gene")[["fold_change", "location"]].mean()
 
         # Plot original values
-        ax.scatter(crispr_['location'] / scale, crispr_['fold_change'], s=6, marker='.', lw=0, c=cls.PAL_DBGD[1], alpha=.4, label='CRISPR-Cas9')
+        ax.scatter(
+            crispr_["location"] / scale,
+            crispr_["fold_change"],
+            s=6,
+            marker=".",
+            lw=0,
+            c=cls.PAL_DBGD[1],
+            alpha=0.4,
+            label="CRISPR-Cas9",
+        )
 
         # Segment mean
-        for (s, e), gp_mean in crispr_.groupby(['start', 'end'])['fold_change']:
-            ax.plot((s / scale, e / scale), (gp_mean.mean(), gp_mean.mean()), alpha=1., c=cls.PAL_DBGD[2], zorder=3, label='CRISPR-Cas9 segment mean', lw=2)
+        for (s, e), gp_mean in crispr_.groupby(["start", "end"])["fold_change"]:
+            ax.plot(
+                (s / scale, e / scale),
+                (gp_mean.mean(), gp_mean.mean()),
+                alpha=1.0,
+                c=cls.PAL_DBGD[2],
+                zorder=3,
+                label="CRISPR-Cas9 segment mean",
+                lw=2,
+            )
 
         # Plot segments
-        for s, e, cn in ascat_[['start', 'end', 'copy_number']].values:
-            ax.plot((s / scale, e / scale), (cn, cn), alpha=1., c=cls.PAL_DBGD[0], zorder=3, label='Copy-number segment', lw=2)
+        for s, e, cn in ascat_[["start", "end", "copy_number"]].values:
+            ax.plot(
+                (s / scale, e / scale),
+                (cn, cn),
+                alpha=1.0,
+                c=cls.PAL_DBGD[0],
+                zorder=3,
+                label="Copy-number segment",
+                lw=2,
+            )
 
         # Highlight
         if highlight is not None:
-            for ic, i in zip(*(sns.color_palette('tab20', n_colors=len(highlight)), highlight)):
+            for ic, i in zip(
+                *(sns.color_palette("tab20", n_colors=len(highlight)), highlight)
+            ):
                 if i in crispr_gene_.index:
                     ax.scatter(
-                        crispr_gene_['location'].loc[i] / scale, crispr_gene_['fold_change'].loc[i], s=14, marker='X', lw=0, c=ic, alpha=.9, label=i
+                        crispr_gene_["location"].loc[i] / scale,
+                        crispr_gene_["fold_change"].loc[i],
+                        s=14,
+                        marker="X",
+                        lw=0,
+                        c=ic,
+                        alpha=0.9,
+                        label=i,
                     )
         # Misc
-        ax.axhline(0, lw=.3, ls='-', color='black')
+        ax.axhline(0, lw=0.3, ls="-", color="black")
 
         # Cytobads
         cytobands = Utils.get_cytobands(chrm=chrm)
 
-        for i, (s, e, t) in enumerate(cytobands[['start', 'end', 'band']].values):
-            if t == 'acen':
-                ax.axvline(s / scale, lw=.2, ls='-', color=cls.PAL_DBGD[0], alpha=.1)
-                ax.axvline(e / scale, lw=.2, ls='-', color=cls.PAL_DBGD[0], alpha=.1)
+        for i, (s, e, t) in enumerate(cytobands[["start", "end", "band"]].values):
+            if t == "acen":
+                ax.axvline(s / scale, lw=0.2, ls="-", color=cls.PAL_DBGD[0], alpha=0.1)
+                ax.axvline(e / scale, lw=0.2, ls="-", color=cls.PAL_DBGD[0], alpha=0.1)
 
             elif not i % 2:
                 ax.axvspan(s / scale, e / scale, alpha=0.1, facecolor=cls.PAL_DBGD[0])
@@ -336,12 +471,17 @@ class QCplot(CrispyPlot):
             by_label = OrderedDict(zip(labels, handles))
             plt.legend()
             ax.legend(
-                by_label.values(), by_label.keys(), loc='center left', bbox_to_anchor=(1, 0.5), prop={'size': legend_size}, frameon=False
+                by_label.values(),
+                by_label.keys(),
+                loc="center left",
+                bbox_to_anchor=(1, 0.5),
+                prop={"size": legend_size},
+                frameon=False,
             )
 
-        ax.set_xlim(crispr_['start'].min() / scale, crispr_['end'].max() / scale)
+        ax.set_xlim(crispr_["start"].min() / scale, crispr_["end"].max() / scale)
 
-        ax.tick_params(axis='both', which='major', labelsize=5)
+        ax.tick_params(axis="both", which="major", labelsize=5)
 
         ax.yaxis.set_major_locator(plticker.MultipleLocator(base=tick_base))
 
@@ -349,8 +489,20 @@ class QCplot(CrispyPlot):
 
     @classmethod
     def plot_rearrangements(
-            cls, brass_bedpe, ascat_bed, crispy_bed, chrm, chrm_size=None, xlim=None, scale=1e6, show_legend=True,
-            unfold_inversions=False, sv_alpha=1., sv_lw=.3, highlight=None, mark_essential=False
+        cls,
+        brass_bedpe,
+        ascat_bed,
+        crispy_bed,
+        chrm,
+        chrm_size=None,
+        xlim=None,
+        scale=1e6,
+        show_legend=True,
+        unfold_inversions=False,
+        sv_alpha=1.0,
+        sv_lw=0.3,
+        highlight=None,
+        mark_essential=False,
     ):
         # - Define default params
         chrm_size = Utils.CHR_SIZES_HG19 if chrm_size is None else chrm_size
@@ -359,122 +511,259 @@ class QCplot(CrispyPlot):
 
         # - Build data-frames
         # BRASS
-        brass_ = brass_bedpe[(brass_bedpe['chr1'] == chrm) | (brass_bedpe['chr2'] == chrm)]
+        brass_ = brass_bedpe[
+            (brass_bedpe["chr1"] == chrm) | (brass_bedpe["chr2"] == chrm)
+        ]
 
         # ASCAT
         ascat_ = ascat_bed.query(f"chr == '{chrm}'")
 
         # CRISPR
-        crispr_ = crispy_bed[crispy_bed['chr'] == chrm]
-        crispr_ = crispr_.assign(location=crispr_[['sgrna_start', 'sgrna_end']].mean(1))
+        crispr_ = crispy_bed[crispy_bed["chr"] == chrm]
+        crispr_ = crispr_.assign(location=crispr_[["sgrna_start", "sgrna_end"]].mean(1))
 
-        crispr_gene_ = crispr_.groupby('gene')[['fold_change', 'location']].mean()
+        crispr_gene_ = crispr_.groupby("gene")[["fold_change", "location"]].mean()
 
         if brass_.shape[0] == 0:
             return None, None, None
 
         # - Plot
-        f, (ax1, ax2, ax3) = plt.subplots(3, 1, sharex='all', gridspec_kw={'height_ratios': [1, 2, 2]})
+        f, (ax1, ax2, ax3) = plt.subplots(
+            3, 1, sharex="all", gridspec_kw={"height_ratios": [1, 2, 2]}
+        )
 
         # Top panel
-        ax1.axhline(0.0, lw=.3, color=cls.PAL_DBGD[0])
+        ax1.axhline(0.0, lw=0.3, color=cls.PAL_DBGD[0])
         ax1.set_ylim(-1, 1)
 
         # Middle panel
         for i, (_, s, e, cn) in ascat_.iterrows():
-            ax2.plot((s / scale, e / scale), (cn, cn), alpha=1., c=cls.PAL_DBGD[2], zorder=3, label='ASCAT', lw=2)
+            ax2.plot(
+                (s / scale, e / scale),
+                (cn, cn),
+                alpha=1.0,
+                c=cls.PAL_DBGD[2],
+                zorder=3,
+                label="ASCAT",
+                lw=2,
+            )
 
         # Bottom panel
-        ax3.scatter(crispr_['location'] / scale, crispr_['fold_change'], s=1, alpha=.5, lw=0, c=cls.PAL_DBGD[1], label='CRISPR-Cas9', zorder=1)
-        ax3.axhline(0.0, lw=.3, color=cls.PAL_DBGD[0])
+        ax3.scatter(
+            crispr_["location"] / scale,
+            crispr_["fold_change"],
+            s=1,
+            alpha=0.5,
+            lw=0,
+            c=cls.PAL_DBGD[1],
+            label="CRISPR-Cas9",
+            zorder=1,
+        )
+        ax3.axhline(0.0, lw=0.3, color=cls.PAL_DBGD[0])
 
-        for (s, e), gp_mean in crispr_.groupby(['start', 'end'])['fold_change']:
-            ax3.plot((s / scale, e / scale), (gp_mean.mean(), gp_mean.mean()), alpha=1., c=cls.PAL_DBGD[2], zorder=3, label='Segment mean', lw=2)
+        for (s, e), gp_mean in crispr_.groupby(["start", "end"])["fold_change"]:
+            ax3.plot(
+                (s / scale, e / scale),
+                (gp_mean.mean(), gp_mean.mean()),
+                alpha=1.0,
+                c=cls.PAL_DBGD[2],
+                zorder=3,
+                label="Segment mean",
+                lw=2,
+            )
 
         if mark_essential:
             ess = Utils.get_adam_core_essential()
             ax3.scatter(
-                crispr_gene_.reindex(ess)['location'] / scale, crispr_gene_.reindex(ess)['fold_change'], s=5, marker='x', lw=.3, c=cls.PAL_DBGD[1],
-                alpha=.4, edgecolors='#fc8d62', label='Core-essential'
+                crispr_gene_.reindex(ess)["location"] / scale,
+                crispr_gene_.reindex(ess)["fold_change"],
+                s=5,
+                marker="x",
+                lw=0.3,
+                c=cls.PAL_DBGD[1],
+                alpha=0.4,
+                edgecolors="#fc8d62",
+                label="Core-essential",
             )
 
         # Highlight
         if highlight is not None:
-            for ic, i in zip(*(sns.color_palette('tab20', n_colors=len(highlight)), highlight)):
+            for ic, i in zip(
+                *(sns.color_palette("tab20", n_colors=len(highlight)), highlight)
+            ):
                 if i in crispr_.index:
-                    ax3.scatter(crispr_.loc[i, 'location'] / scale, crispr_.loc[i]['fold_change'], s=14, marker='X', lw=0, c=ic, alpha=.9, label=i)
+                    ax3.scatter(
+                        crispr_.loc[i, "location"] / scale,
+                        crispr_.loc[i]["fold_change"],
+                        s=14,
+                        marker="X",
+                        lw=0,
+                        c=ic,
+                        alpha=0.9,
+                        label=i,
+                    )
 
         #
-        for c1, s1, e1, c2, s2, e2, st1, st2, sv in brass_[['chr1', 'start1', 'end1', 'chr2', 'start2', 'end2', 'strand1', 'strand2', 'svclass']].values:
+        for c1, s1, e1, c2, s2, e2, st1, st2, sv in brass_[
+            [
+                "chr1",
+                "start1",
+                "end1",
+                "chr2",
+                "start2",
+                "end2",
+                "strand1",
+                "strand2",
+                "svclass",
+            ]
+        ].values:
             stype = Utils.svtype(st1, st2, sv, unfold_inversions)
             stype_col = cls.SV_PALETTE[stype]
 
-            zorder = 2 if stype == 'tandem-duplication' else 1
+            zorder = 2 if stype == "tandem-duplication" else 1
 
             x1_mean, x2_mean = np.mean([s1, e1]), np.mean([s2, e2])
 
             # Plot arc
             if c1 == c2:
-                angle = 0 if stype in ['tandem-duplication', 'deletion'] else 180
+                angle = 0 if stype in ["tandem-duplication", "deletion"] else 180
 
                 xy = (np.mean([x1_mean, x2_mean]) / scale, 0)
 
                 ax1.add_patch(
-                    Arc(xy, (x2_mean - x1_mean) / scale, 1., angle=angle, theta1=0, theta2=180, edgecolor=stype_col, lw=sv_lw, zorder=zorder, alpha=sv_alpha)
+                    Arc(
+                        xy,
+                        (x2_mean - x1_mean) / scale,
+                        1.0,
+                        angle=angle,
+                        theta1=0,
+                        theta2=180,
+                        edgecolor=stype_col,
+                        lw=sv_lw,
+                        zorder=zorder,
+                        alpha=sv_alpha,
+                    )
                 )
 
             # Plot segments
             for ymin, ymax, ax in [(-1, 0.5, ax1), (-1, 1, ax2), (0, 1, ax3)]:
                 if (c1 == chrm) and (xlim[0] <= x1_mean <= xlim[1]):
                     ax.axvline(
-                        x=x1_mean / scale, ymin=ymin, ymax=ymax, c=stype_col, linewidth=sv_lw, zorder=zorder, clip_on=False, label=stype, alpha=sv_alpha
+                        x=x1_mean / scale,
+                        ymin=ymin,
+                        ymax=ymax,
+                        c=stype_col,
+                        linewidth=sv_lw,
+                        zorder=zorder,
+                        clip_on=False,
+                        label=stype,
+                        alpha=sv_alpha,
                     )
 
                 if (c2 == chrm) and (xlim[0] <= x2_mean <= xlim[1]):
                     ax.axvline(
-                        x=x2_mean / scale, ymin=ymin, ymax=ymax, c=stype_col, linewidth=sv_lw, zorder=zorder, clip_on=False, label=stype, alpha=sv_alpha
+                        x=x2_mean / scale,
+                        ymin=ymin,
+                        ymax=ymax,
+                        c=stype_col,
+                        linewidth=sv_lw,
+                        zorder=zorder,
+                        clip_on=False,
+                        label=stype,
+                        alpha=sv_alpha,
                     )
 
             # Translocation label
-            if stype == 'translocation':
+            if stype == "translocation":
                 if (c1 == chrm) and (xlim[0] <= x1_mean <= xlim[1]):
-                    ax1.text(x1_mean / scale, 0, ' to {}'.format(c2), color=stype_col, ha='center', fontsize=5, rotation=90, va='bottom')
+                    ax1.text(
+                        x1_mean / scale,
+                        0,
+                        " to {}".format(c2),
+                        color=stype_col,
+                        ha="center",
+                        fontsize=5,
+                        rotation=90,
+                        va="bottom",
+                    )
 
                 if (c2 == chrm) and (xlim[0] <= x2_mean <= xlim[1]):
-                    ax1.text(x2_mean / scale, 0, ' to {}'.format(c1), color=stype_col, ha='center', fontsize=5, rotation=90, va='bottom')
+                    ax1.text(
+                        x2_mean / scale,
+                        0,
+                        " to {}".format(c1),
+                        color=stype_col,
+                        ha="center",
+                        fontsize=5,
+                        rotation=90,
+                        va="bottom",
+                    )
 
         #
         if show_legend:
-            by_label = {l.capitalize(): p for p, l in zip(*(ax2.get_legend_handles_labels())) if l in cls.SV_PALETTE}
-            ax1.legend(by_label.values(), by_label.keys(), loc='center left', bbox_to_anchor=(1.02, 0.5), prop={'size': 6}, frameon=False)
+            by_label = {
+                l.capitalize(): p
+                for p, l in zip(*(ax2.get_legend_handles_labels()))
+                if l in cls.SV_PALETTE
+            }
+            ax1.legend(
+                by_label.values(),
+                by_label.keys(),
+                loc="center left",
+                bbox_to_anchor=(1.02, 0.5),
+                prop={"size": 6},
+                frameon=False,
+            )
 
-            by_label = {l: p for p, l in zip(*(ax2.get_legend_handles_labels())) if l not in cls.SV_PALETTE}
-            ax2.legend(by_label.values(), by_label.keys(), loc='center left', bbox_to_anchor=(1.02, 0.5), prop={'size': 6}, frameon=False)
+            by_label = {
+                l: p
+                for p, l in zip(*(ax2.get_legend_handles_labels()))
+                if l not in cls.SV_PALETTE
+            }
+            ax2.legend(
+                by_label.values(),
+                by_label.keys(),
+                loc="center left",
+                bbox_to_anchor=(1.02, 0.5),
+                prop={"size": 6},
+                frameon=False,
+            )
 
-            by_label = {l: p for p, l in zip(*(ax3.get_legend_handles_labels())) if l not in cls.SV_PALETTE}
-            ax3.legend(by_label.values(), by_label.keys(), loc='center left', bbox_to_anchor=(1.02, 0.5), prop={'size': 6}, frameon=False)
+            by_label = {
+                l: p
+                for p, l in zip(*(ax3.get_legend_handles_labels()))
+                if l not in cls.SV_PALETTE
+            }
+            ax3.legend(
+                by_label.values(),
+                by_label.keys(),
+                loc="center left",
+                bbox_to_anchor=(1.02, 0.5),
+                prop={"size": 6},
+                frameon=False,
+            )
 
         #
-        ax1.axis('off')
+        ax1.axis("off")
 
         #
-        ax2.set_ylim(0, np.ceil(ascat_['copy_number'].quantile(0.9999) + .5))
+        ax2.set_ylim(0, np.ceil(ascat_["copy_number"].quantile(0.9999) + 0.5))
 
         #
-        ax2.yaxis.set_major_locator(plticker.MultipleLocator(base=2.))
-        ax3.yaxis.set_major_locator(plticker.MultipleLocator(base=1.))
+        ax2.yaxis.set_major_locator(plticker.MultipleLocator(base=2.0))
+        ax3.yaxis.set_major_locator(plticker.MultipleLocator(base=1.0))
 
         #
-        ax2.tick_params(axis='both', which='major', labelsize=6)
-        ax3.tick_params(axis='both', which='major', labelsize=6)
+        ax2.tick_params(axis="both", which="major", labelsize=6)
+        ax3.tick_params(axis="both", which="major", labelsize=6)
 
         #
-        ax1.set_ylabel('SV')
-        ax2.set_ylabel('Copy-number', fontsize=7)
-        ax3.set_ylabel('Loss of fitness', fontsize=7)
+        ax1.set_ylabel("SV")
+        ax2.set_ylabel("Copy-number", fontsize=7)
+        ax3.set_ylabel("Loss of fitness", fontsize=7)
 
         #
-        plt.xlabel('Position on chromosome {} (Mb)'.format(chrm.replace('chr', '')))
+        plt.xlabel("Position on chromosome {} (Mb)".format(chrm.replace("chr", "")))
 
         #
         plt.xlim(xlim[0] / scale, xlim[1] / scale)

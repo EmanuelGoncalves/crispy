@@ -238,22 +238,18 @@ class LMModels:
         mburden=True,
         ploidy=True,
         institute=False,
-        institute_file="crispr/CRISPR_Institute_Origin_20191108.csv.gz",
     ):
         from crispy.DataImporter import Sample
 
         # Imports
         samplesheet = Sample().samplesheet
-        cinstitute = pd.read_csv(
-            f"{DPATH}/{institute_file}", index_col=0, header=None
-        ).iloc[:, 0]
 
         # Covariates
         covariates = []
 
         # CRISPR institute of origin
         if institute:
-            covariates.append(pd.get_dummies(cinstitute).astype(int))
+            covariates.append(pd.get_dummies(samplesheet["institute"]).astype(int))
 
         # Cell lines culture conditions
         if medium:
