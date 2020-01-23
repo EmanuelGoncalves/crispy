@@ -237,7 +237,7 @@ class LMModels:
         cancertype=True,
         mburden=True,
         ploidy=True,
-        institute=False,
+        institute=True,
     ):
         from crispy.DataImporter import Sample
 

@@ -34,7 +34,7 @@ class Sample:
         index="model_id",
         samplesheet_file="model_list_20200107.csv",
         growth_file="GrowthRates_v1.3.0_20190222.csv",
-        institute_file="crispr/CRISPR_Institute_Origin_20191108.csv.gz"
+        institute_file="crispr/CRISPR_Institute_Origin_20191108.csv.gz",
     ):
         self.index = index
 
@@ -55,9 +55,12 @@ class Sample:
         )
 
         # CRISPR institute
-        self.samplesheet["institute"] = pd.read_csv(
-            f"{DPATH}/{institute_file}", index_col=0, header=None
-        ).iloc[:, 0].reindex(self.samplesheet.index).values
+        self.samplesheet["institute"] = (
+            pd.read_csv(f"{DPATH}/{institute_file}", index_col=0, header=None)
+            .iloc[:, 0]
+            .reindex(self.samplesheet.index)
+            .values
+        )
 
     def get_covariates(self, culture_conditions=True, cancer_type=True):
         covariates = []
@@ -84,12 +87,15 @@ class WES:
     def __init__(self, wes_file="WES_variants.csv.gz"):
         self.wes = pd.read_csv(f"{DPATH}/wes/{wes_file}")
 
-    def get_data(self, as_matrix=True, mutation_class=None):
+    def get_data(self, as_matrix=True, mutation_class=None, recurrence=False):
         df = self.wes.copy()
 
         # Filter my mutation types
         if mutation_class is not None:
             df = df[df["Classification"].isin(mutation_class)]
+
+        if recurrence:
+            df = df[df["Recurrence Filter"] == "Yes"]
 
         if as_matrix:
             df["value"] = 1
@@ -105,8 +111,17 @@ class WES:
 
         return df
 
-    def filter(self, subset=None, min_events=5, as_matrix=True, mutation_class=None):
-        df = self.get_data(as_matrix=as_matrix, mutation_class=mutation_class)
+    def filter(
+        self,
+        subset=None,
+        min_events=5,
+        as_matrix=True,
+        mutation_class=None,
+        recurrence=False,
+    ):
+        df = self.get_data(
+            as_matrix=as_matrix, mutation_class=mutation_class, recurrence=recurrence
+        )
 
         # Subset samples
         if subset is not None:
@@ -291,7 +306,7 @@ class Proteomics:
         self,
         protein_matrix="proteomics/E0022_P02-P03_protein_matrix.txt",
         manifest="proteomics/E0022_P02-P03_sample_mapping.txt",
-        replicates_corr="proteomics/replicates_corr.csv.gz"
+        replicates_corr="proteomics/replicates_corr.csv.gz",
     ):
         deprecated_ids = self.map_deprecated()
 
@@ -358,7 +373,11 @@ class Proteomics:
         replicate_thres=0.8,
         quantile_normalise=False,
     ):
-        df = self.get_data(dtype=dtype, quantile_normalise=quantile_normalise, replicate_thres=replicate_thres)
+        df = self.get_data(
+            dtype=dtype,
+            quantile_normalise=quantile_normalise,
+            replicate_thres=replicate_thres,
+        )
 
         # Subset matrices
         if subset is not None:
@@ -693,7 +712,9 @@ class Methylation:
     Import module for Illumina Methylation 450k arrays
     """
 
-    def __init__(self, methy_gene_promoter="methylation/methy_beta_gene_promoter.csv.gz"):
+    def __init__(
+        self, methy_gene_promoter="methylation/methy_beta_gene_promoter.csv.gz"
+    ):
         self.methy_promoter = pd.read_csv(f"{DPATH}/{methy_gene_promoter}", index_col=0)
 
     def get_data(self):

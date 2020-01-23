@@ -23,14 +23,12 @@ import numpy as np
 import pandas as pd
 import pkg_resources
 import seaborn as sns
-from scipy import stats
 import matplotlib.pyplot as plt
-from crispy.QCPlot import QCplot
+from scipy import stats
+from crispy.GIPlot import GIPlot
 from crispy.CrispyPlot import CrispyPlot
-from swath_proteomics.GIPlot import GIPlot
 from swath_proteomics.LMModels import LMModels
-from sklearn.metrics import roc_auc_score, roc_curve
-from crispy.DataImporter import Proteomics, CORUM, GeneExpression
+from crispy.DataImporter import Proteomics, GeneExpression
 
 
 LOG = logging.getLogger("Crispy")

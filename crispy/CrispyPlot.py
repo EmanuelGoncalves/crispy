@@ -2,6 +2,7 @@
 # Copyright (C) 2019 Emanuel Goncalves
 
 import numpy as np
+import pandas as pd
 import seaborn as sns
 import matplotlib.colors as colors
 from natsort import natsorted
@@ -77,7 +78,10 @@ class CrispyPlot:
     )
 
     PAL_GROWTH_CONDITIONS = {
-        "Adherent": "#fb8072", "Semi-Adherent": "#80b1d3", "Suspension": "#fdb462", "Unknown": "#d9d9d9"
+        "Adherent": "#fb8072",
+        "Semi-Adherent": "#80b1d3",
+        "Suspension": "#fdb462",
+        "Unknown": "#d9d9d9",
     }
 
     SV_PALETTE = {
@@ -133,6 +137,23 @@ class CrispyPlot:
             )
 
         return zz
+
+    @classmethod
+    def get_palettes(cls, samples, samplesheet):
+        samples = set(samples).intersection(samplesheet.index)
+
+        pal_tissue = {
+            s: cls.PAL_TISSUE_2[samplesheet.loc[s, "tissue"]] for s in samples
+        }
+
+        pal_growth = {
+            s: cls.PAL_GROWTH_CONDITIONS[samplesheet.loc[s, "growth_properties"]]
+            for s in samples
+        }
+
+        palettes = pd.DataFrame(dict(tissue=pal_tissue, media=pal_growth))
+
+        return palettes
 
 
 class MidpointNormalize(colors.Normalize):

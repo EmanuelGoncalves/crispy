@@ -3,12 +3,10 @@
 
 import numpy as np
 import seaborn as sns
-import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 from natsort import natsorted
 from scipy.stats import pearsonr
-from adjustText import adjust_text
 from crispy.CrispyPlot import CrispyPlot, MidpointNormalize
 
 
@@ -336,107 +334,3 @@ class GIPlot(CrispyPlot):
         ax.grid(True, ls="-", lw=0.1, alpha=1.0, zorder=0)
 
         return ax
-
-
-class MOFAPlot(CrispyPlot):
-    @classmethod
-    def variance_explained_heatmap(cls, df_r2, row_order=None):
-        nrows, ncols = df_r2.shape
-        row_order = list(df_r2.index) if row_order is None else row_order
-
-        f, (axh, axb) = plt.subplots(
-            1,
-            2,
-            sharex="col",
-            sharey="row",
-            figsize=(0.3 * ncols, 0.3 * nrows),
-            gridspec_kw=dict(width_ratios=[4, 1]),
-        )
-
-        # Heatmap
-        g = sns.heatmap(
-            df_r2.loc[row_order],
-            cmap="Greys",
-            annot=True,
-            cbar=False,
-            fmt=".2f",
-            linewidths=0.5,
-            ax=axh,
-            annot_kws={"fontsize": 5},
-        )
-        axh.set_xlabel("Factors")
-        axh.set_ylabel("Data-sets")
-        axh.set_title("Variance explained per factor")
-        axh.grid(True, ls="-", lw=0.1, alpha=1.0, zorder=0)
-        g.set_yticklabels(g.get_yticklabels(), rotation=0, horizontalalignment="right")
-
-        # Barplot
-        i_sums = df_r2.loc[row_order[::-1]].sum(1)
-
-        norm = mpl.colors.Normalize(vmin=0, vmax=i_sums.max())
-        colors = [plt.cm.Greys(norm(v)) for v in i_sums]
-
-        axb.barh(np.arange(len(row_order)) + 0.5, i_sums, color=colors, linewidth=0)
-        axb.set_xlabel("R2")
-        axb.set_ylabel("")
-        axb.set_title("Total variance per data-set")
-        axb.grid(True, ls="-", lw=0.1, alpha=1.0, zorder=0, axis="x")
-
-        plt.subplots_adjust(hspace=0, wspace=0.05)
-
-    @classmethod
-    def factors_weights(cls, factor_weights, dataset, cmap="RdYlGn"):
-        nrows, ncols = factor_weights[dataset].shape
-        fig = sns.clustermap(
-            factor_weights[dataset],
-            cmap=cmap,
-            center=0,
-            figsize=(0.25 * ncols, min(0.01 * nrows, 10)),
-        )
-        fig.ax_heatmap.set_xlabel("Factors")
-        fig.ax_heatmap.set_ylabel(f"{dataset} features")
-
-    @classmethod
-    def factor_weights_scatter(cls, weights, dataset, factor, n_features=30, fontsize=4, r2=None):
-        df = cls.get_top_features(weights, dataset, factor, n_features).reset_index()
-
-        fig, ax = plt.subplots(1, 1, figsize=(2.5, 2), dpi=600)
-
-        ax.scatter(df.index, df[factor], marker="o", edgecolor="", s=5, alpha=0.8, c=cls.PAL_DTRACE[2])
-
-        texts = [
-            plt.text(i, w, g, color="k", fontsize=fontsize) for i, (g, w) in df.iterrows()
-        ]
-        adjust_text(
-            texts, arrowprops=dict(arrowstyle="-", color="k", alpha=0.75, lw=0.3)
-        )
-
-        ax.set_ylabel("Loading" if r2 is None else f"Loading ({r2.loc[dataset, factor]:.2f}%)")
-        ax.set_xlabel("Rank position")
-        ax.set_title(f"Data-set: {dataset}; Factor: {factor}; Top {n_features} features")
-        ax.grid(True, ls="-", lw=0.1, alpha=1.0, zorder=0)
-
-        return ax
-
-    @classmethod
-    def data_heatmap(cls, df, cmap="RdYlGn", title="", center=None, col_colors=None, row_colors=None, mask=None):
-        nrows, ncols = df.shape
-        fig = sns.clustermap(
-            df,
-            mask=mask,
-            cmap=cmap,
-            center=center,
-            col_colors=col_colors,
-            row_colors=row_colors,
-            xticklabels=False,
-            figsize=(min(0.2 * ncols, 15), min(0.2 * nrows, 15)),
-        )
-        fig.ax_heatmap.set_xlabel("Samples")
-        fig.ax_heatmap.set_ylabel(f"Features")
-        fig.ax_col_dendrogram.set_title(title)
-
-    @staticmethod
-    def get_top_features(weights, dataset, factor, n_features=30):
-        df = weights[dataset][factor]
-        df = df.loc[df.abs().sort_values(ascending=False).head(n_features).index]
-        return df.sort_values()

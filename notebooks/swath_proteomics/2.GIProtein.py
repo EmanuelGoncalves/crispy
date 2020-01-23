@@ -19,16 +19,10 @@
 # %autoreload 2
 
 import logging
-import numpy as np
 import pandas as pd
 import pkg_resources
-import seaborn as sns
 import matplotlib.pyplot as plt
-from crispy.QCPlot import QCplot
-from crispy.CrispyPlot import CrispyPlot
-from swath_proteomics.GIPlot import GIPlot
-from swath_proteomics.LMModels import LMModels
-from sklearn.metrics import roc_auc_score, roc_curve
+from data.GIPlot import GIPlot
 from crispy.DataImporter import (
     Proteomics,
     CORUM,

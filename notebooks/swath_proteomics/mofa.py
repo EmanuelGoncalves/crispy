@@ -18,31 +18,22 @@
 # %load_ext autoreload
 # %autoreload 2
 
-import io
 import gseapy
 import logging
 import numpy as np
 import pandas as pd
 import pkg_resources
-import seaborn as sns
 import matplotlib.pyplot as plt
-from crispy.QCPlot import QCplot
 from crispy.Enrichment import Enrichment
-from crispy.CrispyPlot import CrispyPlot
 from swath_proteomics.LMModels import LMModels
-from mofapy2.run.entry_point import entry_point
-from swath_proteomics.GIPlot import GIPlot, MOFAPlot
-from sklearn.metrics import roc_auc_score, roc_curve
+from data.GIPlot import GIPlot, MOFAPlot
 from crispy.DataImporter import (
     Proteomics,
-    CORUM,
-    BioGRID,
     GeneExpression,
     Methylation,
     CRISPR,
     Sample,
     WES,
-    CopyNumber,
 )
 
 
@@ -79,21 +70,15 @@ LOG.info(f"Samples: {len(samples)}")
 
 # Filter data-sets
 #
-prot = prot.filter(subset=samples, perc_measures=0.75, replicate_thres=0.8)
-prot.columns.name = "sample"
-prot.index.name = "feature"
+prot = prot.filter(subset=samples, perc_measures=0.75, replicate_thres=0.7)
 LOG.info(f"Proteomics: {prot.shape}")
 
 gexp = gexp.filter(subset=samples)
 gexp = gexp.loc[gexp.std(1) > 1]
-gexp.columns.name = "sample"
-gexp.index.name = "feature"
 LOG.info(f"Transcriptomics: {gexp.shape}")
 
 methy = methy.filter(subset=samples)
 methy = methy.loc[methy.std(1) > 0.1]
-methy.columns.name = "sample"
-methy.index.name = "feature"
 LOG.info(f"Methylation: {methy.shape}")
 
 crispr = crispr.filter(subset=samples, abs_thres=0.5, min_events=3)
@@ -101,82 +86,6 @@ LOG.info(f"CRISPR: {crispr.shape}")
 
 wes = wes.filter(subset=samples, min_events=5)
 LOG.info(f"WES: {wes.shape}")
-
-
-# Genes
-#
-genes = list(set.intersection(set(prot.index), set(gexp.index)))
-LOG.info(f"Genes: {len(genes)}")
-
-
-# Run MOFA
-#
-
-# Prepare data
-view_labels = ["prot", "gexp", "methy"]
-datasets = [prot, gexp, methy]
-data = (
-    pd.concat(
-        [
-            prot[samples].unstack().rename("value").reset_index().assign(view="prot"),
-            gexp[samples].unstack().rename("value").reset_index().assign(view="gexp"),
-            methy[samples].unstack().rename("value").reset_index().assign(view="methy"),
-        ],
-        ignore_index=True,
-    )
-    .assign(group="gdsc")
-    .dropna()
-)
-
-# Number of factors
-n_factors = 15
-factors_labels = [f"F{i+1}" for i in range(n_factors)]
-
-# Initialise entry point
-ep = entry_point()
-
-# Set data options
-ep.set_data_options(scale_groups=False, scale_views=True)
-ep.set_data_df(data)
-
-# Set model options
-ep.set_model_options(factors=n_factors)
-
-# Set training options
-ep.set_train_options(
-    iter=1000,
-    convergence_mode="slow",
-    startELBO=1,
-    freqELBO=1,
-    dropR2=None,
-    verbose=True,
-)
-
-# Build and run MOFA
-ep.build()
-ep.run()
-
-# Extract factors (per group)
-factors = pd.DataFrame(
-    ep.model.nodes["Z"].getExpectation(), index=samples, columns=factors_labels
-)
-
-# Extract weights (per view)
-weights = {
-    n: pd.DataFrame(
-        ep.model.nodes["W"].getExpectation()[i],
-        index=datasets[i].index,
-        columns=factors_labels,
-    )
-    for i, n in enumerate(view_labels)
-}
-
-# Extract variance explained
-r2 = pd.DataFrame(
-    ep.model.calculate_variance_explained()[0],
-    index=view_labels,
-    columns=factors_labels,
-)
 
 
 # Batch effects on proteomics
