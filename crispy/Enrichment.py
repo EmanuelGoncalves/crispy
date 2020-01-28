@@ -229,14 +229,15 @@ class Enrichment:
                 signature=geneset[gset], background=background, sublist=sublist
             )
 
-            ssgsea_geneset.append(
-                dict(
-                    gset=gset,
-                    p_value=p_value,
-                    len_sig=len(geneset[gset]),
-                    len_intersection=intersection,
+            if intersection >= self.sig_min_len:
+                ssgsea_geneset.append(
+                    dict(
+                        gset=gset,
+                        p_value=p_value,
+                        len_sig=len(geneset[gset]),
+                        len_intersection=intersection,
+                    )
                 )
-            )
 
         ssgsea_geneset = (
             pd.DataFrame(ssgsea_geneset).set_index("gset").sort_values("p_value")

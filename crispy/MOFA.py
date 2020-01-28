@@ -67,7 +67,7 @@ class MOFA:
 
         # Samples
         self.samples = set.intersection(
-            *[set(df.index) for k, df in self.views.items()]
+            *[set(self.views[v]) for v in self.views_labels]
         )
 
         if self.covariates is not None:
@@ -90,20 +90,16 @@ class MOFA:
         self.data = []
 
         for k in self.views_labels:
-            self.views[k].index.name = "sample"
-            self.views[k].columns.name = "feature"
-            self.data.append(
-                self.views[k]
-                .loc[self.samples]
-                .unstack()
-                .rename("value")
-                .reset_index()
-                .assign(view=k)
-            )
+            df = self.views[k][self.samples].copy()
+            df.index.name = "feature"
+            df.columns.name = "sample"
 
-        self.data = (
-            pd.concat(self.data, ignore_index=True).assign(group="gdsc").dropna()
-        )
+            df = df.unstack().rename("value").reset_index()
+
+            self.data.append(df.assign(view=k))
+
+        self.data = pd.concat(self.data, ignore_index=True).assign(group="gdsc")
+        self.data = self.data[["sample", "feature", "view", "group", "value"]].dropna()
 
         # Initialise entry point
         self.ep = entry_point()
@@ -175,14 +171,14 @@ class MOFA:
             views_[k] = pd.DataFrame(
                 {
                     i: self.lm_residuals(
-                        self.views[k][i],
+                        self.views[k].loc[i],
                         self.covariates,
                         fit_intercept=fit_intercept,
                         add_intercept=add_intercept,
                     )
-                    for i in self.views[k]
+                    for i in self.views[k].index
                 }
-            )
+            ).T[self.samples]
 
         return views_
 
@@ -197,10 +193,10 @@ class MOFA:
         return {
             k: pd.DataFrame(
                 self.ep.model.nodes["W"].getExpectation()[i],
-                index=df.columns,
+                index=self.views[k].index,
                 columns=self.factors_labels,
             )
-            for i, (k, df) in enumerate(self.views.items())
+            for i, k in enumerate(self.views_labels)
         }
 
     def get_rsquare(self):
@@ -236,6 +232,9 @@ class MOFA:
         df = self.weights[view][factor]
         df = df.loc[df.abs().sort_values(ascending=False).head(n_features).index]
         return df.sort_values()
+
+    def get_factor_view_weights(self, factor):
+        return pd.DataFrame({v: self.weights[v][factor] for v in self.weights})
 
 
 class MOFAPlot(CrispyPlot):
@@ -350,9 +349,7 @@ class MOFAPlot(CrispyPlot):
         n_features=30,
     ):
         df = mofa_obj.views[view]
-        df = df[
-            mofa_obj.get_top_features(view, factor, n_features=n_features).index
-        ].T
+        df = df.loc[mofa_obj.get_top_features(view, factor, n_features=n_features).index]
 
         if mask is None:
             mask = df.isnull()
@@ -371,7 +368,7 @@ class MOFAPlot(CrispyPlot):
             col_colors=col_colors,
             row_colors=row_colors,
             xticklabels=False,
-            figsize=(min(0.2 * ncols, 15), min(0.2 * nrows, 15)),
+            figsize=(min(0.1 * ncols, 15), min(0.1 * nrows, 15)),
         )
         fig.ax_heatmap.set_xlabel("Samples")
         fig.ax_heatmap.set_ylabel(f"Features")

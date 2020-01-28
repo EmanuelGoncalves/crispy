@@ -24,32 +24,23 @@ import pkg_resources
 import seaborn as sns
 import matplotlib.pyplot as plt
 from crispy.CrispyPlot import CrispyPlot
-from crispy.DataImporter import Proteomics
-from sklearn.preprocessing import quantile_transform
+from crispy.DataImporter import Proteomics, Sample
 
 
-rpath = pkg_resources.resource_filename("notebooks", "swath_proteomics/reports/")
+RPATH = pkg_resources.resource_filename("notebooks", "swath_proteomics/reports/")
 
-# # GDSC baseline cancer cell lines SWATH-Proteomics analysis
+
+# GDSC baseline cancer cell lines SWATH-Proteomics analysis
+#
 
 proteomics = Proteomics()
 
-protein_reps = proteomics.get_data(average_replicates=False)
-protein = proteomics.get_data(average_replicates=False)
+protein_reps = proteomics.get_data(average_replicates=False, replicate_thres=None)
+protein = proteomics.get_data(average_replicates=True, replicate_thres=None)
 
 
-# ## Initial QC
-
-# Number of replicates of cell line per machine
-
-machine = pd.pivot_table(
-    proteomics.manifest, index="SIDM", columns="Instrument", aggfunc=len, fill_value=0
-)["Date"]
-machine["Total"] = machine.sum(1)
-machine.sort_values("Total").head(10)
-
-
-# Plot the distributions of the peptides intensites
+# Protein intensity boxplots
+#
 
 n_rows = len(set(proteomics.manifest["Instrument"]))
 f, axs = plt.subplots(
@@ -73,12 +64,13 @@ for i, (m, df) in enumerate(proteomics.manifest.groupby("Instrument")):
     axs[i].axes.xaxis.set_visible(False)
 
 plt.savefig(
-    f"{rpath}/qc_protein_counts_boxplots.png", bbox_inches="tight", transparent=True
+    f"{RPATH}/0.QC_abundance_boxplots.png", bbox_inches="tight", transparent=True
 )
 plt.close("all")
 
 
 # Sample correlation across cell lines, cancer type and machine
+#
 
 samples_corr = protein_reps.corr()
 samples_corr.columns.name = "sample2"
@@ -114,94 +106,120 @@ samples_corr["same_machine"] = (
     samples_corr["Instrument_1"] == samples_corr["Instrument_2"]
 ).astype(int)
 
-samples_corr.to_csv(f"{rpath}/protein_corr.csv.gz", compression="gzip", index=False)
+samples_corr.to_csv(
+    f"{RPATH}/0.QC_protein_corr.csv.gz", compression="gzip", index=False
+)
 
 
 # Sample correlation boxplots
+#
 
 comparisons = ["same_cell_line", "same_cancer_type", "same_machine"]
 
-f, axs = plt.subplots(
-    1, len(comparisons), dpi=600, figsize=(2, 1.5), sharex="none", sharey="all"
+plot_df = pd.melt(samples_corr, id_vars="pearson", value_vars=comparisons).query(
+    "value == 1"
 )
-for i, n in enumerate(comparisons):
-    label = n[5:]
+plot_df = plot_df.append(samples_corr[["pearson"]].assign(variable="all"))
 
-    sns.boxplot(
-        x=n,
-        y="pearson",
-        data=samples_corr,
-        boxprops=CrispyPlot.BOXPROPS,
-        whiskerprops=CrispyPlot.WHISKERPROPS,
-        medianprops=CrispyPlot.MEDIANPROPS,
-        flierprops=CrispyPlot.FLIERPROPS,
-        palette=CrispyPlot.PAL_DBGD,
-        showcaps=False,
-        ax=axs[i],
+fig, ax = plt.subplots(1, 1, figsize=(2.5, 2), dpi=600)
+sns.violinplot(
+    "pearson",
+    "variable",
+    data=plot_df,
+    cut=0,
+    linewidth=0.5,
+    palette=list(CrispyPlot.PAL_GROWTH_CONDITIONS.values()),
+    ax=ax,
+)
+
+y_labels = []
+for item in ax.get_yticklabels():
+    l = item.get_text()
+    r = plot_df.query(f"variable == '{l}'")["pearson"].mean()
+    y_labels.append(f"{l.replace('_', ' ')} (mean R={r:.2f})")
+
+ax.set_yticklabels(y_labels)
+ax.set_xlabel("Pearson's R")
+ax.set_ylabel("")
+ax.grid(True, axis="x", ls="-", lw=0.1, alpha=1.0, zorder=0)
+plt.savefig(
+    f"{RPATH}/0.QC_samples_correlation.pdf", bbox_inches="tight", transparent=True
+)
+plt.close("all")
+
+
+# Cumulative sum of number of measurements per protein
+#
+
+plot_df = protein.count(1).value_counts().rename("n_proteins")
+plot_df = plot_df.reset_index().rename(columns=dict(index="n_measurements"))
+plot_df = pd.DataFrame(
+    [
+        dict(
+            perc=np.round(v, 1),
+            n_samples=int(np.round(v * protein.shape[1], 0)),
+            n_proteins=plot_df.query(f"n_measurements >= {v * protein.shape[1]}")[
+                "n_proteins"
+            ].sum(),
+        )
+        for v in np.arange(0, 1.1, 0.1)
+    ]
+)
+
+_, ax = plt.subplots(1, 1, figsize=(1.5, 1.5), dpi=600)
+
+ax.bar(
+    plot_df["perc"],
+    plot_df["n_proteins"],
+    width=.1,
+    linewidth=.3,
+    color=CrispyPlot.PAL_DBGD[0],
+)
+
+for i, row in plot_df.iterrows():
+    plt.text(
+        row["perc"],
+        row["n_proteins"] * 0.99,
+        ">0" if row["n_samples"] == 0 else str(int(row["n_samples"])),
+        va="top",
+        ha="center",
+        fontsize=5,
+        zorder=10,
+        rotation=90,
+        color="white",
+
     )
 
-    axs[i].set_title(label)
-    axs[i].set_xlabel("Replicate")
-    if i != 0:
-        axs[i].set_ylabel("")
-
-    axs[i].grid(True, ls="-", lw=0.1, alpha=1.0, zorder=0)
-
-plt.subplots_adjust(wspace=0.075, hspace=0.075)
-plt.savefig(
-    f"{rpath}/qc_protein_corr_boxplot.png", bbox_inches="tight", transparent=True
-)
-plt.close("all")
-
-
-# Histogram of number of measurements per protein
-
-_, ax = plt.subplots(1, 1, figsize=(2.5, 1.5), dpi=600)
-
-sns.distplot(
-    protein.count(1),
-    color=CrispyPlot.PAL_DBGD[0],
-    kde=False,
-    hist_kws=dict(lw=0, alpha=1),
-    label=None,
-    ax=ax,
-)
-
-ax.set_xlabel("Number of measurements")
+ax.set_xlabel("Percentage of cell lines")
 ax.set_ylabel("Number of proteins")
+ax.set_title("Number of quantified proteins")
 ax.grid(True, ls="-", lw=0.1, alpha=1.0, zorder=0)
 
 plt.savefig(
-    f"{rpath}/qc_protein_measurements_histogram.pdf",
+    f"{RPATH}/0.QC_protein_measurements_cumsum.pdf",
     bbox_inches="tight",
     transparent=True,
 )
 plt.close("all")
 
 
-# Histogram of number of measurements per cell line
+# Number of cell lines per tissue
+#
 
-_, ax = plt.subplots(1, 1, figsize=(2.5, 1.5), dpi=600)
+plot_df = Sample().samplesheet.loc[protein.columns, "tissue"].value_counts()
+plot_df = plot_df.rename("count").reset_index()
 
-sns.distplot(
-    protein.count(0),
-    color=CrispyPlot.PAL_DBGD[0],
-    kde=False,
-    hist_kws=dict(lw=0, alpha=1),
-    label=None,
-    ax=ax,
-)
+_, ax = plt.subplots(1, 1, figsize=(2.5, 4.), dpi=600)
 
-ax.set_xlabel("Number of measurements")
-ax.set_ylabel("Number of cell lines")
-ax.grid(True, ls="-", lw=0.1, alpha=1.0, zorder=0)
+sns.barplot("count", "index", data=plot_df, orient="h", palette=CrispyPlot.PAL_TISSUE_2, ax=ax)
 
+ax.set_xlabel("Number of cell lines")
+ax.set_ylabel("")
+
+ax.grid(True, ls="-", lw=0.1, alpha=1.0, zorder=0, axis="x")
 plt.savefig(
-    f"{rpath}/qc_protein_cell_lines_measurements_histogram.pdf",
+    f"{RPATH}/0.QC_tissue_barplot.pdf",
     bbox_inches="tight",
     transparent=True,
 )
 plt.close("all")
-
-
-# Copyright (C) 2019 Emanuel Goncalves

@@ -37,6 +37,11 @@ class CrispyPlot:
         4: "#de2d26",
     }
 
+    PAL_YES_NO = {
+        "No": "#E1E1E1",
+        "Yes": PAL_SET2[1],
+    }
+
     PAL_TISSUE = {
         "Lung": "#c50092",
         "Haematopoietic and Lymphoid": "#00ca5b",
@@ -64,6 +69,7 @@ class CrispyPlot:
         "Vulva": "#ff7580",
         "Placenta": "#994800",
         "Testis": "#875960",
+        "Small Intestine": "fb8072",
         "Adrenal Gland": "#ff8155",
     }
 
@@ -82,6 +88,11 @@ class CrispyPlot:
         "Semi-Adherent": "#80b1d3",
         "Suspension": "#fdb462",
         "Unknown": "#d9d9d9",
+    }
+
+    PAL_MSS = {
+        "MSS": "#d9d9d9",
+        "MSI": "#fb8072",
     }
 
     SV_PALETTE = {

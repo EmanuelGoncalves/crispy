@@ -307,11 +307,9 @@ class Proteomics:
         protein_matrix="proteomics/E0022_P02-P03_protein_matrix.txt",
         manifest="proteomics/E0022_P02-P03_sample_mapping.txt",
         replicates_corr="proteomics/replicates_corr.csv.gz",
+        broad_tmt="proteomics/broad_tmt.csv.gz",
     ):
         deprecated_ids = self.map_deprecated()
-
-        # Import replicates correlation
-        self.rep_corrs = pd.read_csv(f"{DPATH}/{replicates_corr}")
 
         # Import imputed protein levels
         self.protein = pd.read_csv(f"{DPATH}/{protein_matrix}", sep="\t", index_col=0).T
@@ -325,12 +323,31 @@ class Proteomics:
         # Import manifest
         self.manifest = pd.read_csv(f"{DPATH}/{manifest}", index_col=0)
 
+        # Remove excluded samples
+        self.exclude = ["HEK", "h002"]
+        self.exclude_man = self.manifest[self.manifest["SIDM"].isin(self.exclude)]
+
+        self.manifest = self.manifest[~self.manifest.index.isin(self.exclude_man.index)]
+        self.protein = self.protein.drop(columns=self.exclude_man.index)
+
+        # Import replicates correlation
+        self.rep_corrs = pd.read_csv(f"{DPATH}/{replicates_corr}")
+        self.sample_corrs = self.rep_corrs.groupby("SIDM_1")["pearson"].mean()
+
+        # Import Broad TMT data-set
+        self.broad = pd.read_csv(f"{DPATH}/{broad_tmt}", compression="gzip")
+        self.broad = (
+            self.broad.dropna(subset=["Gene_Symbol"])
+            .groupby("Gene_Symbol")
+            .agg(np.nanmean)
+        )
+
     def get_data(
         self,
         dtype="protein",
         average_replicates=True,
         map_ids=True,
-        replicate_thres=0.8,
+        replicate_thres=None,
         quantile_normalise=False,
     ):
         if dtype.lower() == "protein":
@@ -370,7 +387,7 @@ class Proteomics:
         normality=False,
         iqr_range=None,
         perc_measures=0.75,
-        replicate_thres=0.8,
+        replicate_thres=None,
         quantile_normalise=False,
     ):
         df = self.get_data(
@@ -629,7 +646,7 @@ class CopyNumber:
                 }
             )
 
-    def get_data(self, dtype="del"):
+    def get_data(self, dtype="matrix"):
         if dtype == "del":
             res = self.copynumber_del.copy()
 

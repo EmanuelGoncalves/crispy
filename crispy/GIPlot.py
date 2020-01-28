@@ -227,13 +227,14 @@ class GIPlot(CrispyPlot):
     ):
         pal = cls.PAL_DTRACE if palette is None else palette
 
-        grid = sns.JointGrid(x_gene, y_gene, data=plot_df, space=0)
+        fig, ax = plt.subplots(1, 1, figsize=(2.5, 2), dpi=600)
 
         sns.boxplot(
             x=x_gene,
             y=y_gene,
             notch=True,
             data=plot_df,
+            orient=orient,
             boxprops=dict(linewidth=0.3),
             whiskerprops=dict(linewidth=0.3),
             medianprops=cls.MEDIANPROPS,
@@ -241,7 +242,7 @@ class GIPlot(CrispyPlot):
             palette=pal,
             showcaps=False,
             sym="" if stripplot else None,
-            ax=grid.ax_joint,
+            ax=ax,
             saturation=1.0,
         )
 
@@ -251,21 +252,18 @@ class GIPlot(CrispyPlot):
                 y=y_gene,
                 data=plot_df,
                 dodge=True,
+                orient=orient,
                 jitter=0.3,
                 size=1.5,
                 linewidth=0.1,
                 edgecolor="white",
                 palette=pal,
-                ax=grid.ax_joint,
+                ax=ax,
             )
 
-        grid.ax_joint.grid(
-            axis="x" if orient == "v" else "x", lw=0.1, color="#e1e1e1", zorder=0
-        )
+        ax.grid(True, axis="y" if orient == "v" else "x", ls="-", lw=0.1, alpha=1.0, zorder=0)
 
-        plt.gcf().set_size_inches(1, 1.5)
-
-        return grid
+        return ax
 
     @classmethod
     def gi_tissue_plot(cls, x, y, plot_df):

@@ -28,7 +28,6 @@ import pkg_resources
 import seaborn as sns
 from natsort import natsorted
 import matplotlib.pyplot as plt
-from itertools import zip_longest
 from sklearn.manifold import TSNE
 from sklearn.decomposition import PCA
 from crispy.CrispyPlot import CrispyPlot
@@ -119,11 +118,13 @@ def plot_dim_reduction(data, palette=None, ctype="tSNE"):
 
 # Data-sets
 #
+
 prot, gexp = Proteomics(), GeneExpression()
 
 
 # Samples
 #
+
 ss = Sample().samplesheet
 samples = set.intersection(set(prot.get_data()), set(gexp.get_data()))
 LOG.info(f"Samples: {len(samples)}")
@@ -131,7 +132,8 @@ LOG.info(f"Samples: {len(samples)}")
 
 # Filter data-sets
 #
-prot = prot.filter(subset=samples)
+
+prot = prot.filter(subset=samples, replicate_thres=None)
 prot = prot.T.fillna(prot.T.mean()).T
 LOG.info(f"Proteomics: {prot.shape}")
 
@@ -139,16 +141,16 @@ gexp = gexp.filter(subset=samples)
 LOG.info(f"Transcriptomics: {gexp.shape}")
 
 
-# TCGA dimension reduction
+# Dimension reduction
 #
+
 prot_tsne, prot_pca = dim_reduction(prot)
 gexp_tsne, gexp_pca = dim_reduction(gexp)
 
 dimred = dict(
-    tSNE=dict(prot=prot_tsne, gexp=gexp_tsne), pca=dict(prot=prot_pca, gexp=gexp_pca)
+    tSNE=dict(proteomics=prot_tsne, transcriptomics=gexp_tsne),
+    pca=dict(proteomics=prot_pca, transcriptomics=gexp_pca),
 )
-
-pal = pd.read_csv(f"{DPATH}/tissue_palette.csv", index_col=0)["color"]
 
 for ctype in dimred:
     for dtype in dimred[ctype]:
@@ -156,20 +158,11 @@ for ctype in dimred:
             [dimred[ctype][dtype], ss["tissue"]], axis=1, sort=False
         ).dropna()
 
-        ax = plot_dim_reduction(plot_df, ctype=ctype, palette=pal)
+        ax = plot_dim_reduction(plot_df, ctype=ctype, palette=CrispyPlot.PAL_TISSUE_2)
         ax.set_title(f"{ctype} - {dtype}")
         plt.savefig(
-            f"{RPATH}/dimred_{dtype}_{ctype}.pdf", bbox_inches="tight", transparent=True
+            f"{RPATH}/0.Dimension_reduction_{dtype}_{ctype}.pdf",
+            bbox_inches="tight",
+            transparent=True,
         )
         plt.close("all")
-
-
-#
-#
-
-prot_pcs, prot_vexp = dim_reduction_pca(prot)
-gexp_pcs, gexp_vexp = dim_reduction_pca(gexp)
-
-df_prot = pd.concat([prot_pcs, ss[["mutational_burden", "ploidy", "growth"]]], axis=1, sort=False).dropna()
-df_gexp = pd.concat([gexp_pcs, ss[["mutational_burden", "ploidy", "growth"]]], axis=1, sort=False).dropna()
-
