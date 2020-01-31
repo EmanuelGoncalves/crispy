@@ -174,9 +174,9 @@ class Enrichment:
 
     def plot(self, values, gmt_file, signature, vertical_lines=False, shade=False):
         if type(signature) == str:
-            signature = self.get_signature(gmt_file, signature)
+            gset = self.get_signature(gmt_file, signature)
 
-        e_score, p_value, hits, running_hit = self.gsea(values, signature)
+        e_score, p_value, hits, running_hit = self.gsea(values, gset)
 
         ax = GSEAplot.plot_gsea(
             hits,
@@ -185,6 +185,8 @@ class Enrichment:
             vertical_lines=vertical_lines,
             shade=shade,
         )
+
+        ax[0].set_title(f"{signature}: NES={e_score:.2f}; p-val={p_value:.2g}")
 
         return ax
 
@@ -293,9 +295,6 @@ class GSEAplot(CrispyPlot):
 
             # Data
             axs[1].scatter(x, dataset[1], c=cls.PAL_DBGD[0], linewidths=0, s=2)
-
-            if shade:
-                axs[1].fill_between(x, 0, dataset[1], alpha=0.5, color=cls.PAL_DBGD[2])
 
             if vertical_lines:
                 for i in x[np.array(hits, dtype="bool")]:

@@ -6,7 +6,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 from natsort import natsorted
-from scipy.stats import pearsonr
+from scipy.stats import pearsonr, spearmanr
 from crispy.CrispyPlot import CrispyPlot, MidpointNormalize
 
 
@@ -223,18 +223,18 @@ class GIPlot(CrispyPlot):
 
     @classmethod
     def gi_classification(
-        cls, x_gene, y_gene, plot_df, palette=None, orient="v", stripplot=True
+        cls, x_gene, y_gene, plot_df, palette=None, orient="v", stripplot=True, notch=True
     ):
         pal = cls.PAL_DTRACE if palette is None else palette
 
-        fig, ax = plt.subplots(1, 1, figsize=(2.5, 2), dpi=600)
+        fig, ax = plt.subplots(1, 1, figsize=(0.2 * len(set(plot_df[x_gene])), 2), dpi=600)
 
         sns.boxplot(
             x=x_gene,
             y=y_gene,
-            notch=True,
             data=plot_df,
             orient=orient,
+            notch=notch,
             boxprops=dict(linewidth=0.3),
             whiskerprops=dict(linewidth=0.3),
             medianprops=cls.MEDIANPROPS,
@@ -325,6 +325,18 @@ class GIPlot(CrispyPlot):
         cbar = plt.colorbar(sc)
         cbar.ax.set_ylabel(
             z if cbar_label is None else cbar_label, rotation=270, va="bottom"
+        )
+
+        cor, pval = spearmanr(df[x], df[y])
+        annot_text = f"R={cor:.2g}, p={pval:.1e}"
+
+        ax.text(
+            0.95,
+            0.05,
+            annot_text,
+            fontsize=4,
+            transform=ax.transAxes,
+            ha="right",
         )
 
         ax.set_xlabel(x)

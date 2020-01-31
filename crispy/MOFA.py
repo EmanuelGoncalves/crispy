@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # Copyright (C) 2019 Emanuel Goncalves
 
+import os
 import gseapy
 import logging
 import matplotlib
@@ -34,6 +35,7 @@ class MOFA:
         freqELBO=1,
         dropR2=None,
         verbose=1,
+        from_file=None,
     ):
         """
         This is a wrapper of MOFA to perform multi-omics integrations of the GDSC data-sets. 
@@ -60,6 +62,8 @@ class MOFA:
         self.startELBO = startELBO
         self.freqELBO = freqELBO
         self.dropR2 = dropR2
+
+        self.from_file = from_file
 
         # Covariates
         self.covariates = covariates
@@ -121,14 +125,41 @@ class MOFA:
             verbose=verbose > 0,
         )
 
-        # Build and run MOFA
+        # Run MOFA
         self.ep.build()
-        self.ep.run()
 
-        # Export results
-        self.factors = self.get_factors()
-        self.weights = self.get_weights()
-        self.rsquare = self.get_rsquare()
+        if (self.from_file is not None) and os.path.isfile(self.from_file):
+            import h5py
+
+            f = h5py.File(self.from_file, "r")
+
+            self.factors = pd.DataFrame(
+                f["expectations"]["Z"]["gdsc"].value.T,
+                index=[s.decode("utf-8") for s in f["samples"]["gdsc"].value],
+                columns=self.factors_labels,
+            )
+
+            self.weights = {
+                n: pd.DataFrame(
+                    f["expectations"]["W"][n].value.T,
+                    index=self.views[n].index,
+                    columns=self.factors_labels,
+                )
+                for n, df in f["expectations"]["W"].items()
+            }
+
+            self.rsquare = pd.DataFrame(
+                f["variance_explained"]["r2_per_factor"]["gdsc"].value,
+                index=self.views_labels,
+                columns=self.factors_labels,
+            )
+
+        else:
+            self.ep.run()
+
+            self.factors = self.get_factors()
+            self.weights = self.get_weights()
+            self.rsquare = self.get_rsquare()
 
     @staticmethod
     def lm_residuals(y, x, fit_intercept=True, add_intercept=True):
@@ -206,7 +237,7 @@ class MOFA:
             columns=self.factors_labels,
         )
 
-    def pathway_enrichment(self, view, factor, genesets=None, nprocesses=4):
+    def pathway_enrichment(self, factor, views=None, genesets=None, nprocesses=4, permutation_num=0):
         if genesets is None:
             genesets = [
                 "c6.all.v7.0.symbols.gmt",
@@ -215,18 +246,27 @@ class MOFA:
                 "c2.cp.kegg.v7.0.symbols.gmt",
             ]
 
-        return pd.concat(
+        if views is None:
+            views = ["methylation", "transcriptomics", "proteomics"]
+
+        df = pd.concat(
             [
                 gseapy.ssgsea(
-                    self.weights[view][factor],
+                    self.weights[v][factor],
                     processes=nprocesses,
+                    permutation_num=permutation_num,
                     gene_sets=Enrichment.read_gmt(f"{DPATH}/pathways/{g}"),
                     no_plot=True,
                 ).res2d.assign(geneset=g)
+                .assign(view=v)
+                .reset_index()
+                for v in views
                 for g in genesets
             ],
             ignore_index=True,
         )
+        df = df.rename(columns={"sample1": "nes"}).sort_values("nes")
+        return df
 
     def get_top_features(self, view, factor, n_features=30):
         df = self.weights[view][factor]
@@ -236,8 +276,30 @@ class MOFA:
     def get_factor_view_weights(self, factor):
         return pd.DataFrame({v: self.weights[v][factor] for v in self.weights})
 
+    def save_hdf5(self, outfile):
+        self.ep.save(outfile)
+
 
 class MOFAPlot(CrispyPlot):
+    @classmethod
+    def factors_corr_clustermap(cls, mofa_obj, method="pearson", cmap="RdBu_r"):
+        plot_df = mofa_obj.factors.corr(method=method)
+
+        nrows, ncols = plot_df.shape
+        fig = sns.clustermap(
+            plot_df,
+            cmap=cmap,
+            center=0,
+            annot=True,
+            fmt=".2f",
+            annot_kws={"size": 5},
+            figsize=(min(0.3 * ncols, 10), min(0.3 * nrows, 10)),
+        )
+        fig.ax_heatmap.set_xlabel("Factors")
+        fig.ax_heatmap.set_ylabel("Factors")
+
+        fig.ax_heatmap.set_yticklabels(fig.ax_heatmap.get_yticklabels(), rotation=0)
+
     @classmethod
     def variance_explained_heatmap(cls, mofa_obj, row_order=None):
         nrows, ncols = mofa_obj.rsquare.shape
@@ -349,7 +411,9 @@ class MOFAPlot(CrispyPlot):
         n_features=30,
     ):
         df = mofa_obj.views[view]
-        df = df.loc[mofa_obj.get_top_features(view, factor, n_features=n_features).index]
+        df = df.loc[
+            mofa_obj.get_top_features(view, factor, n_features=n_features).index
+        ]
 
         if mask is None:
             mask = df.isnull()
@@ -368,8 +432,45 @@ class MOFAPlot(CrispyPlot):
             col_colors=col_colors,
             row_colors=row_colors,
             xticklabels=False,
-            figsize=(min(0.1 * ncols, 15), min(0.1 * nrows, 15)),
+            figsize=(min(0.1 * ncols, 7), min(0.05 * nrows, 7)),
         )
         fig.ax_heatmap.set_xlabel("Samples")
         fig.ax_heatmap.set_ylabel(f"Features")
         fig.ax_col_dendrogram.set_title(title)
+
+    @classmethod
+    def covariates_heatmap(cls, covs, mofa_obj):
+        nrows, ncols = covs.shape
+
+        fig = sns.clustermap(
+            covs,
+            col_dendrogram_set_axis_off=False,
+            cmap="Spectral",
+            center=0,
+            annot=True,
+            fmt=".2f",
+            cbar=False,
+            col_cluster=False,
+            annot_kws={"size": 5},
+            figsize=(0.3 * ncols, 0.25 * nrows),
+        )
+        fig.ax_heatmap.set_xlabel("Factors")
+        fig.ax_heatmap.set_ylabel(f"Features")
+
+        sns.heatmap(
+            mofa_obj.rsquare,
+            cmap="Greys",
+            annot=True,
+            cbar=False,
+            fmt=".2f",
+            linewidths=0.5,
+            ax=fig.ax_col_dendrogram,
+            annot_kws={"fontsize": 5},
+        )
+        fig.ax_col_dendrogram.set_yticklabels(
+            mofa_obj.rsquare.index, rotation=0, horizontalalignment="right"
+        )
+        fig.ax_col_dendrogram.set_title("Variance explained per factor")
+        fig.ax_col_dendrogram.set_ylabel("Views")
+
+        return fig

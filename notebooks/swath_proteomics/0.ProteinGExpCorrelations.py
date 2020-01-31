@@ -28,7 +28,7 @@ from scipy.stats import pearsonr
 from crispy.GIPlot import GIPlot
 from crispy.CrispyPlot import CrispyPlot
 from statsmodels.stats.multitest import multipletests
-from crispy.DataImporter import Proteomics, GeneExpression, CRISPR
+from crispy.DataImporter import Proteomics, GeneExpression, CRISPR, Sample
 
 
 LOG = logging.getLogger("Crispy")
@@ -66,8 +66,11 @@ LOG.info(f"CRISPR: {crispr.shape}")
 # Overlaps
 #
 
+ss = Sample().samplesheet
+ss = ss[ss["tissue"] != "Haematopoietic and Lymphoid"]
+
 samples = list(set.intersection(set(prot), set(gexp)))
-genes = list(set(prot.index).intersection(gexp.index))
+genes = list(set.intersection(set(prot.index), set(gexp.index)))
 LOG.info(f"Genes: {len(genes)}; Samples: {len(samples)}")
 
 

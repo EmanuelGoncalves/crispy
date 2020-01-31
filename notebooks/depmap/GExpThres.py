@@ -121,6 +121,7 @@ def pc_labels(n):
 
 def dim_reduction(
     df,
+    input_pca_to_tsne=True,
     pca_ncomps=50,
     tsne_ncomps=2,
     perplexity=30.0,
@@ -139,8 +140,8 @@ def dim_reduction(
         early_exaggeration=early_exaggeration,
         learning_rate=learning_rate,
         n_iter=n_iter,
-    ).fit_transform(df_pca)
-    df_tsne = pd.DataFrame(df_tsne, index=df_pca.index, columns=pc_labels(tsne_ncomps))
+    ).fit_transform(df_pca if input_pca_to_tsne else df.T)
+    df_tsne = pd.DataFrame(df_tsne, index=df_pca.index if input_pca_to_tsne else df.T.index, columns=pc_labels(tsne_ncomps))
 
     return df_tsne, df_pca
 
