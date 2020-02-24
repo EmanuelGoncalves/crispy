@@ -146,8 +146,9 @@ class GeneExpression:
 
     """
 
-    def __init__(self, voom_file="gexp/rnaseq_voom.csv.gz"):
+    def __init__(self, voom_file="gexp/rnaseq_voom.csv.gz", read_count="gexp/rnaseq_20191101/rnaseq_read_count_20191101.csv"):
         self.voom = pd.read_csv(f"{DPATH}/{voom_file}", index_col=0)
+        self.readcount = pd.read_csv(f"{DPATH}/{read_count}", index_col=1).drop(columns=["model_id"])
 
     def get_data(self, dtype="voom"):
         if dtype != "voom":
@@ -308,7 +309,12 @@ class Proteomics:
         manifest="proteomics/E0022_P02-P03_sample_mapping.txt",
         replicates_corr="proteomics/replicates_corr.csv.gz",
         broad_tmt="proteomics/broad_tmt.csv.gz",
+        coread_tmt="proteomics/proteomics_coread_processed_parsed.csv",
+        hgsc_prot="proteomics/hgsc_cell_lines_proteomics.csv",
+        brca_prot="proteomics/brca_cell_lines_proteomics_preprocessed.csv",
     ):
+        ss = Sample().samplesheet
+
         deprecated_ids = self.map_deprecated()
 
         # Import imputed protein levels
@@ -341,6 +347,31 @@ class Proteomics:
             .groupby("Gene_Symbol")
             .agg(np.nanmean)
         )
+
+        # Import CRC COREAD TMT
+        self.coread = pd.read_csv(f"{DPATH}/{coread_tmt}", index_col=0)
+        self.coread = self.coread.loc[:, self.coread.columns.isin(ss["model_name"])]
+
+        coread_ss = ss[ss["model_name"].isin(self.coread.columns)]
+        coread_ss = coread_ss.reset_index().set_index("model_name")
+        self.coread = self.coread.rename(columns=coread_ss["model_id"])
+
+        # Import HGSC proteomics
+        self.hgsc = pd.read_csv(f"{DPATH}/{hgsc_prot}").dropna(subset=["Gene names"]).drop(columns=["Majority protein IDs"])
+        self.hgsc = self.hgsc.groupby("Gene names").mean()
+        self.hgsc = self.hgsc.loc[:, self.hgsc.columns.isin(ss["model_name"])]
+
+        hgsc_ss = ss[ss["model_name"].isin(self.hgsc.columns)]
+        hgsc_ss = hgsc_ss.reset_index().set_index("model_name")
+        self.hgsc = self.hgsc.rename(columns=hgsc_ss["model_id"])
+
+        # Import BRCA proteomics
+        self.brca = pd.read_csv(f"{DPATH}/{brca_prot}", index_col=0)
+        self.brca = self.brca.loc[:, self.brca.columns.isin(ss["model_name"])]
+
+        brca_ss = ss[ss["model_name"].isin(self.brca.columns)]
+        brca_ss = brca_ss.reset_index().set_index("model_name")
+        self.brca = self.brca.rename(columns=brca_ss["model_id"])
 
     def get_data(
         self,
@@ -386,7 +417,7 @@ class Proteomics:
         subset=None,
         normality=False,
         iqr_range=None,
-        perc_measures=0.75,
+        perc_measures=None,
         replicate_thres=None,
         quantile_normalise=False,
     ):
@@ -476,10 +507,12 @@ class CRISPR:
         self,
         subset=None,
         scale=True,
+        std_filter=False,
         abs_thres=None,
         drop_core_essential=False,
         min_events=5,
         drop_core_essential_broad=False,
+        binarise_thres=None,
     ):
         df = self.get_data(scale=True)
 
@@ -500,7 +533,15 @@ class CRISPR:
             df = df[~df.index.isin(Utils.get_broad_core_essential())]
 
         # - Subset matrices
-        return self.get_data(scale=scale).loc[df.index].reindex(columns=df.columns)
+        x = self.get_data(scale=scale).loc[df.index].reindex(columns=df.columns)
+
+        if binarise_thres is not None:
+            x = (x < binarise_thres).astype(int)
+
+        if std_filter:
+            x = x.loc[x.std(1) > 0]
+
+        return x
 
     @staticmethod
     def scale(df, essential=None, non_essential=None, metric=np.median):

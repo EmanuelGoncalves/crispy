@@ -32,7 +32,7 @@ from crispy.CRISPRData import CRISPRDataSet, ReadCounts
 if __name__ == "__main__":
     organoids = dict(
         name="Combined set of organoids",
-        read_counts="bme2_counts.csv.gz",
+        read_counts="rawcounts.csv.gz",
         library="Yusa_v1.1.csv.gz",
         plasmids=["Plasmid_v1.1"],
         samplesheet="samplesheet.xlsx",
@@ -50,8 +50,8 @@ if __name__ == "__main__":
     ddir = pkg_resources.resource_filename("data", "organoids/bme2/")
     dreports = pkg_resources.resource_filename("notebooks", "bme/reports/")
 
-    ss = pd.read_excel(f"{ddir}/{organoids['samplesheet']}", index_col=0).query(
-        "sample == 'COLO-027'"
+    ss = pd.read_excel(f"{ddir}/{organoids['samplesheet']}", index_col=1).query(
+        "organoid == 'COLO-027'"
     )
 
     counts = CRISPRDataSet(organoids, ddir=ddir)
@@ -323,34 +323,35 @@ if __name__ == "__main__":
     plt.close("all")
 
     # - Waterfall plot BME 5%
-    plot_df = plot_df.sort_values("BME 5%")
-    plot_df["index"] = np.arange(plot_df.shape[0])
+    for c in ["BME 5%", "BME 80%"]:
+        plot_df = plot_df.sort_values(c)
+        plot_df["index"] = np.arange(plot_df.shape[0])
 
-    genes_highlight = ["WRN", "BRAF"]
-    genes_palette = sns.color_palette("Set2", n_colors=len(genes_highlight)).as_hex()
+        genes_highlight = ["WRN", "BRAF"]
+        genes_palette = sns.color_palette("Set2", n_colors=len(genes_highlight)).as_hex()
 
-    plt.figure(figsize=(3, 2), dpi=600)
-    plt.scatter(plot_df["index"], plot_df["BME 5%"], c=CrispyPlot.PAL_DBGD[2], s=5, linewidths=0)
+        plt.figure(figsize=(3, 2), dpi=600)
+        plt.scatter(plot_df["index"], plot_df[c], c=CrispyPlot.PAL_DBGD[2], s=5, linewidths=0)
 
-    for i, g in enumerate(genes_highlight):
-        plt.scatter(plot_df.loc[g, "index"], plot_df.loc[g, "BME 5%"], c=genes_palette[i], s=10, linewidths=0, label=g)
+        for i, g in enumerate(genes_highlight):
+            plt.scatter(plot_df.loc[g, "index"], plot_df.loc[g, c], c=genes_palette[i], s=10, linewidths=0, label=g)
 
-    q10_fc = plot_df["BME 5%"].quantile(.1)
-    plt.axhline(q10_fc, ls="--", color="k", lw=.1, zorder=0)
-    plt.text(-5, q10_fc, "Top 10%", color="k", ha='left', va='bottom', fontsize=5)
+        q10_fc = plot_df[c].quantile(.1)
+        plt.axhline(q10_fc, ls="--", color="k", lw=.1, zorder=0)
+        plt.text(-5, q10_fc, "Top 10%", color="k", ha='left', va='bottom', fontsize=5)
 
-    plt.xlabel("Rank of genes")
-    plt.ylabel("BME 5%\ngene log2 fold-change")
-    plt.title("COLO-027")
-    plt.legend(frameon=False)
+        plt.xlabel("Rank of genes")
+        plt.ylabel(f"{c}\ngene log2 fold-change")
+        plt.title("COLO-027")
+        plt.legend(frameon=False)
 
-    plt.axhline(0, ls="-", color="k", lw=.3, zorder=0)
-    plt.grid(True, ls=":", lw=0.1, alpha=1.0, zorder=0, axis="both")
+        plt.axhline(0, ls="-", color="k", lw=.3, zorder=0)
+        plt.grid(True, ls=":", lw=0.1, alpha=1.0, zorder=0, axis="both")
 
-    plt.savefig(
-        f"{dreports}/waterfall_BME 5%.pdf",
-        bbox_inches="tight",
-    )
-    plt.close("all")
+        plt.savefig(
+            f"{dreports}/waterfall_{c}.pdf",
+            bbox_inches="tight",
+        )
+        plt.close("all")
 
     # Copyright (C) 2019 Emanuel Goncalves

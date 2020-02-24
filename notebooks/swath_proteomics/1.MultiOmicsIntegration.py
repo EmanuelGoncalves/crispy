@@ -80,7 +80,7 @@ LOG.info(f"Samples: {len(samples)}")
 # Filter data-sets
 #
 
-prot = prot_obj.filter(subset=samples, perc_measures=0.75)
+prot = prot_obj.filter(subset=samples)
 LOG.info(f"Proteomics: {prot.shape}")
 
 gexp = gexp_obj.filter(subset=samples)
@@ -112,7 +112,6 @@ mofa = MOFA(
     iterations=2000,
     convergence_mode="slow",
     factors_n=20,
-    from_file=f"{RPATH}/1.MultiOmics.hdf5",
 )
 mofa.save_hdf5(f"{RPATH}/1.MultiOmics.hdf5")
 

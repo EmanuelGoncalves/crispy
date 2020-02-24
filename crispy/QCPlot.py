@@ -40,7 +40,12 @@ class QCplot(CrispyPlot):
         fpr, tpr, thres = roc_curve(y_true, -rank)
 
         auc_fpr = roc_auc_score(y_true, -rank, max_fpr=fpr_thres)
-        fc_thres_fpr = -min(thres[fpr <= fpr_thres])
+
+        if fpr_thres is not None:
+            fc_thres_fpr = -min(thres[fpr <= fpr_thres])
+
+        else:
+            fc_thres_fpr = None
 
         res = (
             (auc_fpr, fc_thres_fpr, fpr, tpr)

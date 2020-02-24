@@ -13,6 +13,10 @@ DPATH = pkg_resources.resource_filename("crispy", "data/")
 
 
 class LMModels:
+    """"
+    Class to perform the linear regression models
+    """""
+
     RES_ORDER = [
         "y_id",
         "x_id",
@@ -93,14 +97,30 @@ class LMModels:
             self.m2, self.m2_columns = None, None
 
     def __build_y(self, y):
+        """
+        Method to build the y matrix.
+
+        :param y:
+        :return:
+        """
         y_ = self.transform_matrix(y.loc[self.samples], t_type=self.transform_y)
         return y_.values, np.array(list(y_.columns))
 
     def __build_m2(self, m2):
+        """
+        Method to build the m2 matrix.
+        :param m2:
+        :return:
+        """
         m2_ = self.transform_matrix(m2.loc[self.samples], t_type=self.transform_m2)
         return m2_.values, np.array(list(m2_.columns))
 
     def __build_x(self, x):
+        """
+        Method to build the x matrix.
+        :param x:
+        :return:
+        """
         x_ = x.loc[self.samples, x.std() > 0]
 
         if self.x_min_events is not None:
@@ -111,6 +131,12 @@ class LMModels:
         return x_.values, np.array(list(x_.columns))
 
     def lmm(self, y_var):
+        """
+        Linear regression method, using measurements of the y matrix for the variable specified by y_var.
+
+        :param y_var: String y variable name
+        :return: pandas.DataFrame of the associations
+        """
         import limix
 
         # Define samples with NaNs
@@ -141,8 +167,8 @@ class LMModels:
             x_vars = self.x_columns[self.x_columns == y_var]
 
         else:
-            x_ = x_[:, np.std(x_, axis=0) > 0]
             x_vars = self.x_columns[np.std(x_, axis=0) > 0]
+            x_ = x_[:, np.std(x_, axis=0) > 0]
 
         # Subset m
         m_ = self.m[y_nans_idx == 0]
@@ -178,11 +204,17 @@ class LMModels:
 
     def matrix_lmm(self, pval_adj="fdr_bh", pval_adj_overall=False):
         # Iterate through Y variables
-        res = pd.concat([self.lmm(y_var=i) for i in self.y_columns], ignore_index=True)
+        res = []
+
+        for y_var in self.y_columns:
+            res.append(self.lmm(y_var=y_var))
+
+        res = pd.concat(res, ignore_index=True)
 
         # Multiple p-value correction
         if pval_adj_overall:
             res = res.assign(fdr=multipletests(res["pval"], method=pval_adj)[1])
+
         else:
             res = self.multipletests(res, field="pval", pval_method=pval_adj)
 

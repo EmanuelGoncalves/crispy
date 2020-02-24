@@ -97,7 +97,7 @@ LOG.info(f"Covariates: {covariates.shape}")
 # Filter data-sets
 #
 
-prot = prot_obj.filter(subset=set(covariates.index), perc_measures=0.75)
+prot = prot_obj.filter(subset=set(covariates.index), perc_measures=0.1)
 LOG.info(f"Proteomics: {prot.shape}")
 
 gexp = gexp_obj.filter(subset=samples)
@@ -118,7 +118,7 @@ wes = wes.loc[wes.std(1) > 0]
 LOG.info(f"WES: {wes.shape}")
 
 crispr = crispr_obj.filter(
-    subset=samples, abs_thres=0.5, min_events=3, drop_core_essential=True
+    subset=samples, abs_thres=0.5, min_events=5, drop_core_essential=True, drop_core_essential_broad=True,
 )
 LOG.info(f"CRISPR: {crispr.shape}")
 
@@ -130,16 +130,10 @@ mofa = MOFA(
     views=dict(proteomics=prot, transcriptomics=gexp, methylation=methy),
     iterations=2500,
     covariates=covariates,
-    convergence_mode="slow",
-    factors_n=100,
+    convergence_mode="fast",
+    factors_n=250,
 )
 
-mofa.factors.to_csv(f"{RPATH}/2.MultiOmicsCovs_factors.csv.gz", compression="gzip")
-for m in mofa.weights:
-    mofa.weights[m].to_csv(
-        f"{RPATH}/2.MultiOmicsCovs_weights_{m}.csv.gz", compression="gzip"
-    )
-mofa.rsquare.to_csv(f"{RPATH}/2.MultiOmicsCovs_rsquared.csv.gz", compression="gzip")
 mofa.save_hdf5(f"{RPATH}/2.MultiOmicsCovs.hdf5")
 
 

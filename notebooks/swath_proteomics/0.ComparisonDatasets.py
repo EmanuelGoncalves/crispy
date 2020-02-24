@@ -53,7 +53,8 @@ ss = Sample().samplesheet
 # Proteomics
 #
 
-prot_gdsc = Proteomics().filter(perc_measures=None)
+prot_obj = Proteomics()
+prot_gdsc = prot_obj.filter(perc_measures=None)
 LOG.info(f"Proteomics GDSC: {prot_gdsc.shape}")
 
 prot_ccle = Proteomics().broad
@@ -239,6 +240,19 @@ plt.close("all")
 
 def cgenes_corr(g):
     LOG.info(f"Cancer genes correlation: {g}")
+
+    m_gdsc_only = pd.concat([
+        prot_gdsc.loc[g].rename("GDSC"),
+        gexp.loc[g].rename("gexp"),
+    ], axis=1, sort=False).dropna()
+    gdsc_only_r, gdsc_only_p = pearsonr(m_gdsc_only["GDSC"], m_gdsc_only["gexp"])
+
+    m_ccle_only = pd.concat([
+        prot_ccle.loc[g].rename("CCLE"),
+        gexp.loc[g].rename("gexp"),
+    ], axis=1, sort=False).dropna()
+    ccle_only_r, ccle_only_p = pearsonr(m_ccle_only["CCLE"], m_ccle_only["gexp"])
+
     m = pd.concat([
         prot_gdsc.loc[g, samples].rename("GDSC"),
         prot_ccle.loc[g, samples].rename("CCLE"),
@@ -246,44 +260,102 @@ def cgenes_corr(g):
     ], axis=1, sort=False).dropna()
     gdsc_r, gdsc_p = pearsonr(m["GDSC"], m["gexp"])
     ccle_r, ccle_p = pearsonr(m["CCLE"], m["gexp"])
+
     return dict(
-        gene=g, gdsc_corr=gdsc_r, gdsc_pval=gdsc_p, ccle_corr=ccle_r, ccle_pval=ccle_p, len=m.shape[0]
+        gene=g, len=m.shape[0],
+        gdsc_corr=gdsc_r, gdsc_pval=gdsc_p, ccle_corr=ccle_r, ccle_pval=ccle_p,
+        gdsc_only_corr=gdsc_only_r, gdsc_only_pval=gdsc_only_p,
+        ccle_only_corr=ccle_only_r, ccle_only_pval=ccle_only_p,
     )
 
 
 cgenes_corr_df = pd.DataFrame([cgenes_corr(g) for g in cgenes["gene_symbol"] if g in genes])
 cgenes_corr_df = cgenes_corr_df.query("len > 10")
 
-_, ax = plt.subplots(1, 1, figsize=(2.0, 2.0))
-ax.scatter(
-    cgenes_corr_df["gdsc_corr"],
-    cgenes_corr_df["ccle_corr"],
-    c=CrispyPlot.PAL_DTRACE[2],
-    s=10,
-    lw=.3,
-    edgecolor="white",
-    zorder=3,
-)
+for d in ["", "only_"]:
+    _, ax = plt.subplots(1, 1, figsize=(2.0, 2.0))
+    ax.scatter(
+        cgenes_corr_df[f"gdsc_{d}corr"],
+        cgenes_corr_df[f"ccle_{d}corr"],
+        c=CrispyPlot.PAL_DTRACE[2],
+        s=10,
+        lw=.3,
+        edgecolor="white",
+        zorder=3,
+    )
 
-ax.set(xlim=(-0.1, 1), ylim=(-0.1, 1))
-ax.plot([0, 1], [0, 1], transform=ax.transAxes, c=CrispyPlot.PAL_DTRACE[0], lw=.3, zorder=0)
+    ax.set(xlim=(-0.1, 1), ylim=(-0.1, 1))
+    ax.plot([0, 1], [0, 1], transform=ax.transAxes, c=CrispyPlot.PAL_DTRACE[0], lw=.3, zorder=0)
 
-ax.grid(True, ls="-", lw=0.1, alpha=1.0, zorder=0)
+    ax.grid(True, ls="-", lw=0.1, alpha=1.0, zorder=0)
 
-n_idx = list(cgenes_corr_df.eval("gdsc_corr - ccle_corr").sort_values().head(10).index)
-texts = [
-    plt.text(x, y, g, color="k", fontsize=5)
-    for i, (x, y, g) in cgenes_corr_df.loc[n_idx, ["gdsc_corr", "ccle_corr", "gene"]].iterrows()
-]
-adjust_text(
-    texts, arrowprops=dict(arrowstyle="-", color="k", alpha=0.75, lw=0.3)
-)
+    n_idx = list(cgenes_corr_df.eval(f"gdsc_{d}corr - ccle_{d}corr").sort_values().head(10).index)
+    texts = [
+        plt.text(x, y, g, color="k", fontsize=5)
+        for i, (x, y, g) in cgenes_corr_df.loc[n_idx, [f"gdsc_{d}corr", f"ccle_{d}corr", "gene"]].iterrows()
+    ]
+    adjust_text(
+        texts, arrowprops=dict(arrowstyle="-", color="k", alpha=0.75, lw=0.3)
+    )
 
-ax.set_xlabel("GDSC (Pearson's R)")
-ax.set_ylabel("CCLE (Pearson's R)")
-ax.set_title("Cancer genes\nProtein ~ Transcript")
+    ax.set_xlabel(f"GDSC{d} (Pearson's R)")
+    ax.set_ylabel(f"CCLE{d} (Pearson's R)")
+    ax.set_title("Cancer genes\nProtein ~ Transcript")
 
+    plt.savefig(
+        f"{RPATH}/0.Comparison_cgenes_corr_{d}scatter.pdf", bbox_inches="tight", transparent=True
+    )
+    plt.close("all")
+
+
+#
+#
+
+g = "MET"
+
+plot_df = pd.concat([
+    prot_gdsc.loc[g, samples].rename("GDSC"),
+    prot_ccle.loc[g, samples].rename("CCLE"),
+    gexp.loc[g, samples].rename("gexp"),
+    ss["growth_properties"],
+    prot_gdsc.count().rename("count"),
+    prot_obj.sample_corrs.rename("corr_rep")
+], axis=1, sort=False).dropna()
+
+for d in ["GDSC", "CCLE"]:
+    GIPlot.gi_regression(d, "gexp", plot_df, style="growth_properties")
+    plt.savefig(
+        f"{RPATH}/0.Comparison_{g}_{d}_regression.pdf", bbox_inches="tight", transparent=True
+    )
+    plt.close("all")
+
+GIPlot.gi_continuous_plot("GDSC", "gexp", "count", plot_df, mid_point_norm=False)
 plt.savefig(
-    f"{RPATH}/0.Comparison_cgenes_corr_scatter.pdf", bbox_inches="tight", transparent=True
+    f"{RPATH}/0.Comparison_{g}_count.pdf", bbox_inches="tight", transparent=True
 )
 plt.close("all")
+
+GIPlot.gi_continuous_plot("GDSC", "gexp", "corr_rep", plot_df, mid_point_norm=False)
+plt.savefig(
+    f"{RPATH}/0.Comparison_{g}_corr_rep.pdf", bbox_inches="tight", transparent=True
+)
+plt.close("all")
+
+
+#
+#
+
+g = "MET"
+
+plot_df = pd.concat([
+    prot_obj.hgsc.loc[g].rename("HGSC"),
+    prot_obj.coread.loc[g].rename("COREAD"),
+    gexp.loc[g].rename("gexp"),
+], axis=1, sort=False)
+
+for d in ["HGSC", "COREAD"]:
+    GIPlot.gi_regression(d, "gexp", plot_df.dropna(subset=[d, "gexp"]))
+    plt.savefig(
+        f"{RPATH}/0.Comparison_{g}_{d}_regression.pdf", bbox_inches="tight", transparent=True
+    )
+    plt.close("all")

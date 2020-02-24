@@ -20,19 +20,9 @@ CONDITION_MAP = {
     "c9R4": "BME 80%",
     "c9R5": "BME 80%",
     "c9R6": "BME 80%",
-}
-
-ORGS_PALETTE = {
-    "COLO-021 BME 5%": "#3182bd",
-    "COLO-021 BME 80%": "#6baed6",
-    "COLO-023 BME 5%": "#e6550d",
-    "COLO-023 BME 80%": "#fd8d3c",
-    "COLO-027 BME 5%": "#31a354",
-    "COLO-027 BME 80%": "#74c476",
-    "COLO-141 BME 5%": "#756bb1",
-    "COLO-141 BME 80%": "#9e9ac8",
-    "OESO-131 BME 5%": "#636363",
-    "OESO-131 BME 80%": "#969696",
+    "c9R7": "BME 5%",
+    "c9R8": "BME 5%",
+    "c9R9": "BME 5%",
 }
 
 rawcount_files = [
@@ -57,7 +47,6 @@ for f in rawcount_files:
         medium=CONDITION_MAP[f_sample.split("_")[-1]],
     )
     f_dict["name"] = f"{f_dict['organoid']} {f_dict['medium']} {f_dict['replicate']}"
-    f_dict["palette"] = ORGS_PALETTE[f"{f_dict['organoid']} {f_dict['medium']}"]
 
     samplesheet.append(f_dict)
 
@@ -70,6 +59,11 @@ for f in rawcount_files:
 
 # Export samplesheet
 samplesheet = pd.DataFrame(samplesheet)
+
+ORGS_PALETTE = [f"{g} {c}" for g in set(samplesheet["organoid"]) for c in ["BME 5%", "BME 80%"]]
+ORGS_PALETTE = pd.Series((sns.color_palette("tab20b").as_hex() + sns.color_palette("tab20c").as_hex())[:len(ORGS_PALETTE)], index=ORGS_PALETTE)
+samplesheet["palette"] = ORGS_PALETTE[[f"{o} {c}" for o, c in samplesheet[["organoid", "medium"]].values]].values
+
 samplesheet.to_excel(f"{DPATH}/samplesheet.xlsx", index=False)
 
 # Export raw counts

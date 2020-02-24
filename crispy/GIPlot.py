@@ -11,7 +11,7 @@ from crispy.CrispyPlot import CrispyPlot, MidpointNormalize
 
 
 class GIPlot(CrispyPlot):
-    MARKERS = ["o", "X"]
+    MARKERS = ["o", "X", "v", "^"]
 
     @classmethod
     def gi_regression(
