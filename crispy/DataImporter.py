@@ -1,18 +1,12 @@
 #!/usr/bin/env python
 # Copyright (C) 2019 Emanuel Goncalves
 
-import os
-import gc
 import logging
 import numpy as np
 import pandas as pd
 import pkg_resources
-import seaborn as sns
 import itertools as it
-import matplotlib.pyplot as plt
 from crispy.Utils import Utils
-from pybedtools import BedTool
-from crispy.QCPlot import QCplot
 from scipy.stats import shapiro, iqr
 from sklearn.mixture import GaussianMixture
 from sklearn.preprocessing import quantile_transform
@@ -305,8 +299,8 @@ class CORUM:
 class Proteomics:
     def __init__(
         self,
-        protein_matrix="proteomics/E0022_P02-P03_protein_matrix.txt",
-        manifest="proteomics/E0022_P02-P03_sample_mapping.txt",
+        protein_matrix="proteomics/E0022_P05_protein_intensities.txt",
+        manifest="proteomics/E0022_P01-P05_sample_map.txt",
         replicates_corr="proteomics/replicates_corr.csv.gz",
         broad_tmt="proteomics/broad_tmt.csv.gz",
         coread_tmt="proteomics/proteomics_coread_processed_parsed.csv",
@@ -326,12 +320,14 @@ class Proteomics:
         )
         self.protein = self.protein.set_index("Protein")
 
+        exclude_proteins = ["CEIP2_HUMAN"]
+        self.protein = self.protein.drop(exclude_proteins)
+
         # Import manifest
-        self.manifest = pd.read_csv(f"{DPATH}/{manifest}", index_col=0)
+        self.manifest = pd.read_csv(f"{DPATH}/{manifest}", index_col=0, sep="\t")
 
         # Remove excluded samples
-        self.exclude = ["HEK", "h002"]
-        self.exclude_man = self.manifest[self.manifest["SIDM"].isin(self.exclude)]
+        self.exclude_man = self.manifest[~self.manifest["SIDM"].isin(ss.index)]
 
         self.manifest = self.manifest[~self.manifest.index.isin(self.exclude_man.index)]
         self.protein = self.protein.drop(columns=self.exclude_man.index)
@@ -655,7 +651,7 @@ class Mobem:
 class CopyNumber:
     def __init__(
         self,
-        cnv_file="copy_number/copynumber_total_new_map.csv.gz",
+        cnv_file="copy_number/cnv_abs_copy_number_picnic_20191101.csv.gz",
         calculate_deletions=False,
         calculate_amplifications=False,
     ):

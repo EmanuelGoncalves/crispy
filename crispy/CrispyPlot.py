@@ -6,8 +6,9 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.colors as colors
 from natsort import natsorted
-from scipy.interpolate import interpn
+from DataImporter import Sample
 from scipy.stats import gaussian_kde
+from scipy.interpolate import interpn
 
 
 class CrispyPlot:
@@ -28,6 +29,7 @@ class CrispyPlot:
 
     # PALETTES
     PAL_DBGD = {0: "#656565", 1: "#F2C500", 2: "#E1E1E1", 3: "#0570b0"}
+    PAL_SET1 = sns.color_palette("Set1", n_colors=9).as_hex()
     PAL_SET2 = sns.color_palette("Set2", n_colors=8).as_hex()
     PAL_DTRACE = {
         0: "#E1E1E1",
@@ -82,6 +84,18 @@ class CrispyPlot:
             )
         )
     )
+
+    PAL_CANCER_TYPE = dict(
+        zip(
+            *(
+                natsorted(list(Sample().samplesheet["cancer_type"].value_counts().index)),
+                sns.color_palette("tab20c").as_hex()
+                + sns.color_palette("tab20b").as_hex()
+                + sns.light_palette(PAL_SET1[1], n_colors=5).as_hex()[:-1],
+            )
+        )
+    )
+    PAL_CANCER_TYPE["Pancancer"] = PAL_SET1[5]
 
     PAL_GROWTH_CONDITIONS = {
         "Adherent": "#fb8072",

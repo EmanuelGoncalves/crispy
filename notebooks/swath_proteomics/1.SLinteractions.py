@@ -64,7 +64,7 @@ if __name__ == "__main__":
 
     # Filter data-sets
     #
-    prot = prot.filter(subset=samples, perc_measures=0.75)
+    prot = prot.filter(subset=samples)
     prot = prot.T.fillna(prot.T.mean()).T
     LOG.info(f"Proteomics: {prot.shape}")
 

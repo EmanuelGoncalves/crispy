@@ -110,52 +110,10 @@ LOG.info(f"WES: {wes.shape}")
 mofa = MOFA(
     views=dict(proteomics=prot, transcriptomics=gexp, methylation=methy),
     iterations=2000,
-    convergence_mode="slow",
+    convergence_mode="fast",
     factors_n=20,
 )
 mofa.save_hdf5(f"{RPATH}/1.MultiOmics.hdf5")
-
-
-# Factor association analysis
-#
-
-lmm_crispr = LMModels(y=mofa.factors, x=crispr.T).matrix_lmm()
-lmm_crispr.to_csv(
-    f"{RPATH}/1.MultiOmics_lmm_crispr.csv.gz", index=False, compression="gzip"
-)
-print(lmm_crispr.query("fdr < 0.05").head(60))
-
-lmm_cnv = LMModels(y=mofa.factors, x=cn.T, institute=False).matrix_lmm()
-lmm_cnv.to_csv(f"{RPATH}/1.MultiOmics_lmm_cnv.csv.gz", index=False, compression="gzip")
-print(lmm_cnv.query("fdr < 0.05").head(60))
-
-lmm_wes = LMModels(
-    y=mofa.factors, x=wes.T, transform_x="none", institute=False
-).matrix_lmm()
-lmm_wes.to_csv(f"{RPATH}/1.MultiOmics_lmm_wes.csv.gz", index=False, compression="gzip")
-print(lmm_wes.query("fdr < 0.05").head(60))
-
-
-#
-#
-
-factors_tsne, factors_pca = dim_reduction(mofa.factors.T, pca_ncomps=10, input_pca_to_tsne=False)
-
-dimred = dict(tSNE=factors_tsne, pca=factors_pca)
-
-for ctype, df in dimred.items():
-    plot_df = pd.concat(
-        [df, ss["tissue"]], axis=1, sort=False
-    ).dropna()
-
-    ax = plot_dim_reduction(plot_df, ctype=ctype, palette=CrispyPlot.PAL_TISSUE_2)
-    ax.set_title(f"Factors {ctype}")
-    plt.savefig(
-        f"{RPATH}/1.MultiOmics_factors_{ctype}.pdf",
-        bbox_inches="tight",
-        transparent=True,
-    )
-    plt.close("all")
 
 
 # Factor clustermap
@@ -186,8 +144,8 @@ covariates = pd.concat(
         pd.get_dummies(ss["growth_properties"]),
         pd.get_dummies(ss["tissue"])["Haematopoietic and Lymphoid"],
         ss.loc[samples, ["ploidy", "mutational_burden"]],
-        prot.loc[["VIM"]].T.add_suffix("_proteomics"),
-        gexp.loc[["CDH1", "VIM"]].T.add_suffix("_transcriptomics"),
+        prot.loc[["CDH1", "VIM", "MCL1", "BCL2L1"]].T.add_suffix("_proteomics"),
+        gexp_obj.get_data().loc[["CDH1", "VIM", "MCL1", "BCL2L1"]].T.add_suffix("_transcriptomics"),
         methy.loc[["SLC5A1"]].T.add_suffix("_methylation"),
     ],
     axis=1,

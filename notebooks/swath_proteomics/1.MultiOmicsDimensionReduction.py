@@ -87,6 +87,7 @@ mofa = MOFA(
     iterations=2000,
     convergence_mode="fast",
     factors_n=100,
+    from_file=f"{RPATH}/1.MultiOmicsDimRed.hdf5",
 )
 mofa.save_hdf5(f"{RPATH}/1.MultiOmicsDimRed.hdf5")
 
@@ -94,7 +95,7 @@ mofa.save_hdf5(f"{RPATH}/1.MultiOmicsDimRed.hdf5")
 # Dimension reduction
 #
 
-factors_tsne, factors_pca = dim_reduction(mofa.factors.T, pca_ncomps=10, input_pca_to_tsne=False)
+factors_tsne, factors_pca = dim_reduction(mofa.factors.T, pca_ncomps=50, input_pca_to_tsne=False)
 
 dimred = dict(tSNE=factors_tsne, pca=factors_pca)
 
