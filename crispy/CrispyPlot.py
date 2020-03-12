@@ -6,7 +6,7 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.colors as colors
 from natsort import natsorted
-from DataImporter import Sample
+from crispy.DataImporter import Sample
 from scipy.stats import gaussian_kde
 from scipy.interpolate import interpn
 
