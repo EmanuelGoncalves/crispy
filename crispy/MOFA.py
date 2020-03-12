@@ -444,7 +444,6 @@ class MOFAPlot(CrispyPlot):
 
         fig = sns.clustermap(
             covs,
-            col_dendrogram_set_axis_off=False,
             cmap="Spectral",
             center=0,
             annot=True,

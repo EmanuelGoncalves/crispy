@@ -47,12 +47,12 @@ class LibraryRepresentaion:
 
         return pd.Series(percentile_ranges)
 
-    def dropout_rate(self):
+    def dropout_rate(self, threshold=0):
         dropout_rates = {}
 
         for c in self.counts:
             values = self.counts[c]
-            dropout_rates[c] = sum(values == 0) / len(values)
+            dropout_rates[c] = sum(values <= threshold) / len(values)
 
         return pd.Series(dropout_rates)
 

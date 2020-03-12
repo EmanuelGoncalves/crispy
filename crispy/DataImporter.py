@@ -140,9 +140,15 @@ class GeneExpression:
 
     """
 
-    def __init__(self, voom_file="gexp/rnaseq_voom.csv.gz", read_count="gexp/rnaseq_20191101/rnaseq_read_count_20191101.csv"):
+    def __init__(
+        self,
+        voom_file="gexp/rnaseq_voom.csv.gz",
+        read_count="gexp/rnaseq_20191101/rnaseq_read_count_20191101.csv",
+    ):
         self.voom = pd.read_csv(f"{DPATH}/{voom_file}", index_col=0)
-        self.readcount = pd.read_csv(f"{DPATH}/{read_count}", index_col=1).drop(columns=["model_id"])
+        self.readcount = pd.read_csv(f"{DPATH}/{read_count}", index_col=1).drop(
+            columns=["model_id"]
+        )
 
     def get_data(self, dtype="voom"):
         if dtype != "voom":
@@ -168,7 +174,7 @@ class GeneExpression:
             gm_iqr = GaussianMixture(n_components=2).fit(iqr_ranges[["iqr"]])
             iqr_ranges["gm"] = gm_iqr.predict(iqr_ranges[["iqr"]])
 
-            df = df.loc[iqr_ranges["gm"] != gm_iqr.means_.argmin()]
+            df = df.reindex(iqr_ranges["gm"] != gm_iqr.means_.argmin())
 
             LOG.info(f"IQR {iqr_range}")
             LOG.info(iqr_ranges.groupby("gm").agg({"min", "mean", "median", "max"}))
@@ -177,7 +183,7 @@ class GeneExpression:
         if normality:
             normality = df.apply(lambda v: shapiro(v)[1], axis=1)
             normality = multipletests(normality, method="bonferroni")
-            df = df.loc[normality[0]]
+            df = df.reindex(normality[0])
 
         return df
 
@@ -248,38 +254,52 @@ class BioGRID:
 
 class CORUM:
     def __init__(
-        self, corum_file="coreComplexes.txt", organism="Human", homodymers_exclude=True
+        self,
+        corum_file="coreComplexes.txt",
+        organism="Human",
+        homodymers_exclude=True,
+        protein_subset=None,
     ):
         self.organism = organism
         self.homodymers_exclude = homodymers_exclude
+        self.protein_subset = protein_subset
 
         # Load CORUM DB
         self.db = pd.read_csv(f"{DPATH}/{corum_file}", sep="\t")
         self.db = self.db.query(f"Organism == '{organism}'")
+        self.db_name = self.db.groupby("ComplexID")["ComplexName"].first()
 
         # Melt into list of protein pairs (both directions, i.e. p1-p2, p2-p1)
         self.db_melt = self.melt_ppi()
 
         # Map to gene symbols
         self.gmap = self.map_gene_name()
-        self.db_melt_symbol = list(
-            {
-                (self.gmap.loc[p1, "GeneSymbol"], self.gmap.loc[p2, "GeneSymbol"])
-                for p1, p2 in self.db_melt
-                if p1 in self.gmap.index and p2 in self.gmap.index
-            }
-        )
+        self.db_melt_symbol = {
+            (self.gmap.loc[p1, "GeneSymbol"], self.gmap.loc[p2, "GeneSymbol"]): i
+            for (p1, p2), i in self.db_melt.items()
+            if p1 in self.gmap.index and p2 in self.gmap.index
+        }
 
         # Exclude homodymers
         if self.homodymers_exclude:
-            self.db_melt_symbol = [
-                (p1, p2) for p1, p2 in self.db_melt_symbol if p1 != p2
-            ]
+            self.db_melt_symbol = {
+                (p1, p2): i for (p1, p2), i in self.db_melt_symbol.items() if p1 != p2
+            }
 
-    def melt_ppi(self):
-        db_melt = self.db["subunits(UniProt IDs)"].copy()
-        db_melt = db_melt.apply(lambda v: list(it.permutations(v.split(";"), 2)))
-        db_melt = list({p for c in db_melt for p in c})
+        # Subset interactions
+        if self.protein_subset is not None:
+            self.db_melt_symbol = {
+                (p1, p2): i
+                for (p1, p2), i in self.db_melt_symbol.items()
+                if p1 in self.protein_subset and p2 in self.protein_subset
+            }
+
+    def melt_ppi(self, idx_id="ComplexID", idx_sub="subunits(UniProt IDs)"):
+        db_melt = self.db[[idx_id, idx_sub]].copy()
+        db_melt[idx_sub] = db_melt[idx_sub].apply(
+            lambda v: list(it.permutations(v.split(";"), 2))
+        )
+        db_melt = {p: i for i, c in db_melt[[idx_id, idx_sub]].values for p in c}
         return db_melt
 
     @staticmethod
@@ -346,16 +366,22 @@ class Proteomics:
 
         # Import CRC COREAD TMT
         self.coread = pd.read_csv(f"{DPATH}/{coread_tmt}", index_col=0)
-        self.coread = self.coread.loc[:, self.coread.columns.isin(ss["model_name"])]
+        self.coread = self.coread.reindex(
+            columns=self.coread.columns.isin(ss["model_name"])
+        )
 
         coread_ss = ss[ss["model_name"].isin(self.coread.columns)]
         coread_ss = coread_ss.reset_index().set_index("model_name")
         self.coread = self.coread.rename(columns=coread_ss["model_id"])
 
         # Import HGSC proteomics
-        self.hgsc = pd.read_csv(f"{DPATH}/{hgsc_prot}").dropna(subset=["Gene names"]).drop(columns=["Majority protein IDs"])
+        self.hgsc = (
+            pd.read_csv(f"{DPATH}/{hgsc_prot}")
+            .dropna(subset=["Gene names"])
+            .drop(columns=["Majority protein IDs"])
+        )
         self.hgsc = self.hgsc.groupby("Gene names").mean()
-        self.hgsc = self.hgsc.loc[:, self.hgsc.columns.isin(ss["model_name"])]
+        self.hgsc = self.hgsc.reindex(columns=self.hgsc.columns.isin(ss["model_name"]))
 
         hgsc_ss = ss[ss["model_name"].isin(self.hgsc.columns)]
         hgsc_ss = hgsc_ss.reset_index().set_index("model_name")
@@ -363,7 +389,7 @@ class Proteomics:
 
         # Import BRCA proteomics
         self.brca = pd.read_csv(f"{DPATH}/{brca_prot}", index_col=0)
-        self.brca = self.brca.loc[:, self.brca.columns.isin(ss["model_name"])]
+        self.brca = self.brca.reindex(columns=self.brca.columns.isin(ss["model_name"]))
 
         brca_ss = ss[ss["model_name"].isin(self.brca.columns)]
         brca_ss = brca_ss.reset_index().set_index("model_name")
@@ -395,15 +421,15 @@ class Proteomics:
             )
 
         if average_replicates:
-            data = data.groupby(self.manifest.loc[data.columns, "SIDM"], axis=1).agg(
-                np.nanmean
-            )
+            data = data.groupby(
+                self.manifest.reindex(data.columns)["SIDM"], axis=1
+            ).agg(np.nanmean)
 
         if map_ids:
-            pmap = self.map_gene_name().loc[data.index, "GeneSymbol"].dropna()
+            pmap = self.map_gene_name().reindex(data.index)["GeneSymbol"].dropna()
 
             data = data[data.index.isin(pmap.index)]
-            data = data.groupby(pmap.loc[data.index]).mean()
+            data = data.groupby(pmap.reindex(data.index)).mean()
 
         return data
 
@@ -438,7 +464,7 @@ class Proteomics:
             gm_iqr = GaussianMixture(n_components=2).fit(iqr_ranges[["iqr"]])
             iqr_ranges["gm"] = gm_iqr.predict(iqr_ranges[["iqr"]])
 
-            df = df.loc[iqr_ranges["gm"] != gm_iqr.means_.argmin()]
+            df = df.reindex(iqr_ranges["gm"] != gm_iqr.means_.argmin())
 
             LOG.info(f"IQR {iqr_range}")
             LOG.info(iqr_ranges.groupby("gm").agg({"min", "mean", "median", "max"}))
@@ -447,7 +473,7 @@ class Proteomics:
         if normality:
             normality = df.apply(lambda v: shapiro(v)[1], axis=1)
             normality = multipletests(normality, method="bonferroni")
-            df = df.loc[normality[0]]
+            df = df.reindex(normality[0])
 
         # Filter by number of obvservations
         if perc_measures is not None:
@@ -529,13 +555,13 @@ class CRISPR:
             df = df[~df.index.isin(Utils.get_broad_core_essential())]
 
         # - Subset matrices
-        x = self.get_data(scale=scale).loc[df.index].reindex(columns=df.columns)
+        x = self.get_data(scale=scale).reindex(index=df.index, columns=df.columns)
 
         if binarise_thres is not None:
             x = (x < binarise_thres).astype(int)
 
         if std_filter:
-            x = x.loc[x.std(1) > 0]
+            x = x.reindex(x.std(1) > 0)
 
         return x
 
@@ -591,7 +617,7 @@ class Mobem:
             mobem = mobem.drop(columns={"TISSUE_FACTOR", "MSI_FACTOR", "MEDIA_FACTOR"})
 
         if add_msi:
-            self.msi = self.sample.samplesheet.loc[mobem.index, "msi_status"]
+            self.msi = self.sample.samplesheet.reindex(mobem.index)["msi_status"]
             mobem["msi_status"] = (self.msi == "MSI-H").astype(int)[mobem.index].values
 
         self.mobem = mobem.astype(int).T
@@ -604,7 +630,7 @@ class Mobem:
 
         # Subset matrices
         if subset is not None:
-            df = df.loc[:, df.columns.isin(subset)]
+            df = df.reindex(columns=df.columns.isin(subset))
 
         # Minimum number of events
         df = df[df.sum(1) >= min_events]
