@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # Copyright (C) 2019 Emanuel Goncalves
 
+import igraph
 import logging
 import numpy as np
 import pandas as pd
@@ -250,6 +251,187 @@ class BioGRID:
         self.biogrid = list(
             {(p1, p2) for p in self.biogrid for p1, p2 in [(p[0], p[1]), (p[1], p[0])]}
         )
+
+
+class PPI:
+    """
+    Module used to import protein-protein interaction network
+
+    """
+
+    def __init__(
+        self,
+        string_file="ppi/9606.protein.links.full.v11.0.txt.gz",
+        string_alias_file="ppi/9606.protein.aliases.v11.0.txt.gz",
+    ):
+        self.string_file = string_file
+        self.string_alias_file = string_alias_file
+
+    @classmethod
+    def ppi_annotation(cls, df, ppi, target_thres=5):
+        genes_source = set(df["y_id"]).intersection(set(ppi.vs["name"]))
+        genes_target = set(df["x_id"]).intersection(set(ppi.vs["name"]))
+
+        # Calculate distance between drugs and genes in PPI
+        dist_g_g = {
+            g: pd.Series(ppi.shortest_paths(source=g, target=genes_target)[0], index=genes_target).to_dict()
+            for g in genes_source
+        }
+
+        def gene_gene_annot(g_source, g_target):
+            if g_source == g_target:
+                res = "T"
+
+            elif g_source not in genes_source:
+                res = "-"
+
+            elif g_target not in genes_target:
+                res = "-"
+
+            else:
+                res = cls.ppi_dist_to_string(dist_g_g[g_source][g_target], target_thres)
+
+            return res
+
+        # Annotate drug regressions
+        df = df.assign(
+            x_ppi=[
+                gene_gene_annot(g_source, g_target)
+                for g_source, g_target in df[["y_id", "x_id"]].values
+            ]
+        )
+
+        return df
+
+    @staticmethod
+    def ppi_dist_to_string(d, target_thres):
+        if d == 0:
+            res = "T"
+
+        elif d == np.inf:
+            res = "-"
+
+        elif d < target_thres:
+            res = f"{int(d)}"
+
+        else:
+            res = f"{int(target_thres)}+"
+
+        return res
+
+    def build_string_ppi(self, score_thres=900, export_pickle=None):
+        # ENSP map to gene symbol
+        gmap = pd.read_csv(f"{DPATH}/{self.string_alias_file}", sep="\t")
+        gmap = gmap[["BioMart_HUGO" in i.split(" ") for i in gmap["source"]]]
+        gmap = (
+            gmap.groupby("string_protein_id")["alias"].agg(lambda x: set(x)).to_dict()
+        )
+        gmap = {k: list(gmap[k])[0] for k in gmap if len(gmap[k]) == 1}
+        logging.getLogger("DTrace").info(f"ENSP gene map: {len(gmap)}")
+
+        # Load String network
+        net = pd.read_csv(f"{DPATH}/{self.string_file}", sep=" ")
+
+        # Filter by moderate confidence
+        net = net[net["combined_score"] > score_thres]
+
+        # Filter and map to gene symbol
+        net = net[
+            [
+                p1 in gmap and p2 in gmap
+                for p1, p2 in net[["protein1", "protein2"]].values
+            ]
+        ]
+        net["protein1"] = [gmap[p1] for p1 in net["protein1"]]
+        net["protein2"] = [gmap[p2] for p2 in net["protein2"]]
+        LOG.info(f"String: {len(net)}")
+
+        #  String network
+        net_i = igraph.Graph(directed=False)
+
+        # Initialise network lists
+        edges = [(px, py) for px, py in net[["protein1", "protein2"]].values]
+        vertices = list(set(net["protein1"]).union(net["protein2"]))
+
+        # Add nodes
+        net_i.add_vertices(vertices)
+
+        # Add edges
+        net_i.add_edges(edges)
+
+        # Add edge attribute score
+        net_i.es["score"] = list(net["combined_score"])
+
+        # Simplify
+        net_i = net_i.simplify(combine_edges="max")
+        LOG.info(net_i.summary())
+
+        # Export
+        if export_pickle is not None:
+            net_i.write_pickle(export_pickle)
+
+        return net_i
+
+    @staticmethod
+    def ppi_corr(ppi, m_corr, m_corr_thres=None):
+        """
+        Annotate PPI network based on Pearson correlation between the vertices of each edge using
+        m_corr data-frame and m_corr_thres (Pearson > m_corr_thress).
+
+        :param ppi:
+        :param m_corr:
+        :param m_corr_thres:
+        :return:
+        """
+        # Subset PPI network
+        ppi = ppi.subgraph([i.index for i in ppi.vs if i["name"] in m_corr.index])
+
+        # Edge correlation
+        crispr_pcc = np.corrcoef(m_corr.loc[ppi.vs["name"]].values)
+        ppi.es["corr"] = [crispr_pcc[i.source, i.target] for i in ppi.es]
+
+        # Sub-set by correlation between vertices of each edge
+        if m_corr_thres is not None:
+            ppi = ppi.subgraph_edges(
+                [i.index for i in ppi.es if abs(i["corr"]) > m_corr_thres]
+            )
+
+        LOG.info(ppi.summary())
+
+        return ppi
+
+    @classmethod
+    def get_edges(cls, ppi, nodes, corr_thres, norder):
+        # Subset network
+        ppi_sub = ppi.copy().subgraph_edges(
+            [e for e in ppi.es if abs(e["corr"]) >= corr_thres]
+        )
+
+        # Nodes that are contained in the network
+        nodes = {v for v in nodes if v in ppi_sub.vs["name"]}
+        assert len(nodes) > 0, "None of the nodes is contained in the PPI"
+
+        # Nodes neighborhood
+        neighbor_nodes = {
+            v for n in nodes for v in ppi_sub.neighborhood(n, order=norder)
+        }
+
+        # Build subgraph
+        subgraph = ppi_sub.subgraph(neighbor_nodes)
+
+        # Build data-frame
+        nodes_df = pd.DataFrame(
+            [
+                {
+                    "source": subgraph.vs[e.source]["name"],
+                    "target": subgraph.vs[e.target]["name"],
+                    "r": e["corr"],
+                }
+                for e in subgraph.es
+            ]
+        ).sort_values("r")
+
+        return nodes_df
 
 
 class CORUM:

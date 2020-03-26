@@ -15,7 +15,7 @@ class GIPlot(CrispyPlot):
 
     @classmethod
     def gi_regression(
-        cls, x_gene, y_gene, plot_df, style=None, lowess=False, palette=None
+        cls, x_gene, y_gene, plot_df, style=None, lowess=False, palette=None, plot_reg=True
     ):
         pal = cls.PAL_DTRACE if palette is None else palette
 
@@ -46,14 +46,15 @@ class GIPlot(CrispyPlot):
                 alpha=1.0,
             )
 
-        grid.plot_joint(
-            sns.regplot,
-            data=plot_df,
-            line_kws=dict(lw=1.0, color=pal[1]),
-            marker="",
-            lowess=lowess,
-            truncate=True,
-        )
+        if plot_reg:
+            grid.plot_joint(
+                sns.regplot,
+                data=plot_df,
+                line_kws=dict(lw=1.0, color=pal[1]),
+                marker="",
+                lowess=lowess,
+                truncate=True,
+            )
 
         grid.plot_marginals(
             sns.distplot, kde=False, hist_kws=dict(linewidth=0), color=pal[2]
@@ -61,8 +62,8 @@ class GIPlot(CrispyPlot):
 
         grid.ax_joint.grid(axis="both", lw=0.1, color="#e1e1e1", zorder=0)
 
-        cor, pval = pearsonr(plot_df[x_gene], plot_df[y_gene])
-        annot_text = f"R={cor:.2g}, p={pval:.1e}"
+        cor, pval = spearmanr(plot_df[x_gene], plot_df[y_gene])
+        annot_text = f"Spearman's R={cor:.2g}, p-value={pval:.1e}"
         grid.ax_joint.text(
             0.95,
             0.05,

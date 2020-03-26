@@ -4,6 +4,7 @@
 import numpy as np
 import pandas as pd
 import seaborn as sns
+import matplotlib.pyplot as plt
 import matplotlib.colors as colors
 from natsort import natsorted
 from crispy.DataImporter import Sample
@@ -118,6 +119,18 @@ class CrispyPlot:
         "inversion_t_t": "#ff7f00",
     }
 
+    PPI_PAL = {
+        "T": "#fc8d62",
+        "1": "#656565",
+        "2": "#7c7c7c",
+        "3": "#949494",
+        "4": "#ababab",
+        "5+": "#c3c3c3",
+        "-": "#2b8cbe",
+    }
+
+    PPI_ORDER = ["T", "1", "2", "3", "4", "5+", "-"]
+
     # BOXPLOT PROPOS
     BOXPROPS = dict(linewidth=1.0)
     WHISKERPROPS = dict(linewidth=1.0)
@@ -179,6 +192,19 @@ class CrispyPlot:
         palettes = pd.DataFrame(dict(tissue=pal_tissue, media=pal_growth))
 
         return palettes
+
+    @classmethod
+    def triu_plot(cls, x, y, color, label, **kwargs):
+        df = pd.DataFrame(dict(x=x, y=y)).dropna()
+        ax = plt.gca()
+        ax.hexbin(
+            df["x"], df["y"], cmap="Spectral_r", gridsize=50, mincnt=1, bins="log", lw=0
+        )
+        ax.grid(True, ls=":", lw=0.1, alpha=1.0, zorder=0)
+
+    @classmethod
+    def diag_plot(cls, x, color, label, **kwargs):
+        sns.distplot(x[~np.isnan(x)], label=label, color=CrispyPlot.PAL_DBGD[0], kde=False)
 
 
 class MidpointNormalize(colors.Normalize):
