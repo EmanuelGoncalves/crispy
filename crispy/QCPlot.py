@@ -221,7 +221,8 @@ class QCplot(CrispyPlot):
             y_lim = ax.get_ylim()
             ax.set_ylim(text_y, y_lim[1])
 
-        ax.yaxis.set_major_locator(plticker.MultipleLocator(base=tick_base))
+        if tick_base is not None:
+            ax.yaxis.set_major_locator(plticker.MultipleLocator(base=tick_base))
 
         return ax
 
@@ -282,7 +283,7 @@ class QCplot(CrispyPlot):
             )
 
         # Mean
-        if plot_mean is True:
+        if plot_mean:
             x, y, xy_auc = cls.recall_curve(df.mean(1), index_set)
 
             plot_stats["auc"]["mean"] = xy_auc

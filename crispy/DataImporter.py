@@ -27,8 +27,9 @@ class Sample:
     def __init__(
         self,
         index="model_id",
-        samplesheet_file="model_list_20200107.csv",
+        samplesheet_file="model_list_20200204.csv",
         growth_file="GrowthRates_v1.3.0_20190222.csv",
+        medium_file="SIDMvsMedia.xlsx",
         institute_file="crispr/CRISPR_Institute_Origin_20191108.csv.gz",
     ):
         self.index = index
@@ -56,6 +57,17 @@ class Sample:
             .reindex(self.samplesheet.index)
             .values
         )
+
+        # Breakdown tissue type
+        self.samplesheet["model_type"] = [
+            c if t in ["Lung", "Haematopoietic and Lymphoid"] else t
+            for t, c in self.samplesheet[["tissue", "cancer_type"]].values
+        ]
+
+        # Screen medium
+        self.media = pd.read_excel(f"{DPATH}/{medium_file}")
+        self.media = self.media.groupby("SIDM")["Screen Media"].first()
+        self.samplesheet["media"] = self.media.reindex(self.samplesheet.index)
 
     def get_covariates(self, culture_conditions=True, cancer_type=True):
         covariates = []
@@ -85,7 +97,7 @@ class WES:
     def get_data(self, as_matrix=True, mutation_class=None, recurrence=False):
         df = self.wes.copy()
 
-        # Filter my mutation types
+        # Filter by mutation types
         if mutation_class is not None:
             df = df[df["Classification"].isin(mutation_class)]
 
@@ -145,11 +157,13 @@ class GeneExpression:
         self,
         voom_file="gexp/rnaseq_voom.csv.gz",
         read_count="gexp/rnaseq_20191101/rnaseq_read_count_20191101.csv",
+        discrete_table="gexp/GDSC_discretised_table.csv.gz",
     ):
         self.voom = pd.read_csv(f"{DPATH}/{voom_file}", index_col=0)
         self.readcount = pd.read_csv(f"{DPATH}/{read_count}", index_col=1).drop(
             columns=["model_id"]
         )
+        self.discrete = pd.read_csv(f"{DPATH}/GDSC_discretised_table.csv.gz", index_col=0)
 
     def get_data(self, dtype="voom"):
         if dtype != "voom":
@@ -192,6 +206,76 @@ class GeneExpression:
         rpkm = self.filter(dtype="rpkm", subset=subset)
         rpkm = (rpkm < rpkm_threshold).astype(int)
         return rpkm
+
+
+class DrugResponse:
+    """
+    Importer module for drug-response measurements acquired at Sanger Institute GDSC (https://cancerrxgene.org).
+
+    """
+
+    SAMPLE_COLUMNS = ["model_id"]
+    DRUG_COLUMNS = ["Drug Id", "Drug name", "Dataset version"]
+
+    def __init__(
+        self,
+        drugresponse_file="drugresponse/DrugResponse_PANCANCER_GDSC1_GDSC2_IC_20191119.csv.gz",
+    ):
+        # Import and Merge drug response matrix (IC50)
+        self.drugresponse = pd.read_csv(f"{DPATH}/{drugresponse_file}")
+        self.drugresponse = self.drugresponse[
+            ~self.drugresponse["Cell line name"].isin(["LS-1034"])
+        ]
+
+        # Drug max concentration
+        self.maxconcentration = self.drugresponse.groupby(self.DRUG_COLUMNS)[
+            "Max conc"
+        ].first()
+
+    def get_data(self, dtype="IC50"):
+        data = pd.pivot_table(
+            self.drugresponse,
+            index=self.DRUG_COLUMNS,
+            columns=self.SAMPLE_COLUMNS,
+            values=dtype,
+            fill_value=np.nan,
+        )
+
+        return data
+
+    def filter(
+        self,
+        dtype="IC50",
+        subset=None,
+        min_events=3,
+        min_meas=0.75,
+        max_c=0.5,
+        filter_min_observations=False,
+        filter_max_concentration=False,
+        filter_combinations=False,
+    ):
+        # Drug max screened concentration
+        df = self.get_data(dtype="IC50")
+        d_maxc = np.log(self.maxconcentration * max_c)
+
+        # - Filters
+        # Subset samples
+        if subset is not None:
+            df = df.loc[:, df.columns.isin(subset)]
+
+        # Filter by mininum number of observations
+        if filter_min_observations:
+            df = df[df.count(1) > (df.shape[1] * min_meas)]
+
+        # Filter by max screened concentration
+        if filter_max_concentration:
+            df = df[[sum(df.loc[i] < d_maxc.loc[i]) >= min_events for i in df.index]]
+
+        # Filter combinations
+        if filter_combinations:
+            df = df[[" + " not in i[1] for i in df.index]]
+
+        return self.get_data(dtype=dtype).loc[df.index, df.columns]
 
 
 class BioGRID:
@@ -248,9 +332,9 @@ class BioGRID:
                 ["Official Symbol Interactor A", "Official Symbol Interactor B"]
             ].values
         }
-        self.biogrid = list(
-            {(p1, p2) for p in self.biogrid for p1, p2 in [(p[0], p[1]), (p[1], p[0])]}
-        )
+        self.biogrid = {
+            (p1, p2) for p in self.biogrid for p1, p2 in [(p[0], p[1]), (p[1], p[0])]
+        }
 
 
 class PPI:
@@ -268,13 +352,17 @@ class PPI:
         self.string_alias_file = string_alias_file
 
     @classmethod
-    def ppi_annotation(cls, df, ppi, target_thres=5):
-        genes_source = set(df["y_id"]).intersection(set(ppi.vs["name"]))
-        genes_target = set(df["x_id"]).intersection(set(ppi.vs["name"]))
+    def ppi_annotation(
+        cls, df, ppi, target_thres=5, y_var="y_id", x_var="x_id", ppi_var="x_ppi"
+    ):
+        genes_source = set(df[y_var]).intersection(set(ppi.vs["name"]))
+        genes_target = set(df[x_var]).intersection(set(ppi.vs["name"]))
 
         # Calculate distance between drugs and genes in PPI
         dist_g_g = {
-            g: pd.Series(ppi.shortest_paths(source=g, target=genes_target)[0], index=genes_target).to_dict()
+            g: pd.Series(
+                ppi.shortest_paths(source=g, target=genes_target)[0], index=genes_target
+            ).to_dict()
             for g in genes_source
         }
 
@@ -297,9 +385,10 @@ class PPI:
         df = df.assign(
             x_ppi=[
                 gene_gene_annot(g_source, g_target)
-                for g_source, g_target in df[["y_id", "x_id"]].values
+                for g_source, g_target in df[[y_var, x_var]].values
             ]
         )
+        df = df.rename(columns=dict(x_ppi=ppi_var))
 
         return df
 
@@ -498,45 +587,118 @@ class CORUM:
         return idmap
 
 
+class HuRI:
+    def __init__(self, ppi_file="HuRI.tsv", idmap_file="HuRI_biomart_idmap.tsv"):
+        self.huri = pd.read_csv(f"{DPATH}/{ppi_file}", sep="\t", header=None)
+
+        # Convert to a set of pairs {(p1, p2), ...}
+        self.huri = {(p1, p2) for p1, p2 in self.huri.values}
+
+        # Map ids
+        idmap = pd.read_csv(f"{DPATH}/{idmap_file}", sep="\t", index_col=0)[
+            "Gene name"
+        ].to_dict()
+        self.huri = {
+            (idmap[p1], idmap[p2])
+            for p1, p2 in self.huri
+            if p1 in idmap and p2 in idmap
+        }
+
+        # Remove self interactions
+        self.huri = {(p1, p2) for p1, p2 in self.huri if p1 != p2}
+
+        # Build set of interactions (both directions, i.e. p1-p2, p2-p1)
+        self.huri = {
+            (p1, p2) for p in self.huri for p1, p2 in [(p[0], p[1]), (p[1], p[0])]
+        }
+
+
+class Metabolomics:
+    def __init__(self, metab_file="metabolomics/CCLE_metabolomics_20190502.csv"):
+        m_ss = Sample().samplesheet
+        m_ss = m_ss.reset_index().dropna(subset=["BROAD_ID"]).set_index("BROAD_ID")
+
+        # Import
+        self.metab = pd.read_csv(f"{DPATH}/{metab_file}")
+        self.metab["model_id"] = self.metab["DepMap_ID"].replace(m_ss["model_id"])
+        self.metab = self.metab.groupby("model_id").mean().T
+
+    def get_data(self):
+        return self.metab.copy()
+
+    def filter(
+            self,
+            dtype="protein",
+            subset=None,
+            normality=False,
+            iqr_range=None,
+            perc_measures=None,
+            quantile_normalise=False,
+    ):
+        df = self.get_data()
+
+        # Subset matrices
+        if subset is not None:
+            df = df.loc[:, df.columns.isin(subset)]
+
+        return df
+
+
 class Proteomics:
     def __init__(
         self,
-        protein_matrix="proteomics/E0022_P05_protein_intensities.txt",
-        manifest="proteomics/E0022_P01-P05_sample_map.txt",
-        replicates_corr="proteomics/replicates_corr.csv.gz",
+        protein_matrix="proteomics/E0022_P06_Protein_Matrix_ProNorM.tsv.gz",
+        protein_raw_matrix="proteomics/E0022_P06_Protein_Matrix_Raw_Mean_Intensities.tsv.gz",
+        protein_mean_raw="proteomics/E0022_P06_Protein_Mean_Raw_Intensities.tsv",
+        protein_rep_corr="proteomics/E0022_P06_final_reps_correlation.csv",
+        manifest="proteomics/E0022_P06_final_sample_map.txt",
+        samplesheet="proteomics/E0022_P06_samplehseet.csv",
         broad_tmt="proteomics/broad_tmt.csv.gz",
         coread_tmt="proteomics/proteomics_coread_processed_parsed.csv",
         hgsc_prot="proteomics/hgsc_cell_lines_proteomics.csv",
         brca_prot="proteomics/brca_cell_lines_proteomics_preprocessed.csv",
     ):
-        ss = Sample().samplesheet
+        self.ss = pd.read_csv(f"{DPATH}/{samplesheet}", index_col=0)
 
         deprecated_ids = self.map_deprecated()
 
+        # Import manifest
+        self.manifest = pd.read_csv(f"{DPATH}/{manifest}", index_col=0, sep="\t")
+
+        # Remove excluded samples
+        self.exclude_man = self.manifest[~self.manifest["SIDM"].isin(self.ss.index)]
+        self.manifest = self.manifest[~self.manifest.index.isin(self.exclude_man.index)]
+
+        # Replicate correlation
+        self.reps = pd.read_csv(f"{DPATH}/{protein_rep_corr}", index_col=0).iloc[:, 0]
+
+        # Import mean protein abundance
+        self.protein_raw = pd.read_csv(
+            f"{DPATH}/{protein_raw_matrix}", sep="\t", index_col=0
+        )
+        self.peptide_raw_mean = pd.read_csv(
+            f"{DPATH}/{protein_mean_raw}", sep="\t", index_col=0
+        ).iloc[:, 0]
+
         # Import imputed protein levels
         self.protein = pd.read_csv(f"{DPATH}/{protein_matrix}", sep="\t", index_col=0).T
+
         self.protein["Protein"] = (
             self.protein.reset_index()["index"]
             .replace(deprecated_ids["Entry name"])
             .values
         )
         self.protein = self.protein.set_index("Protein")
+        self.protein = self.protein.rename(
+            columns=self.manifest.groupby("Cell_line")["SIDM"].first()
+        )
 
-        exclude_proteins = ["CEIP2_HUMAN"]
-        self.protein = self.protein.drop(exclude_proteins)
-
-        # Import manifest
-        self.manifest = pd.read_csv(f"{DPATH}/{manifest}", index_col=0, sep="\t")
-
-        # Remove excluded samples
-        self.exclude_man = self.manifest[~self.manifest["SIDM"].isin(ss.index)]
-
-        self.manifest = self.manifest[~self.manifest.index.isin(self.exclude_man.index)]
-        self.protein = self.protein.drop(columns=self.exclude_man.index)
-
-        # Import replicates correlation
-        self.rep_corrs = pd.read_csv(f"{DPATH}/{replicates_corr}")
-        self.sample_corrs = self.rep_corrs.groupby("SIDM_1")["pearson"].mean()
+        exclude_controls = [
+            "Control_HEK293T_lys",
+            "Control_HEK293T_std_H002",
+            "Control_HEK293T_std_H003",
+        ]
+        self.protein = self.protein.drop(columns=exclude_controls)
 
         # Import Broad TMT data-set
         self.broad = pd.read_csv(f"{DPATH}/{broad_tmt}", compression="gzip")
@@ -548,11 +710,11 @@ class Proteomics:
 
         # Import CRC COREAD TMT
         self.coread = pd.read_csv(f"{DPATH}/{coread_tmt}", index_col=0)
-        self.coread = self.coread.reindex(
-            columns=self.coread.columns.isin(ss["model_name"])
-        )
+        self.coread = self.coread.loc[
+            :, self.coread.columns.isin(self.ss["model_name"])
+        ]
 
-        coread_ss = ss[ss["model_name"].isin(self.coread.columns)]
+        coread_ss = self.ss[self.ss["model_name"].isin(self.coread.columns)]
         coread_ss = coread_ss.reset_index().set_index("model_name")
         self.coread = self.coread.rename(columns=coread_ss["model_id"])
 
@@ -563,37 +725,26 @@ class Proteomics:
             .drop(columns=["Majority protein IDs"])
         )
         self.hgsc = self.hgsc.groupby("Gene names").mean()
-        self.hgsc = self.hgsc.reindex(columns=self.hgsc.columns.isin(ss["model_name"]))
+        self.hgsc = self.hgsc.loc[:, self.hgsc.columns.isin(self.ss["model_name"])]
 
-        hgsc_ss = ss[ss["model_name"].isin(self.hgsc.columns)]
+        hgsc_ss = self.ss[self.ss["model_name"].isin(self.hgsc.columns)]
         hgsc_ss = hgsc_ss.reset_index().set_index("model_name")
         self.hgsc = self.hgsc.rename(columns=hgsc_ss["model_id"])
 
         # Import BRCA proteomics
         self.brca = pd.read_csv(f"{DPATH}/{brca_prot}", index_col=0)
-        self.brca = self.brca.reindex(columns=self.brca.columns.isin(ss["model_name"]))
+        self.brca = self.brca.loc[:, self.brca.columns.isin(self.ss["model_name"])]
 
-        brca_ss = ss[ss["model_name"].isin(self.brca.columns)]
+        brca_ss = self.ss[self.ss["model_name"].isin(self.brca.columns)]
         brca_ss = brca_ss.reset_index().set_index("model_name")
         self.brca = self.brca.rename(columns=brca_ss["model_id"])
 
-    def get_data(
-        self,
-        dtype="protein",
-        average_replicates=True,
-        map_ids=True,
-        replicate_thres=None,
-        quantile_normalise=False,
-    ):
+    def get_data(self, dtype="protein", map_ids=True, quantile_normalise=False):
         if dtype.lower() == "protein":
             data = self.protein.copy()
+
         else:
             assert False, f"{dtype} not supported"
-
-        if replicate_thres is not None:
-            reps = self.rep_corrs.query(f"pearson > {replicate_thres}")
-            reps = set(reps["sample1"]).union(set(reps["sample2"]))
-            data = data[reps]
 
         if quantile_normalise:
             data = pd.DataFrame(
@@ -601,11 +752,6 @@ class Proteomics:
                 index=data.index,
                 columns=data.columns,
             )
-
-        if average_replicates:
-            data = data.groupby(
-                self.manifest.reindex(data.columns)["SIDM"], axis=1
-            ).agg(np.nanmean)
 
         if map_ids:
             pmap = self.map_gene_name().reindex(data.index)["GeneSymbol"].dropna()
@@ -622,14 +768,9 @@ class Proteomics:
         normality=False,
         iqr_range=None,
         perc_measures=None,
-        replicate_thres=None,
         quantile_normalise=False,
     ):
-        df = self.get_data(
-            dtype=dtype,
-            quantile_normalise=quantile_normalise,
-            replicate_thres=replicate_thres,
-        )
+        df = self.get_data(dtype=dtype, quantile_normalise=quantile_normalise)
 
         # Subset matrices
         if subset is not None:
@@ -682,6 +823,46 @@ class Proteomics:
 
         return idmap
 
+    def calculate_mean_protein_intensities(
+        self, peptide_matrix_raw="proteomics/E0022_P06_Peptide_Matrix_Raw.tsv.gz"
+    ):
+        peptide_raw = pd.read_csv(
+            f"{DPATH}/{peptide_matrix_raw}", sep="\t", index_col=0
+        ).T
+
+        peptide_raw_mean = (
+            peptide_raw.pipe(np.log2).groupby(self.manifest["SIDM"], axis=1).mean()
+        )
+        peptide_raw_mean = peptide_raw_mean.groupby(
+            [p.split("=")[0] for p in peptide_raw_mean.index]
+        ).mean()
+        peptide_raw_mean = peptide_raw_mean.mean(1).sort_values()
+
+        pmap = (
+            self.map_gene_name().reindex(peptide_raw_mean.index)["GeneSymbol"].dropna()
+        )
+
+        peptide_raw_mean = peptide_raw_mean[peptide_raw_mean.index.isin(pmap.index)]
+        peptide_raw_mean = peptide_raw_mean.groupby(
+            pmap.reindex(peptide_raw_mean.index)
+        ).mean()
+
+        return peptide_raw_mean
+
+    def replicates_correlation(self, reps_file="proteomics/E0022_P06_Protein_Matrix_Replicate_ProNorM.tsv.gz"):
+        reps = pd.read_csv(f"{DPATH}/{reps_file}", sep="\t", index_col=0).T
+
+        reps_corr = {}
+
+        for n, df in reps.groupby(self.manifest["SIDM"], axis=1):
+            df_corr = df.corr()
+            df_corr = pd.DataFrame(df_corr.pipe(np.triu, k=1)).replace(0, np.nan)
+            reps_corr[n] = df_corr.unstack().dropna().mean()
+
+        reps_corr = pd.Series(reps_corr, name="RepsCorrelation").sort_values(ascending=False)
+
+        return reps_corr
+
 
 class CRISPR:
     """
@@ -693,14 +874,34 @@ class CRISPR:
         self,
         fc_file="crispr/CRISPR_corrected_qnorm_20191108.csv.gz",
         institute_file="crispr/CRISPR_Institute_Origin_20191108.csv.gz",
+        merged_file="crispr/CCR_SQ_Combat_PC4_All.csv.gz",
     ):
         self.crispr = pd.read_csv(f"{DPATH}/{fc_file}", index_col=0)
         self.institute = pd.read_csv(
             f"{DPATH}/{institute_file}", index_col=0, header=None
         ).iloc[:, 0]
 
-    def get_data(self, scale=True):
-        df = self.crispr.copy()
+        sid = (
+            Sample()
+            .samplesheet.reset_index()
+            .dropna(subset=["BROAD_ID"])
+            .groupby("BROAD_ID")["model_id"]
+            .first()
+        )
+
+        self.merged = pd.read_csv(f"{DPATH}/{merged_file}", index_col=0)
+        self.merged_institute = pd.Series(
+            {c: "Broad" if c.startswith("ACH-") else "Sanger" for c in self.merged}
+        )
+
+        self.merged = self.merged.rename(columns=sid)
+        self.merged_institute = self.merged_institute.rename(index=sid)
+
+    def get_data(self, scale=True, dtype="original"):
+        if dtype == "merged":
+            df = self.merged.copy()
+        else:
+            df = self.crispr.copy()
 
         if scale:
             df = self.scale(df)
@@ -709,6 +910,7 @@ class CRISPR:
 
     def filter(
         self,
+        dtype="original",
         subset=None,
         scale=True,
         std_filter=False,
@@ -718,7 +920,7 @@ class CRISPR:
         drop_core_essential_broad=False,
         binarise_thres=None,
     ):
-        df = self.get_data(scale=True)
+        df = self.get_data(scale=True, dtype=dtype)
 
         # - Filters
         # Subset matrices
@@ -737,7 +939,9 @@ class CRISPR:
             df = df[~df.index.isin(Utils.get_broad_core_essential())]
 
         # - Subset matrices
-        x = self.get_data(scale=scale).reindex(index=df.index, columns=df.columns)
+        x = self.get_data(scale=scale, dtype=dtype).reindex(
+            index=df.index, columns=df.columns
+        )
 
         if binarise_thres is not None:
             x = (x < binarise_thres).astype(int)
@@ -812,7 +1016,7 @@ class Mobem:
 
         # Subset matrices
         if subset is not None:
-            df = df.reindex(columns=df.columns.isin(subset))
+            df = df.loc[:, df.columns.isin(subset)]
 
         # Minimum number of events
         df = df[df.sum(1) >= min_events]
@@ -924,25 +1128,80 @@ class CopyNumber:
             }
         )
 
-    @staticmethod
-    def calculate_ploidy(cn_seg):
+    @classmethod
+    def genomic_instability(cls, seg_file="copy_number/Summary_segmentation_data_994_lines_picnic.csv.gz"):
+        # Import segments
+        cn_seg = pd.read_csv(f"{DPATH}/{seg_file}")
+
+        # Use only autosomal chromosomes
         cn_seg = cn_seg[~cn_seg["chr"].isin(["chrX", "chrY"])]
+        cn_seg = cn_seg[~cn_seg["chr"].isin([23, 24])]
 
-        cn_seg = cn_seg.assign(length=cn_seg["end"] - cn_seg["start"])
-        cn_seg = cn_seg.assign(
-            cn_by_length=cn_seg["length"] * (cn_seg["copy_number"] + 1)
-        )
+        # Segment length
+        cn_seg = cn_seg.assign(length=cn_seg.eval("end - start"))
 
-        chrm = (
-            cn_seg.groupby("chr")["cn_by_length"]
-            .sum()
-            .divide(cn_seg.groupby("chr")["length"].sum())
-            - 1
-        )
+        # Calculate genomic instability
+        s_instability = {}
+        for s, df in cn_seg.groupby("model_id"):
+            s_ploidy = np.round(cls.calculate_ploidy(df), 0)
 
-        ploidy = (cn_seg["cn_by_length"].sum() / cn_seg["length"].sum()) - 1
+            s_chr = []
+            # c, c_df = list(df.groupby("chr"))[0]
+            for c, c_df in df.groupby("chr"):
+                c_gain = c_df[c_df["copy_number"] > s_ploidy]["length"].sum() / c_df["length"].sum()
+                c_loss = c_df[c_df["copy_number"] < s_ploidy]["length"].sum() / c_df["length"].sum()
+                s_chr.append(c_gain + c_loss)
 
-        return chrm, ploidy
+            s_instability[s] = np.mean(s_chr)
+
+        s_instability = pd.Series(s_instability)
+        return s_instability
+
+    @classmethod
+    def calculate_ploidy(cls, cn_seg):
+        # Use only autosomal chromosomes
+        cn_seg = cn_seg[~cn_seg["chr"].isin(["chrX", "chrY"])]
+        cn_seg = cn_seg[~cn_seg["chr"].isin([23, 24])]
+
+        ploidy = cls.weighted_median(cn_seg["copy_number"], cn_seg["length"])
+
+        return ploidy
+
+        # cn_seg = cn_seg.assign(length=cn_seg["end"] - cn_seg["start"])
+        # cn_seg = cn_seg.assign(
+        #     cn_by_length=cn_seg["length"] * (cn_seg["copy_number"] + 1)
+        # )
+        #
+        # chrm = (
+        #     cn_seg.groupby("chr")["cn_by_length"]
+        #     .sum()
+        #     .divide(cn_seg.groupby("chr")["length"].sum())
+        #     - 1
+        # )
+        #
+        # ploidy = (cn_seg["cn_by_length"].sum() / cn_seg["length"].sum()) - 1
+        #
+        # return chrm, ploidy
+
+    @staticmethod
+    def weighted_median(data, weights):
+        # Origingal code: https://gist.github.com/tinybike/d9ff1dad515b66cc0d87
+        data, weights = np.array(data).squeeze(), np.array(weights).squeeze()
+        s_data, s_weights = map(np.array, zip(*sorted(zip(data, weights))))
+        midpoint = 0.5 * sum(s_weights)
+
+        if any(weights > midpoint):
+            w_median = (data[weights == np.max(weights)])[0]
+
+        else:
+            cs_weights = np.cumsum(s_weights)
+            idx = np.where(cs_weights <= midpoint)[0][-1]
+            if cs_weights[idx] == midpoint:
+                w_median = np.mean(s_data[idx:idx + 2])
+            else:
+                w_median = s_data[idx + 1]
+
+        return w_median
 
     @staticmethod
     def is_amplified(

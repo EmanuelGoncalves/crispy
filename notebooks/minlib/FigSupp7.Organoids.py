@@ -27,7 +27,7 @@ import matplotlib.pyplot as plt
 from math import sqrt
 from crispy.QCPlot import QCplot
 from scipy.stats import spearmanr
-from minlib.Utils import density_interpolate
+from crispy.CrispyPlot import density_interpolate
 from sklearn.metrics import mean_squared_error
 from crispy.CRISPRData import CRISPRDataSet, Library
 

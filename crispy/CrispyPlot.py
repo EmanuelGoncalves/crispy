@@ -40,10 +40,7 @@ class CrispyPlot:
         4: "#de2d26",
     }
 
-    PAL_YES_NO = {
-        "No": "#E1E1E1",
-        "Yes": PAL_SET2[1],
-    }
+    PAL_YES_NO = {"No": "#E1E1E1", "Yes": PAL_SET2[1]}
 
     PAL_TISSUE = {
         "Lung": "#c50092",
@@ -72,7 +69,7 @@ class CrispyPlot:
         "Vulva": "#ff7580",
         "Placenta": "#994800",
         "Testis": "#875960",
-        "Small Intestine": "fb8072",
+        "Small Intestine": "#fb8072",
         "Adrenal Gland": "#ff8155",
     }
 
@@ -89,7 +86,9 @@ class CrispyPlot:
     PAL_CANCER_TYPE = dict(
         zip(
             *(
-                natsorted(list(Sample().samplesheet["cancer_type"].value_counts().index)),
+                natsorted(
+                    list(Sample().samplesheet["cancer_type"].value_counts().index)
+                ),
                 sns.color_palette("tab20c").as_hex()
                 + sns.color_palette("tab20b").as_hex()
                 + sns.light_palette(PAL_SET1[1], n_colors=5).as_hex()[:-1],
@@ -98,6 +97,8 @@ class CrispyPlot:
     )
     PAL_CANCER_TYPE["Pancancer"] = PAL_SET1[5]
 
+    PAL_MODEL_TYPE = {**PAL_CANCER_TYPE, **PAL_TISSUE_2}
+
     PAL_GROWTH_CONDITIONS = {
         "Adherent": "#fb8072",
         "Semi-Adherent": "#80b1d3",
@@ -105,10 +106,7 @@ class CrispyPlot:
         "Unknown": "#d9d9d9",
     }
 
-    PAL_MSS = {
-        "MSS": "#d9d9d9",
-        "MSI": "#fb8072",
-    }
+    PAL_MSS = {"MSS": "#d9d9d9", "MSI": "#fb8072"}
 
     SV_PALETTE = {
         "tandem-duplication": "#377eb8",
@@ -130,6 +128,11 @@ class CrispyPlot:
     }
 
     PPI_ORDER = ["T", "1", "2", "3", "4", "5+", "-"]
+
+    GENESETS = ["essential", "nonessential", "nontargeting"]
+    GENESETS_PAL = dict(
+        essential="#e6550d", nonessential="#3182bd", nontargeting="#31a354"
+    )
 
     # BOXPLOT PROPOS
     BOXPROPS = dict(linewidth=1.0)
@@ -198,13 +201,98 @@ class CrispyPlot:
         df = pd.DataFrame(dict(x=x, y=y)).dropna()
         ax = plt.gca()
         ax.hexbin(
-            df["x"], df["y"], cmap="Spectral_r", gridsize=50, mincnt=1, bins="log", lw=0
+            df["x"], df["y"], cmap="Spectral_r", gridsize=30, mincnt=1, bins="log", lw=0
         )
         ax.grid(True, ls=":", lw=0.1, alpha=1.0, zorder=0)
 
     @classmethod
+    def triu_scatter_plot(cls, x, y, color, label, **kwargs):
+        df = pd.DataFrame(dict(x=x, y=y)).dropna()
+        df["z"] = cls.density_interpolate(df["x"], df["y"], dtype="interpolate")
+        df = df.sort_values("z")
+
+        ax = plt.gca()
+
+        ax.scatter(
+            df["x"],
+            df["y"],
+            c=df["z"],
+            marker="o",
+            edgecolor="",
+            s=5,
+            alpha=0.8,
+            cmap="Spectral_r",
+        )
+
+        ax.grid(True, ls=":", lw=0.1, alpha=1.0, zorder=0)
+
+    @classmethod
     def diag_plot(cls, x, color, label, **kwargs):
-        sns.distplot(x[~np.isnan(x)], label=label, color=CrispyPlot.PAL_DBGD[0], kde=False)
+        sns.distplot(
+            x[~np.isnan(x)], label=label, color=CrispyPlot.PAL_DBGD[0], kde=False
+        )
+
+    @classmethod
+    def attenuation_scatter(
+        cls,
+        x,
+        y,
+        plot_df,
+        z="cluster",
+        zorder=None,
+        pal=None,
+        figsize=(1.5, 1.5),
+        ax=None,
+        ax_min=None,
+        ax_max=None,
+    ):
+        if ax_min is None:
+            ax_min = plot_df[[x, y]].min().min() * 1.1
+
+        if ax_max is None:
+            ax_max = plot_df[[x, y]].max().max() * 1.1
+
+        if zorder is None:
+            zorder = ["High", "Low"]
+
+        if pal is None:
+            pal = dict(High=cls.PAL_DTRACE[1], Low=cls.PAL_DTRACE[0])
+
+        if ax is None:
+            _, ax = plt.subplots(1, 1, figsize=figsize, dpi=600)
+
+        for n in zorder[::-1]:
+            df = plot_df.query(f"{z} == '{n}'")
+
+            sns.regplot(
+                x,
+                y,
+                data=df,
+                color=pal[n],
+                fit_reg=False,
+                scatter_kws={"s": 3, "alpha": 1.0, "linewidth": 0},
+                ax=ax,
+            )
+
+            # sns.kdeplot(
+            #     df[[x, y]],
+            #     cmap=sns.light_palette(pal[n], as_cmap=True),
+            #     legend=False,
+            #     shade=False,
+            #     shade_lowest=False,
+            #     n_levels=9,
+            #     alpha=0.8,
+            #     lw=0.1,
+            #     ax=ax,
+            # )
+
+        ax.set_xlim(ax_min, ax_max)
+        ax.set_ylim(ax_min, ax_max)
+
+        ax.grid(True, ls="-", lw=0.1, alpha=1.0, zorder=0)
+        ax.plot([ax_min, ax_max], [ax_min, ax_max], "k--", lw=0.3)
+
+        return ax
 
 
 class MidpointNormalize(colors.Normalize):

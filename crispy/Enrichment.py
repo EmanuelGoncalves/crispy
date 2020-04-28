@@ -127,6 +127,32 @@ class Enrichment:
             }
         return signatures
 
+    @classmethod
+    def read_signature(cls, gmt_file, signature):
+        return cls.read_gmt(gmt_file)[signature]
+
+    @classmethod
+    def signature(cls, signature):
+        if signature.startswith("HALLMARK_"):
+            gs_file = "h.all.v7.1.symbols.gmt"
+
+        elif signature.startswith("KEGG_"):
+            gs_file = "c2.cp.kegg.v7.1.symbols.gmt"
+
+        elif signature.startswith("REACTOME_"):
+            gs_file = "c2.cp.v7.1.symbols.gmt"
+
+        elif signature.startswith("SIG_"):
+            gs_file = "c2.cp.v7.1.symbols.gmt"
+
+        elif signature.startswith("CSR_"):
+            gs_file = "c6.all.v7.1.symbols.gmt"
+
+        else:
+            gs_file = "c5.all.v7.1.symbols.gmt"
+
+        return cls.read_gmt(f"{dpath}/pathways/{gs_file}")[signature]
+
     def gsea(self, values, signature):
         return SSGSEA.gsea(values.to_dict(), signature, permutations=self.permutations)
 

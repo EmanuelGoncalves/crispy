@@ -2,6 +2,7 @@
 # Copyright (C) 2019 Emanuel Goncalves
 
 import os
+import h5py
 import gseapy
 import logging
 import matplotlib
@@ -23,14 +24,17 @@ DPATH = pkg_resources.resource_filename("crispy", "data")
 class MOFA:
     def __init__(
         self,
-        views,
+        views=None,
+        groupby=None,
         likelihoods=None,
         factors_n=10,
         covariates=None,
         fit_intercept=True,
         scale_views=True,
+        scale_groups=True,
         iterations=1000,
         convergence_mode="slow",
+        use_overlap=True,
         startELBO=1,
         freqELBO=1,
         dropR2=None,
@@ -47,23 +51,25 @@ class MOFA:
         """
 
         self.verbose = verbose
+        self.from_file = from_file
+
+        self.factors_n = factors_n
+        self.factors_labels = [f"F{i + 1}" for i in range(factors_n)]
 
         self.likelihoods = likelihoods
 
-        self.factors_n = factors_n
-        self.factors_labels = [f"F{i+1}" for i in range(factors_n)]
-
         self.views = views
         self.scale_views = scale_views
+        self.scale_groups = scale_groups
         self.views_labels = list(self.views)
+
+        self.use_overlap = use_overlap
 
         self.iterations = iterations
         self.convergence_mode = convergence_mode
         self.startELBO = startELBO
         self.freqELBO = freqELBO
         self.dropR2 = dropR2
-
-        self.from_file = from_file
 
         # Covariates
         self.covariates = covariates
@@ -75,11 +81,17 @@ class MOFA:
         )
 
         if self.covariates is not None:
-            LOG.info(f"Covariates provided: {self.covariates.shape}")
-            self.samples = self.samples.intersection(set(self.covariates.index))
+            LOG.info(f"Covariates provided N={len(self.covariates)}")
+            for k, v in self.covariates.items():
+                self.samples = self.samples.intersection(set(v.index))
 
         self.samples = list(self.samples)
-        LOG.info(f"Samples: {len(self.samples)}")
+        LOG.info(f"Overlaping samples: {len(self.samples)}")
+
+        # Reduce to overlaping samples
+        if self.use_overlap:
+            for k, df in self.views.items():
+                self.views[k] = df[self.samples]
 
         # Info
         for k, df in self.views.items():
@@ -94,22 +106,30 @@ class MOFA:
         self.data = []
 
         for k in self.views_labels:
-            df = self.views[k][self.samples].copy()
+            df = self.views[k].copy()
             df.index.name = "feature"
             df.columns.name = "sample"
 
             df = df.unstack().rename("value").reset_index()
 
+            if groupby is not None:
+                df["group"] = groupby.reindex(df["sample"]).values
+
+            else:
+                df = df.assign(group="gdsc")
+
             self.data.append(df.assign(view=k))
 
-        self.data = pd.concat(self.data, ignore_index=True).assign(group="gdsc")
-        self.data = self.data[["sample", "feature", "view", "group", "value"]].dropna()
+        self.data = pd.concat(self.data, ignore_index=True)
+        self.data = self.data[["sample", "group", "feature", "value", "view"]].dropna()
 
         # Initialise entry point
         self.ep = entry_point()
 
         # Set data options
-        self.ep.set_data_options(scale_groups=False, scale_views=self.scale_views)
+        self.ep.set_data_options(
+            scale_groups=self.scale_groups, scale_views=self.scale_views
+        )
         self.ep.set_data_df(self.data, likelihoods=self.likelihoods)
 
         # Set model options
@@ -128,38 +148,75 @@ class MOFA:
         # Run MOFA
         self.ep.build()
 
-        if (self.from_file is not None) and os.path.isfile(self.from_file):
-            import h5py
-
-            f = h5py.File(self.from_file, "r")
-
-            self.factors = pd.DataFrame(
-                f["expectations"]["Z"]["gdsc"].value.T,
-                index=[s.decode("utf-8") for s in f["samples"]["gdsc"].value],
-                columns=self.factors_labels,
-            )
-
-            self.weights = {
-                n: pd.DataFrame(
-                    f["expectations"]["W"][n].value.T,
-                    index=self.views[n].index,
-                    columns=self.factors_labels,
-                )
-                for n, df in f["expectations"]["W"].items()
-            }
-
-            self.rsquare = pd.DataFrame(
-                f["variance_explained"]["r2_per_factor"]["gdsc"].value,
-                index=self.views_labels,
-                columns=self.factors_labels,
-            )
-
-        else:
+        if not os.path.isfile(self.from_file):
             self.ep.run()
+            self.save_hdf5(self.from_file)
 
-            self.factors = self.get_factors()
-            self.weights = self.get_weights()
-            self.rsquare = self.get_rsquare()
+        self.mofa_file = h5py.File(self.from_file, "r")
+
+        self.factors = self.get_factors(self.mofa_file)
+        self.weights = self.get_weights(self.mofa_file)
+        self.rsquare = self.get_rsquare(self.mofa_file)
+
+    @staticmethod
+    def get_factors(mofa_hdf5):
+        factors_n = int(mofa_hdf5["training_stats"]["number_factors"][0])
+        factors_labels = [f"F{i + 1}" for i in range(factors_n)]
+
+        z = mofa_hdf5["expectations"]["Z"]
+        factors = pd.concat(
+            [
+                pd.DataFrame(
+                    df,
+                    columns=[s.decode("utf-8") for s in mofa_hdf5["samples"][k]],
+                    index=factors_labels,
+                ).T
+                for k, df in z.items()
+            ]
+        )
+        return factors
+
+    @staticmethod
+    def get_weights(mofa_hdf5):
+        factors_n = int(mofa_hdf5["training_stats"]["number_factors"][0])
+        factors_labels = [f"F{i + 1}" for i in range(factors_n)]
+
+        w = mofa_hdf5["expectations"]["W"]
+        weights = {
+            n: pd.DataFrame(
+                w[n].value.T,
+                index=[f.decode("utf-8") for f in mofa_hdf5["features"][n]],
+                columns=factors_labels,
+            )
+            for n, df in w.items()
+        }
+        return weights
+
+    @staticmethod
+    def get_rsquare(mofa_hdf5):
+        factors_n = int(mofa_hdf5["training_stats"]["number_factors"][0])
+        factors_labels = [f"F{i + 1}" for i in range(factors_n)]
+
+        r2 = mofa_hdf5["variance_explained"]["r2_per_factor"]
+        rsquare = {
+            k: pd.DataFrame(
+                df,
+                index=[s.decode("utf-8") for s in mofa_hdf5["views"]["views"]],
+                columns=factors_labels,
+            )
+            for k, df in r2.items()
+        }
+        return rsquare
+
+    @classmethod
+    def read_mofa_hdf5(cls, hdf5_file):
+        mofa_hdf5 = h5py.File(hdf5_file, "r")
+
+        factors = cls.get_factors(mofa_hdf5)
+        weights = cls.get_weights(mofa_hdf5)
+        rsquare = cls.get_rsquare(mofa_hdf5)
+
+        return factors, weights, rsquare
 
     @staticmethod
     def lm_residuals(y, x, fit_intercept=True, add_intercept=True):
@@ -182,68 +239,52 @@ class MOFA:
     def regress_out_covariates(self, fit_intercept=True, add_intercept=True):
         views_ = {}
 
-        for k in self.views_labels:
-            # Confirm type is continuous
-            k_dtype = self.views[k].dtypes[0]
+        for k in self.views:
+            if k in self.covariates:
+                cov = self.covariates[k]
 
-            if k_dtype in [int]:
-                LOG.warning(
-                    f"View {k} is of type {k_dtype}; covariates not regressed-out"
-                )
-                views_[k] = self.views[k].copy()
-                continue
+                # Confirm type is continuous
+                k_dtype = self.views[k].dtypes[0]
 
-            if self.verbose > 0:
-                LOG.info(
-                    f"Regressing-out covariates (N={self.covariates.shape[1]}) from {k} view"
-                )
-
-            # Regress-out
-            views_[k] = pd.DataFrame(
-                {
-                    i: self.lm_residuals(
-                        self.views[k].loc[i],
-                        self.covariates,
-                        fit_intercept=fit_intercept,
-                        add_intercept=add_intercept,
+                if k_dtype in [int]:
+                    LOG.warning(
+                        f"View {k} is of type {k_dtype}; covariates not regressed-out"
                     )
-                    for i in self.views[k].index
-                }
-            ).T[self.samples]
+                    views_[k] = self.views[k].copy()
+                    continue
+
+                if self.verbose > 0:
+                    LOG.info(
+                        f"Regressing-out covariates (N={cov.shape[1]}) from {k} view"
+                    )
+
+                # Regress-out
+                views_[k] = pd.DataFrame(
+                    {
+                        i: self.lm_residuals(
+                            self.views[k].loc[i],
+                            cov,
+                            fit_intercept=fit_intercept,
+                            add_intercept=add_intercept,
+                        )
+                        for i in self.views[k].index
+                    }
+                ).T[self.samples]
+
+            else:
+                views_[k] = self.views[k].copy()
 
         return views_
 
-    def get_factors(self):
-        return pd.DataFrame(
-            self.ep.model.nodes["Z"].getExpectation(),
-            index=self.samples,
-            columns=self.factors_labels,
-        )
-
-    def get_weights(self):
-        return {
-            k: pd.DataFrame(
-                self.ep.model.nodes["W"].getExpectation()[i],
-                index=self.views[k].index,
-                columns=self.factors_labels,
-            )
-            for i, k in enumerate(self.views_labels)
-        }
-
-    def get_rsquare(self):
-        return pd.DataFrame(
-            self.ep.model.calculate_variance_explained()[0],
-            index=self.views_labels,
-            columns=self.factors_labels,
-        )
-
-    def pathway_enrichment(self, factor, views=None, genesets=None, nprocesses=4, permutation_num=0):
+    def pathway_enrichment(
+        self, factor, views=None, genesets=None, nprocesses=4, permutation_num=0
+    ):
         if genesets is None:
             genesets = [
-                "c6.all.v7.0.symbols.gmt",
-                "c5.bp.v7.0.symbols.gmt",
-                "h.all.v7.0.symbols.gmt",
-                "c2.cp.kegg.v7.0.symbols.gmt",
+                "c6.all.v7.1.symbols.gmt",
+                "c5.all.v7.1.symbols.gmt",
+                "h.all.v7.1.symbols.gmt",
+                "c2.all.v7.1.symbols.gmt",
             ]
 
         if views is None:
@@ -257,7 +298,8 @@ class MOFA:
                     permutation_num=permutation_num,
                     gene_sets=Enrichment.read_gmt(f"{DPATH}/pathways/{g}"),
                     no_plot=True,
-                ).res2d.assign(geneset=g)
+                )
+                .res2d.assign(geneset=g)
                 .assign(view=v)
                 .reset_index()
                 for v in views
@@ -302,46 +344,57 @@ class MOFAPlot(CrispyPlot):
 
     @classmethod
     def variance_explained_heatmap(cls, mofa_obj, row_order=None):
-        nrows, ncols = mofa_obj.rsquare.shape
-        row_order = list(mofa_obj.rsquare.index) if row_order is None else row_order
+        n_heatmaps = len(mofa_obj.rsquare)
+        nrows, ncols = list(mofa_obj.rsquare.values())[0].shape
+        row_order = (
+            list(list(mofa_obj.rsquare.values())[0].index)
+            if row_order is None
+            else row_order
+        )
 
-        f, (axh, axb) = plt.subplots(
-            1,
+        f, axs = plt.subplots(
+            n_heatmaps,
             2,
             sharex="col",
             sharey="row",
-            figsize=(0.3 * ncols, 0.3 * nrows),
+            figsize=(0.4 * ncols, 0.4 * nrows),
             gridspec_kw=dict(width_ratios=[4, 1]),
         )
 
-        # Heatmap
-        g = sns.heatmap(
-            mofa_obj.rsquare.loc[row_order],
-            cmap="Greys",
-            annot=True,
-            cbar=False,
-            fmt=".2f",
-            linewidths=0.5,
-            ax=axh,
-            annot_kws={"fontsize": 5},
-        )
-        axh.set_xlabel("Factors")
-        axh.set_ylabel("Views")
-        axh.set_title("Variance explained per factor")
-        axh.grid(True, ls="-", lw=0.1, alpha=1.0, zorder=0)
-        g.set_yticklabels(g.get_yticklabels(), rotation=0, horizontalalignment="right")
+        for i, k in enumerate(mofa_obj.rsquare):
+            axh, axb = axs[i]
 
-        # Barplot
-        i_sums = mofa_obj.rsquare.loc[row_order[::-1]].sum(1)
+            df = mofa_obj.rsquare[k]
 
-        norm = matplotlib.colors.Normalize(vmin=0, vmax=i_sums.max())
-        colors = [plt.cm.Greys(norm(v)) for v in i_sums]
+            # Heatmap
+            g = sns.heatmap(
+                df.loc[row_order],
+                cmap="Greys",
+                annot=True,
+                cbar=False,
+                fmt=".2f",
+                linewidths=0.5,
+                ax=axh,
+                annot_kws={"fontsize": 5},
+            )
+            axh.set_xlabel("Factors" if i == (n_heatmaps - 1) else None)
+            axh.set_ylabel(k)
+            axh.set_title("Variance explained per factor" if i == 0 else None)
+            g.set_yticklabels(
+                g.get_yticklabels(), rotation=0, horizontalalignment="right"
+            )
 
-        axb.barh(np.arange(len(row_order)) + 0.5, i_sums, color=colors, linewidth=0)
-        axb.set_xlabel("R2")
-        axb.set_ylabel("")
-        axb.set_title("Total variance per view")
-        axb.grid(True, ls="-", lw=0.1, alpha=1.0, zorder=0, axis="x")
+            # Barplot
+            i_sums = df.loc[row_order[::-1]].sum(1)
+
+            norm = matplotlib.colors.Normalize(vmin=0, vmax=i_sums.max())
+            colors = [plt.cm.Greys(norm(v)) for v in i_sums]
+
+            axb.barh(np.arange(len(row_order)) + 0.5, i_sums, color=colors, linewidth=0)
+            axb.set_xlabel("R2" if i == (n_heatmaps - 1) else None)
+            axb.set_ylabel("")
+            axb.set_title("Total variance per view" if i == 0 else None)
+            axb.grid(True, ls="-", lw=0.1, alpha=1.0, zorder=0, axis="x")
 
         plt.subplots_adjust(hspace=0, wspace=0.05)
 
@@ -359,7 +412,7 @@ class MOFAPlot(CrispyPlot):
 
     @classmethod
     def factor_weights_scatter(
-        cls, mofa_obj, view, factor, n_features=30, fontsize=4, r2=None
+        cls, mofa_obj, view, factor, n_features=30, label_features=True, fontsize=4, r2=None
     ):
         df = mofa_obj.get_top_features(
             view, factor, n_features=n_features
@@ -377,13 +430,14 @@ class MOFAPlot(CrispyPlot):
             c=cls.PAL_DTRACE[2],
         )
 
-        texts = [
-            plt.text(i, w, g, color="k", fontsize=fontsize)
-            for i, (g, w) in df.iterrows()
-        ]
-        adjust_text(
-            texts, arrowprops=dict(arrowstyle="-", color="k", alpha=0.75, lw=0.3)
-        )
+        if label_features:
+            texts = [
+                plt.text(i, w, g, color="k", fontsize=fontsize)
+                for i, (g, w) in df.iterrows()
+            ]
+            adjust_text(
+                texts, arrowprops=dict(arrowstyle="-", color="k", alpha=0.75, lw=0.3)
+            )
 
         ax.set_ylabel(
             "Loading"
@@ -402,18 +456,21 @@ class MOFAPlot(CrispyPlot):
         mofa_obj,
         view,
         factor,
-        cmap="RdYlGn",
+        df=None,
+        cmap="Spectral",
         title="",
         center=None,
         col_colors=None,
         row_colors=None,
         mask=None,
         n_features=30,
+        standard_scale=None,
     ):
-        df = mofa_obj.views[view]
-        df = df.loc[
-            mofa_obj.get_top_features(view, factor, n_features=n_features).index
-        ]
+        if df is None:
+            df = mofa_obj.views[view]
+            df = df.loc[
+                mofa_obj.get_top_features(view, factor, n_features=n_features).index
+            ]
 
         if mask is None:
             mask = df.isnull()
@@ -421,7 +478,10 @@ class MOFAPlot(CrispyPlot):
         if center is None:
             center = 0.5 if view == "methylation" else 0
 
-        df = df.replace(np.nan, center)
+        elif not center:
+            center = None
+
+        df = df.T.fillna(df.T.mean()).T
 
         nrows, ncols = mofa_obj.views[view].shape
         fig = sns.clustermap(
@@ -429,6 +489,7 @@ class MOFAPlot(CrispyPlot):
             mask=mask,
             cmap=cmap,
             center=center,
+            standard_scale=standard_scale,
             col_colors=col_colors,
             row_colors=row_colors,
             xticklabels=False,
@@ -439,37 +500,106 @@ class MOFAPlot(CrispyPlot):
         fig.ax_col_dendrogram.set_title(title)
 
     @classmethod
-    def covariates_heatmap(cls, covs, mofa_obj):
-        nrows, ncols = covs.shape
+    def covariates_heatmap(cls, covs, mofa_obj, agg):
+        # Dendogram heatmap
+        n_heatmaps = len(mofa_obj.rsquare)
+        nrows, ncols = list(mofa_obj.rsquare.values())[0].shape
 
-        fig = sns.clustermap(
-            covs,
+        row_order = list(list(mofa_obj.rsquare.values())[0].index)
+        col_order = list(list(mofa_obj.rsquare.values())[0].columns)
+
+        f, axs = plt.subplots(
+            1,
+            n_heatmaps + 2,
+            sharex="none",
+            sharey="none",
+
+            gridspec_kw={"width_ratios": [0.4] * n_heatmaps + [9, 4]},
+            figsize=(0.3 * n_heatmaps + 0.3 * covs.shape[0] + 0.3 * len(set(agg)), 0.3 * ncols),
+        )
+
+        vmax = np.max([mofa_obj.rsquare[k].max().max() for k in mofa_obj.rsquare])
+
+        # Factors
+        for i, k in enumerate(mofa_obj.rsquare):
+            axh = axs[i]
+
+            df = mofa_obj.rsquare[k]
+
+            # Heatmap
+            g = sns.heatmap(
+                df.loc[row_order, col_order].T,
+                cmap="Greys",
+                annot=True,
+                cbar=False,
+                fmt=".2f",
+                linewidths=0.5,
+                ax=axh,
+                vmin=0,
+                vmax=vmax,
+                annot_kws={"fontsize": 5},
+            )
+            axh.set_title(f"{k} cell lines")
+            g.set_yticklabels(
+                g.get_yticklabels() if i == 0 else [], rotation=0, horizontalalignment="right"
+            )
+
+            # # Barplot
+            # i_sums = df.loc[row_order[::-1]].sum(1)
+            #
+            # norm = matplotlib.colors.Normalize(vmin=0, vmax=i_sums.max())
+            # colors = [plt.cm.Greys(norm(v)) for v in i_sums]
+            #
+            # axb.barh(np.arange(len(row_order)) + 0.5, i_sums, color=colors, linewidth=0)
+            # axb.set_xlabel("R2" if i == (n_heatmaps - 1) else None)
+            # axb.set_ylabel("")
+            # axb.set_title("Total variance per view" if i == 0 else None)
+            # axb.grid(True, ls="-", lw=0.1, alpha=1.0, zorder=0, axis="x")
+
+        # Covariates
+        ax = axs[n_heatmaps]
+
+        g = sns.heatmap(
+            covs.T.loc[col_order],
             cmap="Spectral",
             center=0,
-            annot=True,
-            fmt=".2f",
-            cbar=False,
-            col_cluster=False,
-            annot_kws={"size": 5},
-            figsize=(0.3 * ncols, 0.25 * nrows),
-        )
-        fig.ax_heatmap.set_xlabel("Factors")
-        fig.ax_heatmap.set_ylabel(f"Features")
-
-        sns.heatmap(
-            mofa_obj.rsquare,
-            cmap="Greys",
             annot=True,
             cbar=False,
             fmt=".2f",
             linewidths=0.5,
-            ax=fig.ax_col_dendrogram,
+            ax=ax,
             annot_kws={"fontsize": 5},
         )
-        fig.ax_col_dendrogram.set_yticklabels(
-            mofa_obj.rsquare.index, rotation=0, horizontalalignment="right"
-        )
-        fig.ax_col_dendrogram.set_title("Variance explained per factor")
-        fig.ax_col_dendrogram.set_ylabel("Views")
+        g.set_yticklabels([])
+        ax.set_xlabel("")
+        ax.set_ylabel("")
+        ax.set_title(f"Potential related factors")
 
-        return fig
+        # Tissue contribution
+        ax = axs[-1]
+
+        g = sns.heatmap(
+            mofa_obj.factors.groupby(agg).mean().T.loc[col_order],
+            cmap=sns.diverging_palette(220, 20, sep=20, as_cmap=True),
+            center=0,
+            annot=True,
+            cbar=False,
+            fmt=".1f",
+            linewidths=0.5,
+            ax=ax,
+            annot_kws={"fontsize": 5},
+        )
+        ax.yaxis.tick_right()
+        g.set_yticklabels(
+            g.get_yticklabels(), rotation=0, horizontalalignment="left"
+        )
+        ax.set_xlabel("")
+        ax.set_ylabel("")
+        ax.set_title(f"{agg.name} contribution")
+
+        plt.subplots_adjust(wspace=0.01)
+
+        # plt.suptitle("Variance explained per factor" if i == 0 else None)
+        # axs[-1][1].axis('off')
+
+        return axs

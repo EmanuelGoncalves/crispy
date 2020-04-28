@@ -78,6 +78,22 @@ DATASETS = {
             ).index
         ),
     ),
+    "Avana_DepMap20Q1": dict(
+        name="Avana DepMap20Q1",
+        read_counts="Avana_DepMap20Q1_readcount.csv.gz",
+        library="Avana_v1.csv.gz",
+        plasmids=pd.read_csv(
+            f"{MANIFESTS_DIR}/Avana_DepMap20Q1_sample_map.csv.gz",
+            index_col="replicate_ID",
+        )["controls"]
+        .apply(lambda v: v.split(";"))
+        .to_dict(),
+        exclude_guides=set(
+            pd.read_csv(
+                f"{MANIFESTS_DIR}/Avana_DepMap20Q1_dropped_guides.csv", index_col=0
+            ).index
+        ),
+    ),
     "Sabatini_Lander_AML": dict(
         name="Sabatini Lander AML",
         read_counts="Sabatini_Lander_v2_AML_readcounts.csv.gz",
@@ -153,12 +169,12 @@ DATASETS = {
 
 class Library:
     @staticmethod
-    def load_library(lib_file, set_index=True, remove_dup=False):
+    def load_library(lib_file, set_index=True, remove_dup=False, sep=","):
         lib_path = f"{LIBS_DIR}/{lib_file}"
 
         assert os.path.exists(lib_path), f"CRISPR library {lib_file} not supported"
 
-        clib = pd.read_csv(lib_path)
+        clib = pd.read_csv(lib_path, sep=sep)
 
         if remove_dup:
             nmaps = clib.groupby("sgRNA_ID")["Gene"].agg(list)

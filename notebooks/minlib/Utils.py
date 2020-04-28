@@ -90,7 +90,7 @@ def define_sgrnas_sets(clib, fc=None, add_controls=True, dataset_name="Yusa_v1")
 
     # sgRNA non-targeting
     if add_controls:
-        if dataset_name in ["Yusa_v1", "Yusa_v1.1", "Sabatini_Lander_AML"]:
+        if dataset_name in ["Yusa_v1", "Yusa v1", "Yusa_v1.1", "Yusa v1.1", "Sabatini_Lander_AML"]:
             sgrnas_control = {i for i in clib.index if i.startswith("CTRL0")}
         else:
             sgrnas_control = set(
