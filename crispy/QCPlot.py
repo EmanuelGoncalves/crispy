@@ -173,6 +173,7 @@ class QCplot(CrispyPlot):
         order=None,
         hue_order=None,
         n_fontsize=3.5,
+        draw_violin=False,
     ):
         if ax is None:
             ax = plt.gca()
@@ -188,23 +189,38 @@ class QCplot(CrispyPlot):
         elif palette is None:
             palette = dict(zip(*(order, cls.get_palette_continuous(len(order)))))
 
-        sns.boxplot(
-            x,
-            y,
-            data=data,
-            hue=hue,
-            notch=notch,
-            order=order,
-            palette=palette,
-            saturation=1.0,
-            showcaps=False,
-            hue_order=hue_order,
-            medianprops=cls.MEDIANPROPS,
-            flierprops=cls.FLIERPROPS,
-            whiskerprops=cls.WHISKERPROPS,
-            boxprops=cls.BOXPROPS,
-            ax=ax,
-        )
+        if draw_violin:
+            sns.violinplot(
+                x,
+                y,
+                data=data,
+                hue=hue,
+                order=order,
+                palette=palette,
+                saturation=1.0,
+                hue_order=hue_order,
+                inner="quartile",
+                linewidth=.5,
+                ax=ax,
+            )
+        else:
+            sns.boxplot(
+                x,
+                y,
+                data=data,
+                hue=hue,
+                notch=notch,
+                order=order,
+                palette=palette,
+                saturation=1.0,
+                showcaps=False,
+                hue_order=hue_order,
+                medianprops=cls.MEDIANPROPS,
+                flierprops=cls.FLIERPROPS,
+                whiskerprops=cls.WHISKERPROPS,
+                boxprops=cls.BOXPROPS,
+                ax=ax,
+            )
 
         if despine:
             sns.despine(ax=ax)

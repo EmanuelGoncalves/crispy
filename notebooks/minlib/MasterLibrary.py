@@ -192,6 +192,10 @@ master = master.sort_values(
     ["Library", "Approved_Symbol", "KS"], ascending=[True, True, False]
 )
 
+# Poly T annotation
+polyt = dict(polyt4="TTTT", polyt5="TTTTT")
+master["polyT"] = [[k for k, v in polyt.items() if v in g[:-3]] for g in master["WGE_Sequence"]]
+master["polyT"] = [np.nan if len(v) == 0 else v[-1] for v in master["polyT"]]
 
 # Export Master Library
 #

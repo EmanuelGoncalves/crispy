@@ -127,6 +127,7 @@ class GIPlot(CrispyPlot):
         lowess=False,
         palette=None,
         plot_reg=True,
+        a=1,
     ):
         pal = cls.PAL_DTRACE if palette is None else palette
 
@@ -144,7 +145,7 @@ class GIPlot(CrispyPlot):
                     lw=0.1,
                     s=3,
                     c=pal[2],
-                    alpha=1.0,
+                    alpha=a,
                     marker=cls.MARKERS[i],
                     label=t,
                 )
@@ -156,7 +157,7 @@ class GIPlot(CrispyPlot):
                 lw=0.1,
                 s=3,
                 c=pal[2],
-                alpha=1.0,
+                alpha=a,
             )
 
         if plot_reg:

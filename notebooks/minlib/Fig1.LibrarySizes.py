@@ -46,7 +46,7 @@ sns.scatterplot(
     "Citation",
     data=clib_size,
     size="sgRNAs per Gene",
-    palette=clib_size.set_index("Citation")["Palette"],
+    palette=clib_size.set_index("Citation")["Palette"].to_dict(),
     hue_order=list(clib_size["Citation"]),
     sizes=(10, 50),
     linewidth=0,
@@ -55,7 +55,7 @@ sns.scatterplot(
 
 ax.set_xlim(datetime.date(2013, 11, 1), datetime.date(2020, 3, 1))
 
-ax.axhline(clib_size.loc["Haoquan_Wu", "Number of guides"], lw=.5, color="#706f6f", ls="-", zorder=0)
+ax.axhline(clib_size.loc["GeCKOv1", "Number of guides"], lw=.5, color="#706f6f", ls="-", zorder=0)
 
 ax.grid(True, ls="-", lw=0.1, alpha=1.0, zorder=0)
 

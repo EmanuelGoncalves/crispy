@@ -67,6 +67,7 @@ rawcounts = pd.concat(
 )
 rawcounts = rawcounts.loc[:, ~rawcounts.columns.duplicated(keep="last")]
 rawcounts.to_csv(f"{SPATH}/MinLibCas9_rawcounts.csv.gz", compression="gzip")
+rawcounts.to_excel(f"{RPATH}/MinLibCas9_rawcounts.xlsx")
 
 mlib_dataset = dict(
     name="MinLibCas9_Screens",
@@ -98,13 +99,24 @@ ky_fc_gene = ky_fc_sgrna.groupby(ky.lib["Gene"]).mean()
 # Gene fold-change
 #
 
-fc_gene = pd.concat([
-    ky_fc_gene.add_suffix("_original"),
-    mlib_fc_gene.add_suffix("_MinLibCas9"),
-], axis=1, sort=False)
+fc_gene = pd.concat(
+    [ky_fc_gene.add_suffix("_original"), mlib_fc_gene.add_suffix("_MinLibCas9")],
+    axis=1,
+    sort=False,
+)
 
-lib_pal = dict(original=QCplot.PAL_DBGD[0], MinLibCas9=QCplot.PAL_DBGD[1])
-sample_pal = {s: lib_pal[s.split("_")[-1]] for s in fc_gene}
+fc_gene_rename = dict(
+    HT29_c905R1_original="HT-29 Original R1",
+    HT29_c905R2_original="HT-29 Original R2",
+    HT29_c905R3_original="HT-29 Original R3",
+    HT29_c9M1R6_MinLibCas9="HT-29 MinLibCas9 R1",
+    HT29_c9M1R5_MinLibCas9="HT-29 MinLibCas9 R2",
+    HT29_c9M1R4_MinLibCas9="HT-29 MinLibCas9 R3",
+)
+fc_gene = fc_gene.rename(columns=fc_gene_rename)
+
+lib_pal = dict(Original=QCplot.PAL_DBGD[0], MinLibCas9=QCplot.PAL_DBGD[1])
+sample_pal = {s: lib_pal[s.split(" ")[1]] for s in fc_gene}
 samples = list(fc_gene.columns)
 
 
@@ -194,8 +206,13 @@ for n, gset in [
     plt.xlabel("Area under the recall curve")
     plt.ylabel("")
     plt.title(n)
+    plt.xlim(0, 1)
     plt.grid(True, ls=":", lw=0.1, alpha=1.0, zorder=0, axis="both")
-    plt.savefig(f"{RPATH}/minlibcas9_screens_roccurves_{n}_barplot.pdf", bbox_inches="tight")
+    plt.savefig(
+        f"{RPATH}/minlibcas9_screens_roccurves_{n}_barplot.pdf",
+        bbox_inches="tight",
+        transparent=True,
+    )
     plt.close("all")
 
     # Save results
@@ -204,6 +221,7 @@ for n, gset in [
 
 # Scatter grid
 #
+
 
 def triu_plot(x, y, color, label, **kwargs):
     z = QCplot.density_interpolate(x, y)
@@ -230,7 +248,11 @@ grid.map_diag(diag_plot, kde=True, hist_kws=dict(linewidth=0), bins=30)
 for i, j in zip(*np.tril_indices_from(grid.axes, -1)):
     ax = grid.axes[i, j]
 
-    df = pd.concat([fc_gene.iloc[:, i].rename("x"), fc_gene.iloc[:, j].rename("y")], axis=1, sort=False).dropna()
+    df = pd.concat(
+        [fc_gene.iloc[:, i].rename("x"), fc_gene.iloc[:, j].rename("y")],
+        axis=1,
+        sort=False,
+    ).dropna()
     r, p = spearmanr(df["x"], df["y"])
 
     ax.annotate(
@@ -254,11 +276,41 @@ plt.close("all")
 #
 #
 
-plot_df = fc_gene.groupby([i.split("_")[-1] for i in fc_gene.columns], axis=1).mean().dropna()
+plot_df = (
+    fc_gene.groupby([i.split(" ")[1] for i in fc_gene.columns], axis=1).mean().dropna()
+)
 
-g = GIPlot.gi_regression("original", "MinLibCas9", plot_df, palette=QCplot.PAL_DBGD)
-g.ax_joint.set_xlabel("Original (mean rep. gene FC)")
-g.ax_joint.set_ylabel("MinLibCas9 (mean rep. gene FC)")
+pal = {0: "#656565", 1: "#F2C500", 2: "#656565", 3: "#0570b0"}
+
+g = GIPlot.gi_regression("Original", "MinLibCas9", plot_df, palette=pal, a=.7, plot_reg=False)
+
+# conflicting_genes = plot_df.query("(Original < -2.1) & (MinLibCas9 > -1.8)")
+
+for i, gene in enumerate(["MYC", "BRAF", "MAPK3", "MAPK1"]):
+    g.ax_joint.scatter(
+        plot_df.loc[gene, "Original"],
+        plot_df.loc[gene, "MinLibCas9"],
+        label=gene,
+        color=sns.color_palette("Set1").as_hex()[i],
+        edgecolor="w",
+        lw=0.1,
+        s=6,
+        zorder=3,
+    )
+
+x_min, x_max = plot_df.min().min(), plot_df.max().max()
+lims = [x_min, x_max]
+g.ax_joint.plot(lims, lims, "k-", lw=0.3)
+g.ax_joint.set_xlim(lims)
+g.ax_joint.set_ylim(lims)
+
+g.ax_joint.set_xlabel("Original\n(mean replicate gene FC)")
+g.ax_joint.set_ylabel("MinLibCas9\n(mean replicate gene FC)")
+
+g.ax_joint.legend(prop=dict(size=5), frameon=False, loc=2)
+
+plt.gcf().set_size_inches(2, 2)
+
 plt.savefig(
     f"{RPATH}/minlibcas9_screens_pairplot_gene_fc_mean.pdf",
     bbox_inches="tight",
