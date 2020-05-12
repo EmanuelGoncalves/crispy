@@ -53,7 +53,8 @@ included_files = {
         "data/images/logo.png",
         "data/model_list_20200204.csv",
         "data/GrowthRates_v1.3.0_20190222.csv",
-        "SIDMvsMedia.xlsx"
+        "data/SIDMvsMedia.xlsx",
+        "data/crispr/CRISPR_Institute_Origin_20191108.csv.gz",
     ]
 }
 
