@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 # Copyright (C) 2019 Emanuel Goncalves
 
-import igraph
 import logging
 import numpy as np
 import pandas as pd
@@ -214,25 +213,39 @@ class DrugResponse:
 
     """
 
-    SAMPLE_COLUMNS = ["model_id"]
-    DRUG_COLUMNS = ["Drug Id", "Drug name", "Dataset version"]
+    SAMPLE_COLUMNS = ["SANGER_MODEL_ID"]
+    DRUG_COLUMNS = ["DRUG_ID", "DRUG_NAME", "DATASET"]
 
     def __init__(
         self,
-        drugresponse_file="drugresponse/DrugResponse_PANCANCER_GDSC1_GDSC2_IC_20191119.csv.gz",
+        drugresponse_file="drugresponse/DrugResponse_PANCANCER_GDSC1_GDSC2_20200505.csv.gz",
     ):
         # Import and Merge drug response matrix (IC50)
         self.drugresponse = pd.read_csv(f"{DPATH}/{drugresponse_file}")
         self.drugresponse = self.drugresponse[
-            ~self.drugresponse["Cell line name"].isin(["LS-1034"])
+            ~self.drugresponse["CELL_LINE_NAME"].isin(["LS-1034"])
         ]
 
         # Drug max concentration
         self.maxconcentration = self.drugresponse.groupby(self.DRUG_COLUMNS)[
-            "Max conc"
+            "MAX_CONC"
         ].first()
 
-    def get_data(self, dtype="IC50"):
+    @staticmethod
+    def assemble():
+        gdsc1 = pd.read_excel(f"{DPATH}/drugresponse/GDSC1_fitted_dose_response_25Feb20.xlsx")
+
+        gdsc2 = pd.read_csv(f"{DPATH}/drugresponse/fitted_rapid_screen_1536_v1.6.0_20200505.csv")
+        gdsc2 = gdsc2.assign(DATASET="GDSC2").query("(RMSE < 0.3)")
+        gdsc2 = gdsc2.query("(USE_IN_PUBLICATIONS == 'Y') | (WEBRELEASE == 'Y')")
+
+        columns = set(gdsc1).intersection(gdsc2)
+
+        drespo = pd.concat([gdsc1[columns], gdsc2[columns]], axis=0, ignore_index=True)
+
+        drespo.to_csv(f"{DPATH}/drugresponse/DrugResponse_PANCANCER_GDSC1_GDSC2_20200505.csv.gz", compression="gzip", index=False)
+
+    def get_data(self, dtype="LN_IC50"):
         data = pd.pivot_table(
             self.drugresponse,
             index=self.DRUG_COLUMNS,
@@ -245,7 +258,7 @@ class DrugResponse:
 
     def filter(
         self,
-        dtype="IC50",
+        dtype="LN_IC50",
         subset=None,
         min_events=3,
         min_meas=0.75,
@@ -255,7 +268,7 @@ class DrugResponse:
         filter_combinations=False,
     ):
         # Drug max screened concentration
-        df = self.get_data(dtype="IC50")
+        df = self.get_data(dtype="LN_IC50")
         d_maxc = np.log(self.maxconcentration * max_c)
 
         # - Filters
@@ -409,6 +422,8 @@ class PPI:
         return res
 
     def build_string_ppi(self, score_thres=900, export_pickle=None):
+        import igraph
+
         # ENSP map to gene symbol
         gmap = pd.read_csv(f"{DPATH}/{self.string_alias_file}", sep="\t")
         gmap = gmap[["BioMart_HUGO" in i.split(" ") for i in gmap["source"]]]
