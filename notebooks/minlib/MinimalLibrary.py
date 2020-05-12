@@ -23,7 +23,7 @@ import logging
 import numpy as np
 import pandas as pd
 import pkg_resources
-from minlib.Utils import define_sgrnas_sets
+from notebooks.minlib.Utils import define_sgrnas_sets
 from crispy.CRISPRData import Library, CRISPRDataSet
 
 
@@ -40,13 +40,13 @@ master_lib = Library.load_library("MasterLib_v1.csv.gz", set_index=False)
 # Drop sgRNAs that do not align to GRCh38
 master_lib = master_lib.query("Assembly == 'Human (GRCh38)'")
 
+# Remove sgRNAs with no alignment to GRCh38
+master_lib = master_lib.dropna(subset=["Approved_Symbol", "Off_Target"])
+
 # Remove sgRNAs that match to multiple genes
 sg_count = master_lib.groupby("WGE_Sequence")["Approved_Symbol"].agg(lambda v: len(set(v)))
 sg_count = sg_count[sg_count != 1]
 master_lib = master_lib[~master_lib["WGE_Sequence"].isin(sg_count.index)]
-
-# Remove sgRNAs with no alignment to GRCh38
-master_lib = master_lib.dropna(subset=["Approved_Symbol", "Off_Target"])
 
 # Remove duplicates (sgRNAs shared across multiple libraries)
 master_lib["Library"] = pd.Categorical(master_lib["Library"], ["KosukeYusa", "Avana", "Brunello", "TKOv3"])

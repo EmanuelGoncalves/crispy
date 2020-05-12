@@ -123,11 +123,13 @@ class GIPlot(CrispyPlot):
         x_gene,
         y_gene,
         plot_df,
+        hue=None,
         style=None,
         lowess=False,
         palette=None,
         plot_reg=True,
-        a=1,
+        hexbin=False,
+        a=.75,
     ):
         pal = cls.PAL_DTRACE if palette is None else palette
 
@@ -136,43 +138,57 @@ class GIPlot(CrispyPlot):
         grid = sns.JointGrid(x_gene, y_gene, data=plot_df, space=0)
 
         # Joint
-        if style is not None:
-            for i, (t, df) in enumerate(plot_df.groupby(style)):
-                grid.ax_joint.scatter(
-                    x=df[x_gene],
-                    y=df[y_gene],
-                    edgecolor="w",
-                    lw=0.1,
-                    s=3,
-                    c=pal[2],
-                    alpha=a,
-                    marker=cls.MARKERS[i],
-                    label=t,
-                )
-        else:
-            grid.ax_joint.scatter(
-                x=plot_df[x_gene],
-                y=plot_df[y_gene],
-                edgecolor="w",
-                lw=0.1,
-                s=3,
-                c=pal[2],
-                alpha=a,
-            )
-
         if plot_reg:
             grid.plot_joint(
                 sns.regplot,
                 data=plot_df,
-                line_kws=dict(lw=1.0, color=pal[1]),
+                line_kws=dict(lw=1.0, color=cls.PAL_DTRACE[1]),
                 marker="",
                 lowess=lowess,
                 truncate=True,
             )
 
-        grid.plot_marginals(
-            sns.distplot, kde=False, hist_kws=dict(linewidth=0), color=pal[2]
-        )
+        hue_df = plot_df.groupby(hue) if hue is not None else [(None, plot_df)]
+        for i, (h, h_df) in enumerate(hue_df):
+            style_df = h_df.groupby(style) if style is not None else [(None, h_df)]
+
+            for j, (s, s_df) in enumerate(style_df):
+                if hexbin:
+                    grid.ax_joint.hexbin(
+                        s_df[x_gene],
+                        s_df[y_gene],
+                        cmap="Spectral_r",
+                        gridsize=100,
+                        mincnt=1,
+                        bins="log",
+                        lw=0,
+                        alpha=1,
+                    )
+
+                else:
+                    grid.ax_joint.scatter(
+                        x=s_df[x_gene],
+                        y=s_df[y_gene],
+                        edgecolor="w",
+                        lw=0.1,
+                        s=3,
+                        c=pal[2] if h is None else pal[h],
+                        alpha=a,
+                        marker=cls.MARKERS[0] if s is None else cls.MARKERS[j],
+                        label=s,
+                    )
+
+                grid.x = s_df[x_gene].rename("")
+                grid.y = s_df[y_gene].rename("")
+                grid.plot_marginals(
+                    sns.kdeplot,
+                    # hist_kws=dict(linewidth=0, alpha=a),
+                    cut=0,
+                    legend=False,
+                    shade=True,
+                    color=pal[2] if h is None else pal[h],
+                    label=h,
+                )
 
         grid.ax_joint.grid(axis="both", lw=0.1, color="#e1e1e1", zorder=0)
 
@@ -189,6 +205,9 @@ class GIPlot(CrispyPlot):
 
         if style is not None:
             grid.ax_joint.legend(prop=dict(size=4), frameon=False, loc=2)
+
+        if hue is not None:
+            grid.ax_marg_y.legend(prop=dict(size=4), frameon=False, loc="center left", bbox_to_anchor=(1, 0.5))
 
         plt.gcf().set_size_inches(1.5, 1.5)
 

@@ -51,7 +51,9 @@ included_files = {
 
         "data/images/example_gp_fit.png",
         "data/images/logo.png",
-        "data/model_list_2018-09-28_1452.csv",
+        "data/model_list_20200204.csv",
+        "data/GrowthRates_v1.3.0_20190222.csv",
+        "SIDMvsMedia.xlsx"
     ]
 }
 

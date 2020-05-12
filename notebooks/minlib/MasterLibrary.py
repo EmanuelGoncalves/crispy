@@ -53,6 +53,8 @@ avana_gsets = define_sgrnas_sets(
 avana_ks = estimate_ks(avana_fc, avana_gsets["nontargeting"]["fc"])
 
 
+avana_fc.loc[:, [("311C" not in c.upper()) and ("AVANA" not in c.upper()) for c in avana_fc]]
+
 # CRISPR-Cas9 libraries
 #
 

@@ -129,18 +129,18 @@ class LibraryRepresentaion:
                 y_lorenz,
                 x_lorenz,
                 color=CrispyPlot.PAL_DBGD[0] if palette is None else palette[c],
-                label=f"{c} (gini={gini_scores[c]:.2f})",
+                label=f"{c}\n(Gini coefficient={gini_scores[c]:.2f})",
                 zorder=2,
                 alpha=.5,
             )
 
-        ax.plot([0, 1], [0, 1], "k-", lw=0.3, zorder=1)
+        ax.plot([0, 1], [0, 1], "k-", lw=0.3, zorder=1, label="Expected line of equality")
 
         ax.grid(True, ls="-", lw=0.1, alpha=1.0, zorder=0)
 
         ax.set_ylabel("Fraction of total reads")
         ax.set_xlabel("Fraction of total sgRNAs")
 
-        plt.legend(loc=2, frameon=False, prop={"size": 4})
+        plt.legend(loc=2, frameon=False, prop={"size": 6})
 
         return ax

@@ -228,11 +228,11 @@ class MOFA:
         lm = LinearRegression(fit_intercept=fit_intercept).fit(xs, ys)
 
         # Calculate residuals
-        residuals = ys - lm.predict(xs)
+        residuals = ys - lm.predict(xs) - lm.intercept_
 
-        # Add intercept
-        if add_intercept:
-            residuals += lm.intercept_
+        # # Add intercept
+        # if add_intercept:
+        #     residuals += lm.intercept_
 
         return residuals
 
@@ -362,7 +362,7 @@ class MOFAPlot(CrispyPlot):
         )
 
         for i, k in enumerate(mofa_obj.rsquare):
-            axh, axb = axs[i]
+            axh, axb = axs[i] if n_heatmaps > 1 else axs[0], axs[1]
 
             df = mofa_obj.rsquare[k]
 
@@ -540,6 +540,9 @@ class MOFAPlot(CrispyPlot):
                 annot_kws={"fontsize": 5},
             )
             axh.set_title(f"{k} cell lines")
+            g.set_xticklabels(
+                labels=row_order, rotation=90, horizontalalignment="center"
+            )
             g.set_yticklabels(
                 g.get_yticklabels() if i == 0 else [], rotation=0, horizontalalignment="right"
             )
