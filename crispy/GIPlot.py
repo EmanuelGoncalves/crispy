@@ -2,12 +2,16 @@
 # Copyright (C) 2019 Emanuel Goncalves
 
 import numpy as np
+import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 from natsort import natsorted
+from crispy.Utils import Utils
+from adjustText import adjust_text
 from matplotlib.lines import Line2D
 from scipy.stats import pearsonr, spearmanr
+from sklearn.preprocessing import MinMaxScaler
 from crispy.CrispyPlot import CrispyPlot, MidpointNormalize
 
 
@@ -122,18 +126,37 @@ class GIPlot(CrispyPlot):
         cls,
         x_gene,
         y_gene,
-        plot_df,
+        plot_df=None,
+        size=None,
+        size_range=None,
+        size_inverse=False,
+        size_legend_loc="best",
+        size_legend_title=None,
         hue=None,
         style=None,
         lowess=False,
         palette=None,
         plot_reg=True,
+        plot_annot=True,
         hexbin=False,
-        a=.75,
+        color=None,
+        label=None,
+        a=0.75,
     ):
         pal = cls.PAL_DTRACE if palette is None else palette
 
+        if plot_df is None:
+            plot_df = pd.concat([x_gene, y_gene], axis=1)
+            x_gene, y_gene = x_gene.name, y_gene.name
+
         plot_df = plot_df.dropna(subset=[x_gene, y_gene])
+
+        if size is not None:
+            plot_df = plot_df.dropna(subset=[size])
+
+            feature_range = [1, 10] if size_range is None else size_range
+            s_transform = MinMaxScaler(feature_range=feature_range)
+            s_transform = s_transform.fit((plot_df[[size]] * -1) if size_inverse else plot_df[[size]])
 
         grid = sns.JointGrid(x_gene, y_gene, data=plot_df, space=0)
 
@@ -166,12 +189,19 @@ class GIPlot(CrispyPlot):
                     )
 
                 else:
-                    grid.ax_joint.scatter(
+                    if size is None:
+                        s = 3
+                    elif size_inverse:
+                        s = s_transform.transform(s_df[[size]] * -1)
+                    else:
+                        s = s_transform.transform(s_df[[size]])
+
+                    sc = grid.ax_joint.scatter(
                         x=s_df[x_gene],
                         y=s_df[y_gene],
                         edgecolor="w",
                         lw=0.1,
-                        s=3,
+                        s=s,
                         c=pal[2] if h is None else pal[h],
                         alpha=a,
                         marker=cls.MARKERS[0] if s is None else cls.MARKERS[j],
@@ -192,24 +222,50 @@ class GIPlot(CrispyPlot):
 
         grid.ax_joint.grid(axis="both", lw=0.1, color="#e1e1e1", zorder=0)
 
-        cor, pval = spearmanr(plot_df[x_gene], plot_df[y_gene])
-        annot_text = f"Spearman's R={cor:.2g}, p-value={pval:.1e}"
-        grid.ax_joint.text(
-            0.95,
-            0.05,
-            annot_text,
-            fontsize=4,
-            transform=grid.ax_joint.transAxes,
-            ha="right",
-        )
+        if plot_annot:
+            cor, pval = spearmanr(plot_df[x_gene], plot_df[y_gene])
+            annot_text = f"Spearman's R={cor:.2g}, p-value={pval:.1e}"
+            grid.ax_joint.text(
+                0.95,
+                0.05,
+                annot_text,
+                fontsize=4,
+                transform=grid.ax_joint.transAxes,
+                ha="right",
+            )
 
         if style is not None:
             grid.ax_joint.legend(prop=dict(size=4), frameon=False, loc=2)
 
         if hue is not None:
-            grid.ax_marg_y.legend(prop=dict(size=4), frameon=False, loc="center left", bbox_to_anchor=(1, 0.5))
+            grid.ax_marg_y.legend(
+                prop=dict(size=4),
+                frameon=False,
+                loc="center left",
+                bbox_to_anchor=(1, 0.5),
+            )
 
-        plt.gcf().set_size_inches(1.5, 1.5)
+        if size is not None:
+            def inverse_transform_func(x):
+                arg_x = np.array(x).reshape(-1, 1)
+                res = s_transform.inverse_transform(arg_x)[:, 0]
+                return res
+
+            handles, labels = sc.legend_elements(
+                prop="sizes",
+                num=8,
+                func=inverse_transform_func,
+            )
+            grid.ax_joint.legend(
+                handles,
+                labels,
+                title=size_legend_title,
+                loc=size_legend_loc,
+                frameon=False,
+                prop={"size": 3},
+            ).get_title().set_fontsize("3")
+
+        plt.gcf().set_size_inches(2, 2)
 
         return grid
 
@@ -239,6 +295,8 @@ class GIPlot(CrispyPlot):
         annot_text=None,
         add_hline=False,
         add_vline=False,
+        plot_reg=True,
+        plot_annot=True,
         marginal_notch=False,
     ):
         # Defaults
@@ -275,17 +333,18 @@ class GIPlot(CrispyPlot):
             medianprops=dict(linestyle="-", linewidth=1.0),
         )
 
-        sns.regplot(
-            x=x,
-            y=y,
-            data=plot_df,
-            color=discrete_pal[0],
-            truncate=True,
-            fit_reg=True,
-            scatter=False,
-            line_kws=line_kws,
-            ax=grid.ax_joint,
-        )
+        if plot_reg:
+            sns.regplot(
+                x=x,
+                y=y,
+                data=plot_df,
+                color=discrete_pal[0],
+                truncate=True,
+                fit_reg=True,
+                scatter=False,
+                line_kws=line_kws,
+                ax=grid.ax_joint,
+            )
 
         for feature in hue_order:
             dfs = plot_df[plot_df[z] == feature]
@@ -312,19 +371,20 @@ class GIPlot(CrispyPlot):
             grid.ax_joint.legend(prop=dict(size=4), frameon=False, loc=2)
 
         # Annotation
-        if annot_text is None:
-            df_corr = plot_df.dropna(subset=[x, y, z])
-            cor, pval = pearsonr(df_corr[x], df_corr[y])
-            annot_text = f"R={cor:.2g}, p={pval:.1e}"
+        if plot_annot:
+            if annot_text is None:
+                df_corr = plot_df.dropna(subset=[x, y, z])
+                cor, pval = pearsonr(df_corr[x], df_corr[y])
+                annot_text = f"R={cor:.2g}, p={pval:.1e}"
 
-        grid.ax_joint.text(
-            0.95,
-            0.05,
-            annot_text,
-            fontsize=4,
-            transform=grid.ax_joint.transAxes,
-            ha="right",
-        )
+            grid.ax_joint.text(
+                0.95,
+                0.05,
+                annot_text,
+                fontsize=4,
+                transform=grid.ax_joint.transAxes,
+                ha="right",
+            )
 
         if add_hline:
             grid.ax_joint.axhline(0, ls="-", lw=0.3, c=cls.PAL_DBGD[0], alpha=0.2)
@@ -444,8 +504,8 @@ class GIPlot(CrispyPlot):
             hue_nfeatures = len(set(plot_df[hue]))
             handles, labels = bp.get_legend_handles_labels()
             ax.legend(
-                handles[:(hue_nfeatures - 1)],
-                labels[:(hue_nfeatures - 1)],
+                handles[: (hue_nfeatures - 1)],
+                labels[: (hue_nfeatures - 1)],
                 frameon=False,
                 **legend_kws,
             )
@@ -456,14 +516,31 @@ class GIPlot(CrispyPlot):
         return ax
 
     @classmethod
-    def gi_tissue_plot(cls, x, y, plot_df, plot_reg=True, lowess=False):
-        fig, ax = plt.subplots(1, 1, figsize=(2, 2), dpi=600)
+    def gi_tissue_plot(
+        cls,
+        x,
+        y,
+        plot_df=None,
+        hue="tissue",
+        pal=CrispyPlot.PAL_TISSUE_2,
+        plot_reg=True,
+        annot=True,
+        lowess=False,
+        figsize=(2, 2),
+    ):
+        if plot_df is None:
+            plot_df = pd.concat([x, y], axis=1)
+            x, y = x.name, y.name
 
-        for t, df in plot_df.groupby("tissue"):
+        plot_df = plot_df.dropna(subset=[x, y])
+
+        fig, ax = plt.subplots(1, 1, figsize=figsize, dpi=600)
+
+        for t, df in plot_df.groupby(hue):
             ax.scatter(
                 df[x],
                 df[y],
-                c=GIPlot.PAL_TISSUE_2[t],
+                c=pal[t],
                 marker="o",
                 edgecolor="",
                 s=5,
@@ -473,7 +550,9 @@ class GIPlot(CrispyPlot):
 
         if plot_reg:
             sns.regplot(
-                x, y, data=plot_df,
+                x,
+                y,
+                data=plot_df,
                 line_kws=dict(lw=1.0, color=cls.PAL_DTRACE[1]),
                 marker="",
                 lowess=lowess,
@@ -481,16 +560,12 @@ class GIPlot(CrispyPlot):
                 ax=ax,
             )
 
-        cor, pval = spearmanr(plot_df[x], plot_df[y])
-        annot_text = f"Spearman's R={cor:.2g}, p-value={pval:.1e}"
-        ax.text(
-            0.95,
-            0.05,
-            annot_text,
-            fontsize=4,
-            transform=ax.transAxes,
-            ha="right",
-        )
+        if annot:
+            cor, pval = spearmanr(plot_df[x], plot_df[y])
+            annot_text = f"Spearman's R={cor:.2g}, p-value={pval:.1e}"
+            ax.text(
+                0.95, 0.05, annot_text, fontsize=4, transform=ax.transAxes, ha="right"
+            )
 
         ax.set_xlabel(x)
         ax.set_ylabel(y)
@@ -498,10 +573,10 @@ class GIPlot(CrispyPlot):
         ax.legend(
             loc="center left",
             bbox_to_anchor=(1, 0.5),
-            prop={"size": 4},
+            prop={"size": 3},
             frameon=False,
-            title="Tissue",
-        ).get_title().set_fontsize("5")
+            title=hue,
+        ).get_title().set_fontsize("3")
 
         return ax
 
@@ -513,6 +588,7 @@ class GIPlot(CrispyPlot):
         z,
         plot_df,
         cmap="Spectral_r",
+        joint_alpha=0.8,
         mid_point_norm=True,
         mid_point=0,
         cbar_label=None,
@@ -532,9 +608,9 @@ class GIPlot(CrispyPlot):
             c=df[z],
             marker="o",
             edgecolor="",
-            s=5,
+            s=3,
             cmap=cmap,
-            alpha=0.8,
+            alpha=joint_alpha,
             norm=MidpointNormalize(midpoint=mid_point) if mid_point_norm else None,
         )
 
@@ -545,7 +621,9 @@ class GIPlot(CrispyPlot):
 
         if plot_reg:
             sns.regplot(
-                x, y, data=plot_df,
+                x,
+                y,
+                data=plot_df,
                 line_kws=dict(lw=1.0, color=cls.PAL_DTRACE[1]),
                 marker="",
                 lowess=lowess,
@@ -565,3 +643,57 @@ class GIPlot(CrispyPlot):
         ax.grid(True, ls="-", lw=0.1, alpha=1.0, zorder=0)
 
         return ax
+
+    @classmethod
+    def gi_manhattan(cls, assoc_df):
+        _, axs = plt.subplots(1, len(Utils.CHR_ORDER), figsize=(len(Utils.CHR_ORDER), 3), dpi=600, sharey="row")
+
+        for i, ctype in enumerate(Utils.CHR_ORDER):
+            ax = axs[i]
+
+            for ttype in ["ppi != 'T'", "ppi == 'T'"]:
+                t_df = assoc_df.query(f"(chr == '{ctype}') & (fdr < .1) & ({ttype})")
+                t_df["log_pval"] = -np.log10(t_df["pval"])
+
+                def calculate_score(pval, beta):
+                    s = np.log10(pval)
+                    if beta > 0:
+                        s *= -1
+                    return s
+
+                t_df["score"] = [
+                    calculate_score(p, b) for p, b in t_df[["pval", "beta"]].values
+                ]
+
+                ax.scatter(
+                    t_df["chr_pos"],
+                    t_df["score"],
+                    s=5,
+                    alpha=.7,
+                    c=CrispyPlot.PAL_DTRACE[0],
+                    lw=.5 if ttype == "ppi == 'T'" else 0,
+                    edgecolors=CrispyPlot.PAL_DTRACE[1] if ttype == "ppi == 'T'" else None,
+                )
+
+                labels = [
+                    ax.text(
+                        row["chr_pos"],
+                        row["score"],
+                        f"{row['y_id'].split(';')[1] if ';' in row['y_id'] else row['y_id']} ~ {row['x_id']}",
+                        color="k",
+                        fontsize=4,
+                        zorder=3,
+                    )
+                    for _, row in t_df.query(f"log_pval > 10").head(5).iterrows()
+                ]
+                adjust_text(
+                    labels,
+                    arrowprops=dict(arrowstyle="-", color="k", alpha=0.75, lw=0.3),
+                    ax=ax,
+                )
+
+            ax.set_xlabel(f"Chr {ctype}")
+            ax.set_ylabel(f"-log10(p-value)" if i == 0 else None)
+            ax.grid(axis="y", lw=0.1, color="#e1e1e1", zorder=0)
+
+        plt.subplots_adjust(hspace=0, wspace=0.05)

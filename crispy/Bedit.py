@@ -187,6 +187,33 @@ class AdenineBaseEditor(BaseEditor):
 
 class BeditPlot(CrispyPlot):
     # TODO: Test situtation where not all 20 aa and stop codon are present
+
+    @classmethod
+    def region_scatter(cls, dataframe, y_var="aa_pos", x_var="score"):
+        plot_df = dataframe.dropna(subset=[y_var, x_var])
+        plot_df["z_var"] = cls.density_interpolate(plot_df[y_var], plot_df[x_var])
+
+        fig, ax = plt.subplots(
+            1, 1, figsize=(min(len(set(plot_df[y_var])) * 0.01, 15), 2.0), dpi=600
+        )
+
+        ax.scatter(
+            plot_df[y_var],
+            plot_df[x_var],
+            c=plot_df["z_var"],
+            marker="o",
+            edgecolor="",
+            cmap="Spectral_r",
+            s=2,
+        )
+
+        ax.grid(True, ls="-", lw=0.1, alpha=1.0, zorder=0)
+
+        ax.set_xlabel("Position")
+        ax.set_ylabel("Functional score")
+
+        return ax
+
     @classmethod
     def aa_grid(
         cls, dataframe=None, aggfunc=len, index_var="mutant", col_var="wildtype"

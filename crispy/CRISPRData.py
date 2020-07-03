@@ -94,6 +94,22 @@ DATASETS = {
             ).index
         ),
     ),
+    "Avana_DepMap20Q2": dict(
+        name="Avana DepMap20Q2",
+        read_counts="Avana_DepMap20Q2_readcount.csv.gz",
+        library="Avana_v1.csv.gz",
+        plasmids=pd.read_csv(
+            f"{MANIFESTS_DIR}/Avana_DepMap20Q2_sample_map.csv.gz",
+            index_col="replicate_ID",
+        )["controls"]
+        .apply(lambda v: v.split(";"))
+        .to_dict(),
+        exclude_guides=set(
+            pd.read_csv(
+                f"{MANIFESTS_DIR}/Avana_DepMap20Q2_dropped_guides.csv", index_col=0
+            ).index
+        ),
+    ),
     "Sabatini_Lander_AML": dict(
         name="Sabatini Lander AML",
         read_counts="Sabatini_Lander_v2_AML_readcounts.csv.gz",

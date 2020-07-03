@@ -120,11 +120,21 @@ class Enrichment:
         assert signature in self.gmts[gmt_file], f"{signature} not in {gmt_file}"
 
     @staticmethod
-    def read_gmt(file_path):
+    def read_gmt(file_path, subset=None, min_size=15):
         with open(file_path) as f:
-            signatures = {
-                l.split("\t")[0]: set(l.strip().split("\t")[2:]) for l in f.readlines()
-            }
+            signatures = {}
+
+            for l in f.readlines():
+                sig_name = l.split("\t")[0]
+
+                sig_genes = set(l.strip().split("\t")[2:])
+
+                if subset is not None:
+                    sig_genes = sig_genes.intersection(subset)
+
+                if len(sig_genes) > min_size:
+                    signatures[sig_name] = sig_genes
+
         return signatures
 
     @classmethod

@@ -5,8 +5,8 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.manifold import TSNE
-from sklearn.decomposition import PCA
 from crispy.CrispyPlot import CrispyPlot
+from sklearn.decomposition import PCA, FactorAnalysis
 
 
 def pc_labels(n):
@@ -14,14 +14,25 @@ def pc_labels(n):
 
 
 def dim_reduction_pca(df, pca_ncomps=10):
-    df_pca = PCA(n_components=pca_ncomps)
+    df_pca = PCA(n_components=pca_ncomps).fit(df.T)
 
-    df_pcs = df_pca.fit_transform(df.T)
+    df_pcs = df_pca.transform(df.T)
     df_pcs = pd.DataFrame(df_pcs, index=df.T.index, columns=pc_labels(pca_ncomps))
+    df_loadings = pd.DataFrame(df_pca.components_, index=pc_labels(pca_ncomps), columns=df.T.columns)
 
     df_vexp = pd.Series(df_pca.explained_variance_ratio_, index=df_pcs.columns)
 
-    return df_pcs, df_vexp
+    return df_pcs, df_vexp, df_loadings
+
+
+def dim_reduction_fa(df, pca_ncomps=10):
+    df_pca = FactorAnalysis(n_components=pca_ncomps).fit(df.T)
+
+    df_pcs = df_pca.transform(df.T)
+    df_pcs = pd.DataFrame(df_pcs, index=df.T.index, columns=pc_labels(pca_ncomps))
+    df_loadings = pd.DataFrame(df_pca.components_, index=pc_labels(pca_ncomps), columns=df.T.columns)
+
+    return df_pcs, df_loadings
 
 
 def dim_reduction(

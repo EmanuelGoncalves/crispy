@@ -219,10 +219,14 @@ class MOFA:
         return factors, weights, rsquare
 
     @staticmethod
-    def lm_residuals(y, x, fit_intercept=True, add_intercept=True):
+    def lm_residuals(y, x, fit_intercept=True, add_intercept=False):
         # Prepare input matrices
         ys = y.dropna()
         xs = x.loc[ys.index]
+        xs = xs.loc[:, xs.std() > 0]
+
+        if ys.shape[0] <= xs.shape[1]:
+            return None
 
         # Linear regression models
         lm = LinearRegression(fit_intercept=fit_intercept).fit(xs, ys)
@@ -230,9 +234,9 @@ class MOFA:
         # Calculate residuals
         residuals = ys - lm.predict(xs) - lm.intercept_
 
-        # # Add intercept
-        # if add_intercept:
-        #     residuals += lm.intercept_
+        # Add intercept
+        if add_intercept:
+            residuals += lm.intercept_
 
         return residuals
 
@@ -255,7 +259,7 @@ class MOFA:
 
                 if self.verbose > 0:
                     LOG.info(
-                        f"Regressing-out covariates (N={cov.shape[1]}) from {k} view"
+                        f"Regressing-out covariates (N={cov.shape}) from {k} view"
                     )
 
                 # Regress-out
@@ -343,7 +347,7 @@ class MOFAPlot(CrispyPlot):
         fig.ax_heatmap.set_yticklabels(fig.ax_heatmap.get_yticklabels(), rotation=0)
 
     @classmethod
-    def variance_explained_heatmap(cls, mofa_obj, row_order=None):
+    def variance_explained_heatmap(cls, mofa_obj, row_order=None, rotate_ylabels=True):
         n_heatmaps = len(mofa_obj.rsquare)
         nrows, ncols = list(mofa_obj.rsquare.values())[0].shape
         row_order = (
@@ -357,12 +361,12 @@ class MOFAPlot(CrispyPlot):
             2,
             sharex="col",
             sharey="row",
-            figsize=(0.4 * ncols, 0.4 * nrows),
+            figsize=(0.3 * ncols, 0.5 * nrows),
             gridspec_kw=dict(width_ratios=[4, 1]),
         )
 
         for i, k in enumerate(mofa_obj.rsquare):
-            axh, axb = axs[i] if n_heatmaps > 1 else axs[0], axs[1]
+            axh, axb = axs[i][0] if n_heatmaps > 1 else axs[0], axs[i][1]
 
             df = mofa_obj.rsquare[k]
 
@@ -381,7 +385,7 @@ class MOFAPlot(CrispyPlot):
             axh.set_ylabel(k)
             axh.set_title("Variance explained per factor" if i == 0 else None)
             g.set_yticklabels(
-                g.get_yticklabels(), rotation=0, horizontalalignment="right"
+                g.get_yticklabels(), rotation=0 if rotate_ylabels else 90, horizontalalignment="right"
             )
 
             # Barplot

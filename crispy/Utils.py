@@ -10,6 +10,33 @@ from scipy.stats import gaussian_kde, rankdata, norm
 class Utils(object):
     DPATH = pkg_resources.resource_filename("crispy", "data/")
 
+    CHR_ORDER = [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10",
+        "11",
+        "12",
+        "13",
+        "14",
+        "15",
+        "16",
+        "17",
+        "18",
+        "19",
+        "20",
+        "21",
+        "22",
+        "X",
+        "Y",
+    ]
+
     CHR_SIZES_HG19 = {
         "chr1": 249_250_621,
         "chr2": 243_199_373,
@@ -219,9 +246,7 @@ class Utils(object):
     @classmethod
     def get_adam_core_essential(cls, dfile="gene_sets/pancan_core.csv"):
         return set(
-            pd.read_csv(f"{cls.DPATH}/{dfile}")[
-                "ADAM PanCancer Core-Fitness genes"
-            ]
+            pd.read_csv(f"{cls.DPATH}/{dfile}")["ADAM PanCancer Core-Fitness genes"]
         )
 
     @classmethod

@@ -6,6 +6,7 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors
+import matplotlib.patches as mpatches
 from natsort import natsorted
 from crispy.DataImporter import Sample
 from scipy.stats import gaussian_kde
@@ -71,6 +72,8 @@ class CrispyPlot:
         "Testis": "#875960",
         "Small Intestine": "#fb8072",
         "Adrenal Gland": "#ff8155",
+        "Eye": "#fa1243",
+        "Other": "#000000",
     }
 
     PAL_TISSUE_2 = dict(
@@ -125,6 +128,7 @@ class CrispyPlot:
         "4": "#ababab",
         "5+": "#c3c3c3",
         "-": "#2b8cbe",
+        "X": "#2ca02c",
     }
 
     PPI_ORDER = ["T", "1", "2", "3", "4", "5+", "-"]
@@ -241,8 +245,8 @@ class CrispyPlot:
         z="cluster",
         zorder=None,
         pal=None,
-        figsize=(1.5, 1.5),
-        ax=None,
+        figsize=(2.5, 2.5),
+        plot_reg=True,
         ax_min=None,
         ax_max=None,
     ):
@@ -258,41 +262,59 @@ class CrispyPlot:
         if pal is None:
             pal = dict(High=cls.PAL_DTRACE[1], Low=cls.PAL_DTRACE[0])
 
-        if ax is None:
-            _, ax = plt.subplots(1, 1, figsize=figsize, dpi=600)
+        g = sns.jointplot(
+            x,
+            y,
+            plot_df,
+            "scatter",
+            color=CrispyPlot.PAL_DTRACE[0],
+            xlim=[ax_min, ax_max],
+            ylim=[ax_min, ax_max],
+            space=0,
+            s=5,
+            edgecolor="w",
+            linewidth=0.0,
+            marginal_kws={"hist": False, "rug": False},
+            stat_func=None,
+            alpha=0.1,
+        )
 
         for n in zorder[::-1]:
             df = plot_df.query(f"{z} == '{n}'")
+            g.x, g.y = df[x], df[y]
 
-            sns.regplot(
-                x,
-                y,
-                data=df,
+            g.plot_joint(
+                sns.regplot,
                 color=pal[n],
                 fit_reg=False,
-                scatter_kws={"s": 3, "alpha": 1.0, "linewidth": 0},
-                ax=ax,
+                scatter_kws={"s": 3, "alpha": 0.5, "linewidth": 0},
             )
 
-            # sns.kdeplot(
-            #     df[[x, y]],
-            #     cmap=sns.light_palette(pal[n], as_cmap=True),
-            #     legend=False,
-            #     shade=False,
-            #     shade_lowest=False,
-            #     n_levels=9,
-            #     alpha=0.8,
-            #     lw=0.1,
-            #     ax=ax,
-            # )
+            if plot_reg:
+                g.plot_joint(
+                    sns.kdeplot,
+                    cmap=sns.light_palette(pal[n], as_cmap=True),
+                    legend=False,
+                    shade=False,
+                    shade_lowest=False,
+                    n_levels=9,
+                    alpha=0.8,
+                    lw=0.1,
+                )
 
-        ax.set_xlim(ax_min, ax_max)
-        ax.set_ylim(ax_min, ax_max)
+            g.plot_marginals(sns.kdeplot, color=pal[n], shade=True, legend=False)
 
-        ax.grid(True, ls="-", lw=0.1, alpha=1.0, zorder=0)
-        ax.plot([ax_min, ax_max], [ax_min, ax_max], "k--", lw=0.3)
+        handles = [mpatches.Circle([0, 0], 0.25, facecolor=pal[s], label=s) for s in pal]
+        g.ax_joint.legend(
+            loc="upper left", handles=handles, title="Protein\nattenuation", frameon=False
+        )
 
-        return ax
+        g.ax_joint.grid(True, ls="-", lw=0.1, alpha=1.0, zorder=0)
+        g.ax_joint.plot([ax_min, ax_max], [ax_min, ax_max], "k--", lw=0.3)
+
+        plt.gcf().set_size_inches(figsize)
+
+        return g
 
 
 class MidpointNormalize(colors.Normalize):

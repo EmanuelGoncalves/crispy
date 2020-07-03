@@ -27,7 +27,7 @@ class Sample:
         self,
         index="model_id",
         samplesheet_file="model_list_20200204.csv",
-        growth_file="GrowthRates_v1.3.0_20190222.csv",
+        growth_file="growth_rates_rapid_screen_1536_v1.6.3_02Jun20.csv",
         medium_file="SIDMvsMedia.xlsx",
         institute_file="crispr/CRISPR_Institute_Origin_20191108.csv.gz",
     ):
@@ -156,21 +156,26 @@ class GeneExpression:
         self,
         voom_file="gexp/rnaseq_voom.csv.gz",
         read_count="gexp/rnaseq_20191101/rnaseq_read_count_20191101.csv",
-        discrete_table="gexp/GDSC_discretised_table.csv.gz",
     ):
         self.voom = pd.read_csv(f"{DPATH}/{voom_file}", index_col=0)
         self.readcount = pd.read_csv(f"{DPATH}/{read_count}", index_col=1).drop(
             columns=["model_id"]
         )
-        self.discrete = pd.read_csv(f"{DPATH}/GDSC_discretised_table.csv.gz", index_col=0)
+        self.discrete = pd.read_csv(
+            f"{DPATH}/GDSC_discretised_table.csv.gz", index_col=0
+        )
 
     def get_data(self, dtype="voom"):
-        if dtype != "voom":
+        if dtype == "voom":
+            return self.voom.copy()
+
+        elif dtype == "readcount":
+            return self.readcount.copy()
+
+        else:
             assert False, f"Dtype {dtype} not supported"
 
-        return self.voom.copy()
-
-    def filter(self, dtype="voom", subset=None, iqr_range=None, normality=False):
+    def filter(self, dtype="voom", subset=None, iqr_range=None, normality=False, lift_gene_ids=True):
         df = self.get_data(dtype=dtype)
 
         # Subset matrices
@@ -199,6 +204,10 @@ class GeneExpression:
             normality = multipletests(normality, method="bonferroni")
             df = df.reindex(normality[0])
 
+        if lift_gene_ids:
+            gmap = pd.read_csv(f"{DPATH}/gexp/hgnc-symbol-check.csv").groupby("Input")["Approved symbol"].first()
+            df.index = gmap.loc[df.index]
+
         return df
 
     def is_not_expressed(self, rpkm_threshold=1, subset=None):
@@ -213,39 +222,49 @@ class DrugResponse:
 
     """
 
-    SAMPLE_COLUMNS = ["SANGER_MODEL_ID"]
-    DRUG_COLUMNS = ["DRUG_ID", "DRUG_NAME", "DATASET"]
+    SAMPLE_COLUMNS = ["model_id"]
+    DRUG_COLUMNS = ["drug_id", "drug_name", "dataset"]
 
     def __init__(
         self,
-        drugresponse_file="drugresponse/DrugResponse_PANCANCER_GDSC1_GDSC2_20200505.csv.gz",
+        drugresponse_file="drugresponse/DrugResponse_PANCANCER_GDSC1_GDSC2_20200602.csv.gz",
     ):
         # Import and Merge drug response matrix (IC50)
         self.drugresponse = pd.read_csv(f"{DPATH}/{drugresponse_file}")
         self.drugresponse = self.drugresponse[
-            ~self.drugresponse["CELL_LINE_NAME"].isin(["LS-1034"])
+            ~self.drugresponse["cell_line_name"].isin(["LS-1034"])
         ]
 
         # Drug max concentration
         self.maxconcentration = self.drugresponse.groupby(self.DRUG_COLUMNS)[
-            "MAX_CONC"
+            "max_screening_conc"
         ].first()
 
     @staticmethod
     def assemble():
-        gdsc1 = pd.read_excel(f"{DPATH}/drugresponse/GDSC1_fitted_dose_response_25Feb20.xlsx")
+        gdsc1 = pd.read_csv(
+            f"{DPATH}/drugresponse/fitted_data_screen_96_384_v1.6.0_02Jun20.csv"
+        )
+        gdsc1 = gdsc1.assign(dataset="GDSC1").query("(RMSE < 0.3)")
+        gdsc1 = gdsc1.query("use_in_publications == 'Y'")
 
-        gdsc2 = pd.read_csv(f"{DPATH}/drugresponse/fitted_rapid_screen_1536_v1.6.0_20200505.csv")
-        gdsc2 = gdsc2.assign(DATASET="GDSC2").query("(RMSE < 0.3)")
-        gdsc2 = gdsc2.query("(USE_IN_PUBLICATIONS == 'Y') | (WEBRELEASE == 'Y')")
+        gdsc2 = pd.read_csv(
+            f"{DPATH}/drugresponse/fitted_data_rapid_screen_1536_v1.6.3_02Jun20.csv"
+        )
+        gdsc2 = gdsc2.assign(dataset="GDSC2").query("(RMSE < 0.3)")
+        gdsc2 = gdsc2.query("use_in_publications == 'Y'")
 
         columns = set(gdsc1).intersection(gdsc2)
 
         drespo = pd.concat([gdsc1[columns], gdsc2[columns]], axis=0, ignore_index=True)
 
-        drespo.to_csv(f"{DPATH}/drugresponse/DrugResponse_PANCANCER_GDSC1_GDSC2_20200505.csv.gz", compression="gzip", index=False)
+        drespo.to_csv(
+            f"{DPATH}/drugresponse/DrugResponse_PANCANCER_GDSC1_GDSC2_20200602.csv.gz",
+            compression="gzip",
+            index=False,
+        )
 
-    def get_data(self, dtype="LN_IC50"):
+    def get_data(self, dtype="ln_IC50"):
         data = pd.pivot_table(
             self.drugresponse,
             index=self.DRUG_COLUMNS,
@@ -258,7 +277,7 @@ class DrugResponse:
 
     def filter(
         self,
-        dtype="LN_IC50",
+        dtype="ln_IC50",
         subset=None,
         min_events=3,
         min_meas=0.75,
@@ -268,7 +287,7 @@ class DrugResponse:
         filter_combinations=False,
     ):
         # Drug max screened concentration
-        df = self.get_data(dtype="LN_IC50")
+        df = self.get_data(dtype="ln_IC50")
         d_maxc = np.log(self.maxconcentration * max_c)
 
         # - Filters
@@ -368,8 +387,12 @@ class PPI:
     def ppi_annotation(
         cls, df, ppi, target_thres=5, y_var="y_id", x_var="x_id", ppi_var="x_ppi"
     ):
-        genes_source = set(df[y_var]).intersection(set(ppi.vs["name"]))
-        genes_target = set(df[x_var]).intersection(set(ppi.vs["name"]))
+        genes_source = set({g for v in df[y_var].dropna() for g in v.split(";")}).intersection(
+            set(ppi.vs["name"])
+        )
+        genes_target = set({g for v in df[x_var].dropna() for g in v.split(";")}).intersection(
+            set(ppi.vs["name"])
+        )
 
         # Calculate distance between drugs and genes in PPI
         dist_g_g = {
@@ -380,7 +403,10 @@ class PPI:
         }
 
         def gene_gene_annot(g_source, g_target):
-            if g_source == g_target:
+            if str(g_source) == "nan" or str(g_target) == "nan":
+                res = np.nan
+
+            elif len(set(g_source.split(";")).intersection(g_target.split(";"))) > 0:
                 res = "T"
 
             elif g_source not in genes_source:
@@ -390,7 +416,8 @@ class PPI:
                 res = "-"
 
             else:
-                res = cls.ppi_dist_to_string(dist_g_g[g_source][g_target], target_thres)
+                g_st_min = np.min([dist_g_g[gs][gt] for gs in g_source.split(";") for gt in g_target.split(";")])
+                res = cls.ppi_dist_to_string(g_st_min, target_thres)
 
             return res
 
@@ -642,13 +669,13 @@ class Metabolomics:
         return self.metab.copy()
 
     def filter(
-            self,
-            dtype="protein",
-            subset=None,
-            normality=False,
-            iqr_range=None,
-            perc_measures=None,
-            quantile_normalise=False,
+        self,
+        dtype="protein",
+        subset=None,
+        normality=False,
+        iqr_range=None,
+        perc_measures=None,
+        quantile_normalise=False,
     ):
         df = self.get_data()
 
@@ -864,7 +891,9 @@ class Proteomics:
 
         return peptide_raw_mean
 
-    def replicates_correlation(self, reps_file="proteomics/E0022_P06_Protein_Matrix_Replicate_ProNorM.tsv.gz"):
+    def replicates_correlation(
+        self, reps_file="proteomics/E0022_P06_Protein_Matrix_Replicate_ProNorM.tsv.gz"
+    ):
         reps = pd.read_csv(f"{DPATH}/{reps_file}", sep="\t", index_col=0).T
 
         reps_corr = {}
@@ -874,7 +903,9 @@ class Proteomics:
             df_corr = pd.DataFrame(df_corr.pipe(np.triu, k=1)).replace(0, np.nan)
             reps_corr[n] = df_corr.unstack().dropna().mean()
 
-        reps_corr = pd.Series(reps_corr, name="RepsCorrelation").sort_values(ascending=False)
+        reps_corr = pd.Series(reps_corr, name="RepsCorrelation").sort_values(
+            ascending=False
+        )
 
         return reps_corr
 
@@ -889,7 +920,7 @@ class CRISPR:
         self,
         fc_file="crispr/CRISPR_corrected_qnorm_20191108.csv.gz",
         institute_file="crispr/CRISPR_Institute_Origin_20191108.csv.gz",
-        merged_file="crispr/CCR_SQ_Combat_PC4_All.csv.gz",
+        merged_file="crispr/CRISPRcleanR_FC.txt.gz",
     ):
         self.crispr = pd.read_csv(f"{DPATH}/{fc_file}", index_col=0)
         self.institute = pd.read_csv(
@@ -904,7 +935,7 @@ class CRISPR:
             .first()
         )
 
-        self.merged = pd.read_csv(f"{DPATH}/{merged_file}", index_col=0)
+        self.merged = pd.read_csv(f"{DPATH}/{merged_file}", index_col=0, sep="\t")
         self.merged_institute = pd.Series(
             {c: "Broad" if c.startswith("ACH-") else "Sanger" for c in self.merged}
         )
@@ -912,7 +943,7 @@ class CRISPR:
         self.merged = self.merged.rename(columns=sid)
         self.merged_institute = self.merged_institute.rename(index=sid)
 
-    def get_data(self, scale=True, dtype="original"):
+    def get_data(self, scale=True, dtype="merged"):
         if dtype == "merged":
             df = self.merged.copy()
         else:
@@ -925,7 +956,7 @@ class CRISPR:
 
     def filter(
         self,
-        dtype="original",
+        dtype="merged",
         subset=None,
         scale=True,
         std_filter=False,
@@ -1079,6 +1110,7 @@ class CopyNumber:
     def __init__(
         self,
         cnv_file="copy_number/cnv_abs_copy_number_picnic_20191101.csv.gz",
+        gistic_file="copy_number/cnv_gistic_20191101.csv.gz",
         calculate_deletions=False,
         calculate_amplifications=False,
     ):
@@ -1087,6 +1119,10 @@ class CopyNumber:
         self.copynumber = pd.read_csv(f"{DPATH}/{cnv_file}", index_col=0)
 
         self.ploidy = self.ss_obj.samplesheet["ploidy"]
+
+        self.gistic = pd.read_csv(
+            f"{DPATH}/{gistic_file}", index_col="gene_symbol"
+        ).drop(columns=["gene_id"])
 
         if calculate_deletions:
             self.copynumber_del = pd.DataFrame(
@@ -1117,6 +1153,9 @@ class CopyNumber:
         elif dtype == "amp":
             res = self.copynumber_amp.copy()
 
+        elif dtype == "gistic":
+            res = self.gistic.copy()
+
         else:
             res = self.copynumber.copy()
 
@@ -1144,7 +1183,9 @@ class CopyNumber:
         )
 
     @classmethod
-    def genomic_instability(cls, seg_file="copy_number/Summary_segmentation_data_994_lines_picnic.csv.gz"):
+    def genomic_instability(
+        cls, seg_file="copy_number/Summary_segmentation_data_994_lines_picnic.csv.gz"
+    ):
         # Import segments
         cn_seg = pd.read_csv(f"{DPATH}/{seg_file}")
 
@@ -1163,8 +1204,14 @@ class CopyNumber:
             s_chr = []
             # c, c_df = list(df.groupby("chr"))[0]
             for c, c_df in df.groupby("chr"):
-                c_gain = c_df[c_df["copy_number"] > s_ploidy]["length"].sum() / c_df["length"].sum()
-                c_loss = c_df[c_df["copy_number"] < s_ploidy]["length"].sum() / c_df["length"].sum()
+                c_gain = (
+                    c_df[c_df["copy_number"] > s_ploidy]["length"].sum()
+                    / c_df["length"].sum()
+                )
+                c_loss = (
+                    c_df[c_df["copy_number"] < s_ploidy]["length"].sum()
+                    / c_df["length"].sum()
+                )
                 s_chr.append(c_gain + c_loss)
 
             s_instability[s] = np.mean(s_chr)
@@ -1212,7 +1259,7 @@ class CopyNumber:
             cs_weights = np.cumsum(s_weights)
             idx = np.where(cs_weights <= midpoint)[0][-1]
             if cs_weights[idx] == midpoint:
-                w_median = np.mean(s_data[idx:idx + 2])
+                w_median = np.mean(s_data[idx : idx + 2])
             else:
                 w_median = s_data[idx + 1]
 
