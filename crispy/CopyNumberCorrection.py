@@ -1,11 +1,9 @@
 #!/usr/bin/env python
 # Copyright (C) 2019 Emanuel Goncalves
 
-import warnings
 import numpy as np
 import pandas as pd
 import crispy as cy
-import scipy.stats as st
 import matplotlib.pyplot as plt
 from pybedtools import BedTool
 from sklearn.gaussian_process import GaussianProcessRegressor
@@ -16,9 +14,9 @@ PSEUDO_COUNT = 0.5
 
 LOW_COUNT_THRES = 30
 
-COPY_NUMBER_COLUMNS = ["chr", "start", "end", "copy_number"]
+COPY_NUMBER_COLUMNS = ["Chr", "Start", "End", "copy_number"]
 
-CRISPR_LIB_COLUMNS = ["chr", "start", "end", "sgrna"]
+CRISPR_LIB_COLUMNS = ["Chr", "Start", "End", "sgRNA_ID"]
 
 BED_COLUMNS = [
     "chr",
@@ -33,14 +31,10 @@ BED_COLUMNS = [
 ]
 
 
-# TODO: add check for minimum number of reads 15M
 class Crispy:
-    def __init__(self, raw_counts=None, sgrna_fc=None, library=None, copy_number=None, plasmid=None):
+    def __init__(self, sgrna_fc=None, library=None, copy_number=None):
         f"""
         Initialise a Crispy processing pipeline object
-
-        :param raw_counts: pandas.DataFrame
-            Unprocessed/Raw counts
 
         :param copy_number: pandas.DataFrame
             Copy-number segments, must have these columns {COPY_NUMBER_COLUMNS}
@@ -48,30 +42,12 @@ class Crispy:
         :param library: pandas.DataFrame
             CRISPR library, must have these columns {CRISPR_LIB_COLUMNS}
 
-        :param plasmid: str or list, optional
-            Column(s) in raw_counts to compare to other samples. If None last column is taken as control.
-
-
         """
-        self.raw_counts = raw_counts
-
         self.copy_number = copy_number
 
         self.sgrna_fc = sgrna_fc
 
         self.library = cy.Utils.get_crispr_lib() if library is None else library
-
-        if plasmid is None and raw_counts is None:
-            self.plasmid = None
-
-        elif plasmid is None:
-            self.plasmid = [self.raw_counts.columns[-1]]
-
-        elif type(plasmid) == str:
-            self.plasmid = [plasmid]
-
-        else:
-            self.plasmid = plasmid
 
         self.gpr = None
 
@@ -79,7 +55,6 @@ class Crispy:
         self,
         x_features=None,
         y_feature="fold_change",
-        qc_replicates_thres=None,
         n_sgrna=10,
         round_dec=5,
     ):
@@ -91,9 +66,6 @@ class Crispy:
 
         :param y_feature: str
             Dependent variable
-
-        :param qc_replicates_thres: float
-            Replicate fold-change Pearson correlation threshold
 
         :param n_sgrna: int
             Minimum number of guides per segment
@@ -114,14 +86,8 @@ class Crispy:
         else:
             x_features = x_features
 
-        # - Estimate fold-changes from raw counts
-        fc = self.sgrna_fc if self.sgrna_fc is not None else self.fold_changes(qc_replicates_thres=qc_replicates_thres)
-
-        if fc is None:
-            return fc
-
         # - Intersect sgRNAs genomic localisation with copy-number segments
-        bed_df = self.intersect_sgrna_copynumber(fc)
+        bed_df = self.intersect_sgrna_copynumber(self.sgrna_fc)
 
         # - Fit Gaussian Process on segment fold-changes
         self.gpr = CrispyGaussian(bed_df, n_sgrna=n_sgrna).fit(
@@ -178,11 +144,11 @@ class Crispy:
         lib = self.library[CRISPR_LIB_COLUMNS]
 
         if fold_change is not None:
-            lib = lib[lib["sgrna"].isin(fold_change.index)]
-            lib = lib.assign(fold_change=fold_change[lib["sgrna"]].values)
+            lib = lib[lib["sgRNA_ID"].isin(fold_change.index)]
+            lib = lib.assign(fold_change=fold_change[lib["sgRNA_ID"]].values)
 
-        lib = lib.assign(start=lib["start"].astype(int).values)
-        lib = lib.assign(end=lib["end"].astype(int).values)
+        lib = lib.assign(Start=lib["Start"].astype(int).values)
+        lib = lib.assign(End=lib["End"].astype(int).values)
 
         lib_str = lib.to_string(index=False, header=False)
 
@@ -257,184 +223,9 @@ class Crispy:
 
         return bed_df
 
-    @staticmethod
-    def estimate_size_factors(raw_counts):
-        """
-        Normalisation coefficients are estimated similarly to DESeq2 (DOI: 10.1186/s13059-014-0550-8).
-
-        :returns pandas.Series: Normalisation factors
-
-        """
-        geom_mean = st.gmean(raw_counts, axis=1)
-
-        factors = raw_counts.divide(geom_mean, axis=0).median().rename("size_factors")
-
-        return factors
-
-    @staticmethod
-    def library_size_factor(raw_counts):
-        return raw_counts.sum().rename("size_factors")
-
-    @staticmethod
-    def replicates_correlation(fold_changes):
-        """
-        Raw counts pearson correlations
-
-        :returns pandas.Series: Pearson correlation coefficients
-
-        """
-        corr = fold_changes.corr()
-
-        corr = corr.where(np.triu(np.ones(corr.shape), 1).astype(np.bool))
-        corr = corr.unstack().dropna().reset_index()
-        corr = corr.set_axis(["sample_1", "sample_2", "corr"], axis=1, inplace=False)
-
-        return corr
-
-    def scale_raw_counts(self, counts, scale=1e7):
-        factors = self.library_size_factor(counts)
-
-        return counts.divide(factors) * scale
-
-    def replicates_foldchanges(self):
-        """
-        Estimate replicates fold-changes
-        :return: pandas.DataFrame
-        """
-        # Remove plasmid low count sgRNAs
-        df = self.raw_counts.loc[
-            self.raw_counts[self.plasmid].mean(1) >= LOW_COUNT_THRES
-        ]
-
-        # Calculate normalisation factors
-        df = self.scale_raw_counts(df)
-
-        # Calculate log fold-changes
-        df = (
-            df.add(PSEUDO_COUNT)
-            .divide(df[self.plasmid].mean(1), axis=0)
-            .drop(self.plasmid, axis=1)
-            .apply(np.log2)
-        )
-
-        return df
-
-    def fold_changes(self, qc_replicates_thres=0.7, average_replicates=True):
-        """
-        Fold-changes estimation
-
-        :param qc_replicates_thres: float, optional default = 0.7
-            Replicate fold-change Pearson correlation threshold
-
-        :param average_replicates: bool
-
-        :returns pandas.Series: fold-changes compared to plasmid
-
-        """
-        fold_changes = self.replicates_foldchanges()
-
-        # Remove replicates with low correlation
-        if qc_replicates_thres is not None:
-            corr = self.replicates_correlation(fold_changes)
-
-            samples = corr.query(f"corr > {qc_replicates_thres}")
-            samples = pd.unique(samples[["sample_1", "sample_2"]].unstack())
-
-            discarded_samples = [s for s in fold_changes if s not in samples]
-
-            if len(discarded_samples) > 0:
-                warnings.warn(
-                    f"QC correlation, replicates discarded: {discarded_samples}"
-                )
-
-            if len(samples) == 0:
-                warnings.warn(
-                    f"All replicates failed QC correlation threshold {qc_replicates_thres:.2f}"
-                )
-                return None
-
-            fold_changes = fold_changes[samples]
-
-        # Average replicates
-        if average_replicates:
-            fold_changes = fold_changes.mean(1)
-
-        return fold_changes
-
-    # TODO: Note to potential duplciate sgrnas in library
-    def gene_fold_changes(
-        self, bed_df=None, qc_replicates_thres=0.7, average_replicates=True
-    ):
-        """
-        Gene level fold-changes
-
-        :param bed_df:
-
-        :param qc_replicates_thres: float, optional default = 0.7
-            Replicate fold-change Pearson correlation threshold
-
-        :param average_replicates:
-
-        :return: pandas.Series
-        """
-
-        if bed_df is None:
-            fc = self.fold_changes(
-                qc_replicates_thres=qc_replicates_thres,
-                average_replicates=average_replicates,
-            )
-        else:
-            fc = bed_df.set_index("sgrna")["fold_change"]
-
-        genes = self.library.dropna(subset=["gene"]).set_index("sgrna")["gene"]
-
-        return fc.groupby(genes).mean()
-
-    def gene_corrected_fold_changes(self, bed_df):
-        genes = self.library.dropna(subset=["gene"]).set_index("sgrna")["gene"]
-
-        fc = bed_df.set_index("sgrna")["corrected"]
-
-        return fc.groupby(genes).mean()
-
-    @staticmethod
-    def scale_crispr(df, ess=None, ness=None, metric=np.median):
-        """
-        Min/Max scaling of CRISPR-Cas9 log-FC by median (default) Essential and Non-Essential.
-
-        :param df: pandas.DataFrame
-            Gene fold-changes
-        :param ess: set(String)
-        :param ness: set(String)
-        :param metric: np.Median (default)
-
-        :return: Float pandas.DataFrame
-
-        """
-
-        if ess is None:
-            ess = cy.Utils.get_essential_genes(return_series=False)
-
-        if ness is None:
-            ness = cy.Utils.get_non_essential_genes(return_series=False)
-
-        assert (
-            len(ess.intersection(df.index)) != 0
-        ), "DataFrame has no index overlapping with essential list"
-        assert (
-            len(ness.intersection(df.index)) != 0
-        ), "DataFrame has no index overlapping with non-essential list"
-
-        ess_metric = metric(df.reindex(ess).dropna(), axis=0)
-        ness_metric = metric(df.reindex(ness).dropna(), axis=0)
-
-        df = df.subtract(ness_metric).divide(ness_metric - ess_metric)
-
-        return df
-
 
 class CrispyGaussian(GaussianProcessRegressor):
-    SEGMENT_COLUMNS = ["chr", "start", "end"]
+    SEGMENT_COLUMNS = ["Chr", "Start", "End"]
 
     SEGMENT_AGG_FUN = dict(
         fold_change=np.mean,

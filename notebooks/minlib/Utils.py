@@ -128,6 +128,7 @@ def project_score_sample_map(lib_version="V1.1"):
     ky_v11_manifest = pd.read_csv(
         f"{DPATH}/crispr_manifests/project_score_manifest.csv.gz"
     )
+    ky_v11_manifest["rep_qc"] = ky_v11_manifest["rep_qc"].fillna("")
 
     s_map = []
     for i in ky_v11_manifest.index:
@@ -137,6 +138,7 @@ def project_score_sample_map(lib_version="V1.1"):
                     model_id=ky_v11_manifest.iloc[i]["model_id"],
                     s_ids=ky_v11_manifest.iloc[i]["library"].split(", "),
                     s_lib=ky_v11_manifest.iloc[i]["experiment_identifier"].split(", "),
+                    rep_qc=ky_v11_manifest.iloc[i]["rep_qc"].split(", ")
                 )
             )
         )

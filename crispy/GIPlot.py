@@ -24,6 +24,7 @@ class GIPlot(CrispyPlot):
         x_gene,
         y_gene,
         plot_df,
+        alpha=1.0,
         hue=None,
         style=None,
         lowess=False,
@@ -55,7 +56,7 @@ class GIPlot(CrispyPlot):
                     lw=0.1,
                     s=3,
                     c=pal[2] if palette is None else pal[t],
-                    alpha=1.0,
+                    alpha=alpha,
                     marker=cls.MARKERS[i],
                 )
                 markers_handles[n] = cls.MARKERS[i]

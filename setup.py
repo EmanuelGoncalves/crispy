@@ -19,8 +19,6 @@ with open("requirements.txt") as f:
 included_files = {
     "crispy": [
         "data/cytoBand.txt",
-        "data/example_copynumber.csv",
-        "data/example_rawcounts.csv",
 
         "data/crispr_libs/Avana_v1.csv.gz",
         "data/crispr_libs/Brunello_v1.csv.gz",
@@ -49,8 +47,11 @@ included_files = {
         "data/gene_sets/pan_core_essential_broad_depmap18Q4.txt",
         "data/gene_sets/essential_sanger_depmap19.tsv",
 
+        "data/copy_number/Summary_segmentation_data_994_lines_picnic.csv.gz",
+
         "data/images/example_gp_fit.png",
         "data/images/logo.png",
+
         "data/model_list_20200204.csv",
         "data/GrowthRates_v1.3.0_20190222.csv",
         "data/SIDMvsMedia.xlsx",

@@ -61,7 +61,7 @@ for f in rawcount_files:
 samplesheet = pd.DataFrame(samplesheet)
 
 ORGS_PALETTE = [f"{g} {c}" for g in set(samplesheet["organoid"]) for c in ["BME 5%", "BME 80%"]]
-ORGS_PALETTE = pd.Series((sns.color_palette("tab20b").as_hex() + sns.color_palette("tab20c").as_hex())[:len(ORGS_PALETTE)], index=ORGS_PALETTE)
+ORGS_PALETTE = pd.Series((sns.color_palette("tab20b").as_hex() + sns.color_palette("tab20c").as_hex() + sns.color_palette("tab20").as_hex())[:len(ORGS_PALETTE)], index=ORGS_PALETTE)
 samplesheet["palette"] = ORGS_PALETTE[[f"{o} {c}" for o, c in samplesheet[["organoid", "medium"]].values]].values
 
 samplesheet.to_excel(f"{DPATH}/samplesheet.xlsx", index=False)

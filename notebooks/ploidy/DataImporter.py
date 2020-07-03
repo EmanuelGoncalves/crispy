@@ -127,8 +127,8 @@ class DataImporter:
 
 class DataProcessor(object):
 
-    def __init__(self, data=None, bed_filename_prefix=''):
-        self.data = DataImporter() if data is None else data
+    def __init__(self, data=None, bed_filename_prefix='', subset_samples=None):
+        self.data = DataImporter(subset_samples=subset_samples) if data is None else data
 
         self.bed_filename_prefix = bed_filename_prefix
 

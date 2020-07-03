@@ -1111,6 +1111,7 @@ class CopyNumber:
         self,
         cnv_file="copy_number/cnv_abs_copy_number_picnic_20191101.csv.gz",
         gistic_file="copy_number/cnv_gistic_20191101.csv.gz",
+        segmentation_file="copy_number/Summary_segmentation_data_994_lines_picnic.csv.gz",
         calculate_deletions=False,
         calculate_amplifications=False,
     ):
@@ -1119,6 +1120,8 @@ class CopyNumber:
         self.copynumber = pd.read_csv(f"{DPATH}/{cnv_file}", index_col=0)
 
         self.ploidy = self.ss_obj.samplesheet["ploidy"]
+
+        self.copynumber_seg = pd.read_csv(f"{DPATH}/{segmentation_file}")
 
         self.gistic = pd.read_csv(
             f"{DPATH}/{gistic_file}", index_col="gene_symbol"
@@ -1173,12 +1176,10 @@ class CopyNumber:
     def ploidy_from_segments(
         self, seg_file="copy_number/Summary_segmentation_data_994_lines_picnic.csv.gz"
     ):
-        copynumber_seg = pd.read_csv(f"{DPATH}/{seg_file}")
-
         return pd.Series(
             {
                 s: self.calculate_ploidy(df)[1]
-                for s, df in copynumber_seg.groupby("model_id")
+                for s, df in self.copynumber_seg.groupby("model_id")
             }
         )
 

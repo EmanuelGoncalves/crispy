@@ -8,7 +8,7 @@ import seaborn as sns
 from pybedtools import BedTool
 import matplotlib.pyplot as plt
 from scipy.stats import ttest_ind
-from analysis.DataImporter import DataImporter, DataProcessor
+from notebooks.ploidy.DataImporter import DataImporter, DataProcessor
 
 
 class DataImporterWGS(DataImporter):
