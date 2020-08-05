@@ -535,7 +535,7 @@ class GIPlot(CrispyPlot):
 
         plot_df = plot_df.dropna(subset=[x, y])
 
-        fig, ax = plt.subplots(1, 1, figsize=figsize, dpi=600)
+        fig, ax = plt.subplots(figsize=figsize, dpi=600)
 
         for t, df in plot_df.groupby(hue):
             ax.scatter(

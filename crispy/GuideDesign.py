@@ -57,7 +57,7 @@ class GuideDesign:
     CRISPR_BY_ID = "https://www.sanger.ac.uk/htgt/wge/api/crispr_by_id"
     SEARCH_BY_SEQ = "https://www.sanger.ac.uk/htgt/wge/api/search_by_seq"
     OFFTARGETS_BY_SEQ = "https://www.sanger.ac.uk/htgt/wge/api/off_targets_by_seq"
-    INDIVIDUAL_OFF_TARGET_SEARCH="https://www.sanger.ac.uk/htgt/wge/api/individual_off_target_search"
+    INDIVIDUAL_OFF_TARGET_SEARCH = "https://www.sanger.ac.uk/htgt/wge/api/individual_off_target_search"
 
     RESTRICTION_SITES = dict(
         BsmBI="CGTCTC",

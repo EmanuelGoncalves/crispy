@@ -84,24 +84,35 @@ def diag_plot(x, color, label, **kwargs):
 
 order = ["Median", "KS", "JACKS", "RuleSet2", "FORECAST"]
 
-grid = sns.PairGrid(ky_gmetrics[order], height=1.1, despine=False, diag_sharey=False)
+genes = {
+    "All": ky_gmetrics.index,
+    "Essential": ky_gsets["essential"]["sgrnas"],
+    "Non-essential": ky_gsets["nonessential"]["sgrnas"],
+}
 
-for i, j in zip(*np.tril_indices_from(grid.axes, -1)):
-    ax = grid.axes[i, j]
-    r, p = spearmanr(ky_gmetrics.iloc[:, [i, j]].dropna().values)
-    ax.annotate(
-        f"R={r:.2f}\np={p:.1e}" if p != 0 else f"R={r:.2f}\np<0.0001",
-        xy=(0.5, 0.5),
-        xycoords=ax.transAxes,
-        ha="center",
-        va="center",
-        fontsize=9,
-    )
+for dtype in genes:
+    plot_df = ky_gmetrics.reindex(genes[dtype])
 
-grid.map_diag(diag_plot, kde=True, hist_kws=dict(linewidth=0), bins=30)
-grid.map_upper(triu_plot, marker="o", edgecolor="", cmap="Spectral_r", s=2)
+    grid = sns.PairGrid(plot_df[order], height=1.1, despine=False, diag_sharey=False)
 
-plt.subplots_adjust(hspace=0.05, wspace=0.05)
-plt.gcf().set_size_inches(2 * len(order), 2 * len(order))
-plt.savefig(f"{RPATH}/ky_v11_guides_metrics_scatter.pdf", bbox_inches="tight", transparent=True)
-plt.close("all")
+    for j, i in [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (1, 3), (1, 4), (1, 2), (2, 3), (2, 4), (3, 4)]:
+        ax = grid.axes[i, j]
+        r, p = spearmanr(plot_df[order[i]], plot_df[order[j]], nan_policy="omit")
+        ax.annotate(
+            f"R={r:.2f}\np={p:.1e}" if p != 0 else f"R={r:.2f}\np<0.0001",
+            xy=(0.5, 0.5),
+            xycoords=ax.transAxes,
+            ha="center",
+            va="center",
+            fontsize=9,
+        )
+
+    grid.map_diag(diag_plot, kde=True, hist_kws=dict(linewidth=0), bins=30)
+    grid.map_upper(triu_plot, marker="o", edgecolor="", cmap="Spectral_r", s=2)
+
+    plt.title(dtype)
+
+    plt.subplots_adjust(hspace=0.05, wspace=0.05)
+    plt.gcf().set_size_inches(1.5 * len(order), 1.5 * len(order))
+    plt.savefig(f"{RPATH}/ky_v11_guides_metrics_scatter_{dtype}.pdf", bbox_inches="tight", transparent=True)
+    plt.close("all")

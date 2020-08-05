@@ -280,7 +280,7 @@ class DrugResponse:
         dtype="ln_IC50",
         subset=None,
         min_events=3,
-        min_meas=0.75,
+        min_meas=25,
         max_c=0.5,
         filter_min_observations=False,
         filter_max_concentration=False,
@@ -297,7 +297,7 @@ class DrugResponse:
 
         # Filter by mininum number of observations
         if filter_min_observations:
-            df = df[df.count(1) > (df.shape[1] * min_meas)]
+            df = df[df.count(1) > min_meas]
 
         # Filter by max screened concentration
         if filter_max_concentration:

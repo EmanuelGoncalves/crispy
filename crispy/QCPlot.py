@@ -400,6 +400,7 @@ class QCplot(CrispyPlot):
         crispy_bed,
         ascat_bed,
         chrm,
+        y_var="fold_change",
         highlight=None,
         ax=None,
         legend=False,
@@ -413,18 +414,18 @@ class QCplot(CrispyPlot):
 
         # - Build data-frames
         # ASCAT
-        ascat_ = ascat_bed.query(f"chr == '{chrm}'")
+        ascat_ = ascat_bed.query(f"Chr == '{chrm}'")
 
         # CRISPR
-        crispr_ = crispy_bed[crispy_bed["chr"] == chrm]
-        crispr_ = crispr_.assign(location=crispr_[["sgrna_start", "sgrna_end"]].mean(1))
+        crispr_ = crispy_bed[crispy_bed["Chr"] == chrm]
+        crispr_ = crispr_.assign(location=crispr_[["sgRNA_Start", "sgRNA_End"]].mean(1))
 
-        crispr_gene_ = crispr_.groupby("gene")[["fold_change", "location"]].mean()
+        crispr_gene_ = crispr_.groupby("gene")[[y_var, "location"]].mean()
 
         # Plot original values
         ax.scatter(
             crispr_["location"] / scale,
-            crispr_["fold_change"],
+            crispr_[y_var],
             s=6,
             marker=".",
             lw=0,
@@ -434,7 +435,7 @@ class QCplot(CrispyPlot):
         )
 
         # Segment mean
-        for (s, e), gp_mean in crispr_.groupby(["start", "end"])["fold_change"]:
+        for (s, e), gp_mean in crispr_.groupby(["Start", "End"])[y_var]:
             ax.plot(
                 (s / scale, e / scale),
                 (gp_mean.mean(), gp_mean.mean()),
@@ -446,7 +447,7 @@ class QCplot(CrispyPlot):
             )
 
         # Plot segments
-        for s, e, cn in ascat_[["start", "end", "copy_number"]].values:
+        for s, e, cn in ascat_[["Start", "End", "copy_number"]].values:
             ax.plot(
                 (s / scale, e / scale),
                 (cn, cn),
@@ -465,7 +466,7 @@ class QCplot(CrispyPlot):
                 if i in crispr_gene_.index:
                     ax.scatter(
                         crispr_gene_["location"].loc[i] / scale,
-                        crispr_gene_["fold_change"].loc[i],
+                        crispr_gene_[y_var].loc[i],
                         s=14,
                         marker="X",
                         lw=0,
@@ -479,7 +480,7 @@ class QCplot(CrispyPlot):
         # Cytobads
         cytobands = Utils.get_cytobands(chrm=chrm)
 
-        for i, (s, e, t) in enumerate(cytobands[["start", "end", "band"]].values):
+        for i, (s, e, t) in enumerate(cytobands[["Start", "End", "band"]].values):
             if t == "acen":
                 ax.axvline(s / scale, lw=0.2, ls="-", color=cls.PAL_DBGD[0], alpha=0.1)
                 ax.axvline(e / scale, lw=0.2, ls="-", color=cls.PAL_DBGD[0], alpha=0.1)
@@ -501,7 +502,7 @@ class QCplot(CrispyPlot):
                 frameon=False,
             )
 
-        ax.set_xlim(crispr_["start"].min() / scale, crispr_["end"].max() / scale)
+        ax.set_xlim(crispr_["Start"].min() / scale, crispr_["End"].max() / scale)
 
         ax.tick_params(axis="both", which="major", labelsize=5)
 

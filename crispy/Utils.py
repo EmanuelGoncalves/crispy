@@ -269,12 +269,13 @@ class Utils(object):
 
     @classmethod
     def get_cytobands(cls, dfile="cytoBand.txt", chrm=None):
-        cytobands = pd.read_csv("{}/{}".format(cls.DPATH, dfile), sep="\t")
+        cytobands = pd.read_csv(f"{cls.DPATH}/{dfile}", sep="\t")
+        cytobands["Chr"] = [i.replace("chr", "") for i in cytobands["Chr"]]
 
         if chrm is not None:
-            cytobands = cytobands[cytobands["chr"] == chrm]
+            cytobands = cytobands[cytobands["Chr"] == chrm]
 
-        assert cytobands.shape[0] > 0, "{} not found in cytobands file"
+        assert cytobands.shape[0] > 0, f"{chrm} not found in cytobands file"
 
         return cytobands
 

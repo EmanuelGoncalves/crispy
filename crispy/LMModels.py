@@ -133,7 +133,7 @@ class LModel:
                 dict(
                     y_id=y.columns,
                     x_id=x_var,
-                    n=len(x),
+                    n=y.attrs["nan_mask"].loc[y.columns, x.index].sum(1) if "nan_mask" in y.attrs else len(x),
                     beta=lm_full.coef_[:, -1],
                     lr=lr.values,
                     covs=m.shape[1],
@@ -141,6 +141,7 @@ class LModel:
                     fdr=multipletests(lr_pval, method="fdr_bh")[1],
                 )
             )
+
             lms.append(res)
 
         lms = pd.concat(lms, ignore_index=True).sort_values("pval")
@@ -430,7 +431,10 @@ class LMModels:
         return parsed_results_adj
 
     @staticmethod
-    def transform_matrix(matrix, t_type="scale", fillna_func=np.mean):
+    def transform_matrix(matrix, t_type="scale", add_nan_mask=True, fillna_func=np.mean):
+        # Create mask attribute
+        mask_df = matrix.notna()
+
         # Fill NaNs
         if fillna_func is not None:
             matrix = matrix.T.fillna(matrix.apply(fillna_func, axis=1)).T
@@ -452,6 +456,9 @@ class LMModels:
             LOG.warning(
                 f"{t_type} transformation not supported. Original matrix returned."
             )
+
+        if add_nan_mask:
+            matrix.attrs["nan_mask"] = mask_df.loc[matrix.index, matrix.columns]
 
         return matrix
 

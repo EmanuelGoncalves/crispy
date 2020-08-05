@@ -144,6 +144,7 @@ if __name__ == "__main__":
     # Library & Samplesheet
     #
     lib_ss = pd.read_excel(f"{DPATH}/gi_samplesheet.xlsx")
+    lib_ss = lib_ss.query("library == '2gCRISPR_Pilot_library_v2.0.0.xlsx'")
 
     # Parse reads
     #

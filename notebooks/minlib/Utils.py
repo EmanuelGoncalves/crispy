@@ -143,7 +143,9 @@ def project_score_sample_map(lib_version="V1.1"):
             )
         )
     s_map = pd.concat(s_map).set_index("s_lib")
-    s_map = s_map.query(f"s_ids == '{lib_version}'")
+
+    if lib_version is not None:
+        s_map = s_map.query(f"s_ids == '{lib_version}'")
 
     return s_map
 
@@ -167,7 +169,7 @@ def density_interpolate(xx, yy, dtype="gaussian"):
     return zz
 
 
-def replicates_correlation(sgrna_data, guides=None, plasmids=None):
+def replicates_correlation(sgrna_data, guides=None, plasmids=None, method="pearson"):
     # Subset guides
     if guides is not None:
         df = sgrna_data.reindex(guides).copy()
@@ -181,7 +183,7 @@ def replicates_correlation(sgrna_data, guides=None, plasmids=None):
         df = df.remove_low_counts(plasmids).norm_rpm().foldchange(plasmids)
 
     # Sample correlation
-    df_corr = df.corr()
+    df_corr = df.corr(method=method)
     df_corr = df_corr.where(np.triu(np.ones(df_corr.shape), 1).astype(np.bool))
     df_corr = df_corr.unstack().dropna().reset_index()
     df_corr.columns = ["sample_1", "sample_2", "corr"]
