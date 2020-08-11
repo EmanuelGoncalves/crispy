@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 from crispy import logger as LOG
 from dualguide import read_gi_library
 from crispy.CrispyPlot import CrispyPlot
+from more_itertools import unique_everseen
 from dualguide.ParseFASTQ import SCAFFOLDS_MOTIFS
 from crispy.LibRepresentationReport import LibraryRepresentaion
 
@@ -61,7 +62,7 @@ if __name__ == "__main__":
 
         lib = read_gi_library(lib_name)
 
-        samples = list(set(lib_ss_df["name"]))
+        samples = list(unique_everseen(lib_ss_df["name"]))
         samples_pal = lib_ss_df.groupby("name")["palette"].first()
 
         # FASTQ reads stats, swaps and counts
@@ -104,7 +105,7 @@ if __name__ == "__main__":
             "swap",
         ]
 
-        if "_PILOT_" in lib_name:
+        if "_Pilot_" in lib_name:
             col_order += [
                 "scaffold_exists",
                 "scaffold_WT",
@@ -120,7 +121,7 @@ if __name__ == "__main__":
             len(col_order),
             sharex="all",
             sharey="all",
-            figsize=(len(col_order) * len(samples) * 0.3, 3.0),
+            figsize=(len(col_order) * len(samples) * 0.125, 3.0),
             dpi=600,
         )
 
@@ -180,7 +181,7 @@ if __name__ == "__main__":
 
         # Gini scores barplot
         #
-        plt.figure(figsize=(2.5, 1.0), dpi=600)
+        plt.figure(figsize=(2.5, len(samples) * 0.125), dpi=600)
 
         sns.barplot(
             "gini",
@@ -188,7 +189,7 @@ if __name__ == "__main__":
             data=gini_scores,
             orient="h",
             order=samples,
-            palette=samples_pal,
+            palette=samples_pal[samples],
             saturation=1,
             lw=0,
         )
@@ -239,7 +240,7 @@ if __name__ == "__main__":
                 .rename(columns={"index": "sample", 0: "range"})
         )
 
-        plt.figure(figsize=(2.5, 1.0), dpi=600)
+        plt.figure(figsize=(2.5, len(samples) * 0.125), dpi=600)
 
         sns.barplot(
             "range",
@@ -269,7 +270,7 @@ if __name__ == "__main__":
             columns={"index": "sample", 0: "dropout"}
         )
 
-        plt.figure(figsize=(2.5, 1.0), dpi=600)
+        plt.figure(figsize=(len(samples) * 0.125, 1.0), dpi=600)
 
         ax = sns.barplot(
             "dropout",

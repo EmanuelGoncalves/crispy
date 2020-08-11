@@ -16,23 +16,23 @@ LOW_COUNT_THRES = 30
 
 COPY_NUMBER_COLUMNS = ["Chr", "Start", "End", "copy_number"]
 
-CRISPR_LIB_COLUMNS = ["Chr", "Start", "End", "sgRNA_ID"]
+CRISPR_LIB_COLUMNS = ["Chr", "Start", "End"]
 
 BED_COLUMNS = [
-    "chr",
-    "start",
-    "end",
+    "Chr",
+    "Start",
+    "End",
     "copy_number",
-    "sgrna_chr",
-    "sgrna_start",
-    "sgrna_end",
-    "sgrna",
+    "sgRNA_Chr",
+    "sgRNA_Start",
+    "sgRNA_End",
     "fold_change",
+    "sgRNA_ID",
 ]
 
 
 class Crispy:
-    def __init__(self, sgrna_fc=None, library=None, copy_number=None):
+    def __init__(self, sgrna_fc, library, copy_number, exclude_heterochromosomes=False):
         f"""
         Initialise a Crispy processing pipeline object
 
@@ -43,20 +43,17 @@ class Crispy:
             CRISPR library, must have these columns {CRISPR_LIB_COLUMNS}
 
         """
-        self.copy_number = copy_number
-
+        self.library = library
         self.sgrna_fc = sgrna_fc
-
-        self.library = cy.Utils.get_crispr_lib() if library is None else library
-
+        self.copy_number = copy_number
         self.gpr = None
+        self.exclude_heterochromosomes = exclude_heterochromosomes
 
     def correct(
         self,
         x_features=None,
         y_feature="fold_change",
         n_sgrna=10,
-        round_dec=5,
     ):
         """
         Main pipeline function to process data from raw counts to corrected fold-changes.
@@ -87,12 +84,11 @@ class Crispy:
             x_features = x_features
 
         # - Intersect sgRNAs genomic localisation with copy-number segments
-        bed_df = self.intersect_sgrna_copynumber(self.sgrna_fc)
+        bed_df = self.intersect_sgrna_copynumber()
 
         # - Fit Gaussian Process on segment fold-changes
-        self.gpr = CrispyGaussian(bed_df, n_sgrna=n_sgrna).fit(
-            x=x_features, y=y_feature
-        )
+        self.gpr = CrispyGaussian(bed_df, n_sgrna=n_sgrna)
+        self.gpr = self.gpr.fit(x=x_features, y=y_feature)
 
         bed_df["gp_mean"] = self.gpr.predict(bed_df[x_features])
 
@@ -101,61 +97,12 @@ class Crispy:
 
         # - Add gene
         bed_df["gene"] = (
-            self.library.set_index("sgrna").reindex(bed_df["sgrna"])["gene"].values
+            self.library.reindex(bed_df["sgRNA_ID"])["Approved_Symbol"].values
         )
-
-        # - Round floating
-        if round_dec is not None:
-            round_cols = [
-                "fold_change",
-                "chr_copy",
-                "ploidy",
-                "ratio",
-                "len_log2",
-                "gp_mean",
-                "corrected",
-            ]
-            bed_df[round_cols] = bed_df[round_cols].round(round_dec)
 
         return bed_df
 
-    def get_bed_copy_number(self):
-        """
-        Create BedTool object from copy-number segments data-frame
-
-        :return: pybedtools.BedTool
-        """
-        cn_str = self.copy_number[COPY_NUMBER_COLUMNS].to_string(
-            index=False, header=False
-        )
-        return BedTool(cn_str, from_string=True).sort()
-
-    def get_bed_library(self, fold_change=None):
-        """
-        Create BedTool object for sgRNAs in CRISPR-Cas9 library
-
-        :param fold_change: pandas.Series, optional
-            Estimated fold-changes
-
-        :return: pybedtools.BedTool
-        """
-        pd.set_option("display.max_colwidth", 10000)
-
-        lib = self.library[CRISPR_LIB_COLUMNS]
-
-        if fold_change is not None:
-            lib = lib[lib["sgRNA_ID"].isin(fold_change.index)]
-            lib = lib.assign(fold_change=fold_change[lib["sgRNA_ID"]].values)
-
-        lib = lib.assign(Start=lib["Start"].astype(int).values)
-        lib = lib.assign(End=lib["End"].astype(int).values)
-
-        lib_str = lib.to_string(index=False, header=False)
-
-        return BedTool(lib_str, from_string=True).sort()
-
-    @staticmethod
-    def calculate_ploidy(df):
+    def calculate_ploidy(self, df):
         """
         Estimate ploidy and chromosomes number of copies from copy-number segments. Mean copy-number is
         weigthed by the length of the segment.
@@ -170,23 +117,52 @@ class Crispy:
                 columns={"name": "copy_number", "chrom": "chr"}
             )
 
-        df = df[~df["chr"].isin(["chrX", "chrY"])]
+        if self.exclude_heterochromosomes:
+            df = df[~df["Chr"].isin(["chrX", "chrY"])]
 
-        df = df.assign(length=df["end"] - df["start"])
+        df = df.assign(length=df["End"] - df["Start"])
         df = df.assign(cn_by_length=df["length"] * (df["copy_number"] + 1))
 
         chrm = (
-            df.groupby("chr")["cn_by_length"]
+            df.groupby("Chr")["cn_by_length"]
             .sum()
-            .divide(df.groupby("chr")["length"].sum())
+            .divide(df.groupby("Chr")["length"].sum())
             - 1
         )
+        chrm.index = [str(i) if type(i) is not str else i for i in chrm.index]
 
         ploidy = (df["cn_by_length"].sum() / df["length"].sum()) - 1
 
         return chrm, ploidy
 
-    def intersect_sgrna_copynumber(self, fold_change):
+    def get_df_copy_number(self):
+        """
+        Create BedTool object from copy-number segments data-frame
+
+        :return: pybedtools.BedTool
+        """
+        return self.copy_number[COPY_NUMBER_COLUMNS]
+
+    def get_df_library(self):
+        """
+        Create BedTool object for sgRNAs in CRISPR-Cas9 library
+
+        :param fold_change: pandas.Series, optional
+            Estimated fold-changes
+
+        :return: pybedtools.BedTool
+        """
+        lib = self.library[CRISPR_LIB_COLUMNS].dropna()
+
+        lib = lib[lib.index.isin(self.sgrna_fc.index)]
+        lib = lib.assign(fold_change=self.sgrna_fc[lib.index].values)
+
+        lib = lib.assign(Start=lib["Start"].astype(int).values)
+        lib = lib.assign(End=lib["End"].astype(int).values)
+
+        return lib.reset_index()[CRISPR_LIB_COLUMNS + ["fold_change", "index"]]
+
+    def intersect_sgrna_copynumber(self):
         """
         Intersect sgRNAs fold-changes with copy-number segments
 
@@ -194,31 +170,33 @@ class Crispy:
             sgRNAs fold-changes
 
         :return: pandas.DataFrame
-            DataFrame containing the intersection of the copy-number segments with the sgRNAs of the CRISPR library
+            DataFrame containing the intersection of the copy-number segments with the sgRNAs
+            of the CRISPR library
 
         """
-        # Build copy-number and sgRNAs bed files
-        copy_number_bed = self.get_bed_copy_number()
-        sgrnas_bed = self.get_bed_library(fold_change)
+        # Build copy-number and sgRNAs data frames
+        df_cn = self.get_df_copy_number()
+        df_sg = self.get_df_library()
+
+        # Build beds
+        bed_cn = BedTool(df_cn.to_string(index=False, header=False), from_string=True).sort()
+        bed_sg = BedTool(df_sg.to_string(index=False, header=False), from_string=True).sort()
 
         # Intersect copy-number segments with sgRNAs
-        bed_df = (
-            copy_number_bed.intersect(sgrnas_bed, wa=True, wb=True)
-            .to_dataframe(names=BED_COLUMNS)
-            .drop(["sgrna_chr"], axis=1)
-        )
+        bed_df = bed_cn.intersect(bed_sg, wa=True, wb=True).to_dataframe(names=BED_COLUMNS)
+        bed_df["sgRNA_ID"] = [f"{i:.0f}".split(".")[0] if type(i) is not str else i for i in bed_df["sgRNA_ID"]]
 
         # Calculate chromosome copies and cell ploidy
-        chrm, ploidy = self.calculate_ploidy(copy_number_bed)
+        chrm, ploidy = self.calculate_ploidy(df_cn)
 
-        bed_df = bed_df.assign(chr_copy=chrm[bed_df["chr"]].values)
+        bed_df = bed_df.assign(chr_copy=chrm[bed_df["Chr"]].values)
         bed_df = bed_df.assign(ploidy=ploidy)
 
         # Calculate copy-number ratio
         bed_df = bed_df.assign(ratio=bed_df.eval("copy_number / chr_copy"))
 
         # Calculate segment length
-        bed_df = bed_df.assign(len=bed_df.eval("end - start"))
+        bed_df = bed_df.assign(len=bed_df.eval("End - Start"))
         bed_df = bed_df.assign(len_log2=bed_df["len"].apply(np.log2))
 
         return bed_df
@@ -235,7 +213,7 @@ class CrispyGaussian(GaussianProcessRegressor):
         ploidy=np.mean,
         len=np.mean,
         len_log2=np.mean,
-        sgrna="count",
+        sgRNA_ID="count",
     )
 
     def __init__(
@@ -279,12 +257,12 @@ class CrispyGaussian(GaussianProcessRegressor):
 
     def fit(self, x, y, train_idx=None):
         if train_idx is not None:
-            x = self.bed_seg.iloc[train_idx].query(f"sgrna >= {self.n_sgrna}")[x]
-            y = self.bed_seg.iloc[train_idx].query(f"sgrna >= {self.n_sgrna}")[y]
+            x = self.bed_seg.iloc[train_idx].query(f"sgRNA_ID >= {self.n_sgrna}")[x]
+            y = self.bed_seg.iloc[train_idx].query(f"sgRNA_ID >= {self.n_sgrna}")[y]
 
         else:
-            x = self.bed_seg.query(f"sgrna >= {self.n_sgrna}")[x]
-            y = self.bed_seg.query(f"sgrna >= {self.n_sgrna}")[y]
+            x = self.bed_seg.query(f"sgRNA_ID >= {self.n_sgrna}")[x]
+            y = self.bed_seg.query(f"sgRNA_ID >= {self.n_sgrna}")[y]
 
         return super().fit(x, y)
 
@@ -320,12 +298,12 @@ class CrispyGaussian(GaussianProcessRegressor):
 
         # - Data
         x, y = (
-            self.bed_seg.query(f"sgrna >= {self.n_sgrna}")[x_feature],
-            self.bed_seg.query(f"sgrna >= {self.n_sgrna}")[y_feature],
+            self.bed_seg.query(f"sgRNA_ID >= {self.n_sgrna}")[x_feature],
+            self.bed_seg.query(f"sgRNA_ID >= {self.n_sgrna}")[y_feature],
         )
         x_, y_ = (
-            self.bed_seg.query(f"sgrna < {self.n_sgrna}")[x_feature],
-            self.bed_seg.query(f"sgrna < {self.n_sgrna}")[y_feature],
+            self.bed_seg.query(f"sgRNA_ID < {self.n_sgrna}")[x_feature],
+            self.bed_seg.query(f"sgRNA_ID < {self.n_sgrna}")[y_feature],
         )
 
         x_pred = np.arange(0, x.max(), 0.1)
@@ -340,7 +318,7 @@ class CrispyGaussian(GaussianProcessRegressor):
             alpha=0.7,
             edgecolors="white",
             lw=0.3,
-            label=f"#(sgRNA) >= {self.n_sgrna}",
+            label=f"#(sgRNA_ID) >= {self.n_sgrna}",
         )
 
         # Segments not used for fitting
@@ -352,7 +330,7 @@ class CrispyGaussian(GaussianProcessRegressor):
             alpha=0.3,
             edgecolors="white",
             lw=0.3,
-            label=f"#(sgRNA) < {self.n_sgrna}",
+            label=f"#(sgRNA_ID) < {self.n_sgrna}",
         )
 
         # Plot GP fit

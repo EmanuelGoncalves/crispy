@@ -6,11 +6,13 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
+from math import sqrt
 from natsort import natsorted
 from crispy.Utils import Utils
 from adjustText import adjust_text
 from matplotlib.lines import Line2D
 from scipy.stats import pearsonr, spearmanr
+from sklearn.metrics import mean_squared_error
 from sklearn.preprocessing import MinMaxScaler
 from crispy.CrispyPlot import CrispyPlot, MidpointNormalize
 
@@ -76,7 +78,8 @@ class GIPlot(CrispyPlot):
         ax.grid(axis="both", lw=0.1, color="#e1e1e1", zorder=0)
 
         cor, pval = spearmanr(plot_df[x_gene], plot_df[y_gene])
-        annot_text = f"Spearman's R={cor:.2g}, p-value={pval:.1e}"
+        rmse = sqrt(mean_squared_error(plot_df[x_gene], plot_df[y_gene]))
+        annot_text = f"Spearman's R={cor:.2g}, p-value={pval:.1e}; RMSE={rmse:.2f}"
         ax.text(0.95, 0.05, annot_text, fontsize=4, transform=ax.transAxes, ha="right")
 
         if plot_hue_legend and (palette is not None):
@@ -225,7 +228,8 @@ class GIPlot(CrispyPlot):
 
         if plot_annot:
             cor, pval = spearmanr(plot_df[x_gene], plot_df[y_gene])
-            annot_text = f"Spearman's R={cor:.2g}, p-value={pval:.1e}"
+            rmse = sqrt(mean_squared_error(plot_df[x_gene], plot_df[y_gene]))
+            annot_text = f"Spearman's R={cor:.2g}, p-value={pval:.1e}; RMSE={rmse:.2f}"
             grid.ax_joint.text(
                 0.95,
                 0.05,

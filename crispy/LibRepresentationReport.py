@@ -141,6 +141,6 @@ class LibraryRepresentaion:
         ax.set_ylabel("Fraction of total reads")
         ax.set_xlabel("Fraction of total sgRNAs")
 
-        plt.legend(loc=2, frameon=False, prop={"size": 6})
+        plt.legend(frameon=False, prop={"size": 4}, loc="center left", bbox_to_anchor=(1, 0.5))
 
         return ax
