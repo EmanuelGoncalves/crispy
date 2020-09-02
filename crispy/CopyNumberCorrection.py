@@ -44,6 +44,8 @@ class Crispy:
 
         """
         self.library = library
+        self.library.index.name = "index"
+
         self.sgrna_fc = sgrna_fc
         self.copy_number = copy_number
         self.gpr = None
@@ -85,6 +87,7 @@ class Crispy:
 
         # - Intersect sgRNAs genomic localisation with copy-number segments
         bed_df = self.intersect_sgrna_copynumber()
+        bed_df = bed_df.dropna(subset=x_features + [y_feature])
 
         # - Fit Gaussian Process on segment fold-changes
         self.gpr = CrispyGaussian(bed_df, n_sgrna=n_sgrna)
@@ -189,7 +192,7 @@ class Crispy:
         # Calculate chromosome copies and cell ploidy
         chrm, ploidy = self.calculate_ploidy(df_cn)
 
-        bed_df = bed_df.assign(chr_copy=chrm[bed_df["Chr"]].values)
+        bed_df = bed_df.assign(chr_copy=chrm[bed_df["Chr"].astype(str)].values)
         bed_df = bed_df.assign(ploidy=ploidy)
 
         # Calculate copy-number ratio

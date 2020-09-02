@@ -537,17 +537,17 @@ class GIPlot(CrispyPlot):
             plot_df = pd.concat([x, y], axis=1)
             x, y = x.name, y.name
 
-        plot_df = plot_df.dropna(subset=[x, y])
+        plot_df = plot_df.dropna(subset=[x, y, hue])
 
         fig, ax = plt.subplots(figsize=figsize, dpi=600)
 
         for t, df in plot_df.groupby(hue):
             ax.scatter(
-                df[x],
-                df[y],
+                df[x].values,
+                df[y].values,
                 c=pal[t],
                 marker="o",
-                edgecolor="",
+                linewidths=0,
                 s=5,
                 label=t,
                 alpha=0.8,

@@ -571,30 +571,42 @@ if __name__ == "__main__":
             plt.savefig(f"{RPATH}/{lib_name}_recall_curves_{c}_scaffold.pdf", bbox_inches="tight")
             plt.close("all")
 
-        # Single KO comparison
-        #
-        plot_df = data[data["sgRNA1_class"].isin(["intergenic", "non-targeting"]) | data["sgRNA2_class"].isin(["intergenic", "non-targeting"])]
-        plot_df = plot_df[plot_df["sgRNA1_Approved_Symbol"].isin(cscore_ht29.index) | plot_df["sgRNA2_Approved_Symbol"].isin(cscore_ht29.index)]
+    # Single KO comparison
+    #
+    plot_df = data[data["sgRNA1_class"].isin(["intergenic", "non-targeting"]) | data["sgRNA2_class"].isin(["intergenic", "non-targeting"])]
+    plot_df = plot_df[plot_df["sgRNA1_Approved_Symbol"].isin(cscore_ht29.index) | plot_df["sgRNA2_Approved_Symbol"].isin(cscore_ht29.index)]
 
-        plot_df["Gene"] = [gn2 if g1 in ["intergenic", "non-targeting"] else gn1 for g1, g2, gn1, gn2 in plot_df[["sgRNA1_class", "sgRNA2_class", "sgRNA1_Approved_Symbol", "sgRNA2_Approved_Symbol"]].values]
-        plot_df["SingleKO"] = [cscore_ht29.loc[g1] if g1 in cscore_ht29.index else cscore_ht29.loc[g2] for g1, g2 in plot_df[["sgRNA1_Approved_Symbol", "sgRNA2_Approved_Symbol"]].values]
-        plot_df["ControlType"] = [g1 if g1 in ["intergenic", "non-targeting"] else g2 for g1, g2 in plot_df[["sgRNA1_class", "sgRNA2_class"]].values]
+    plot_df["Gene"] = [gn2 if g1 in ["intergenic", "non-targeting"] else gn1 for g1, g2, gn1, gn2 in plot_df[["sgRNA1_class", "sgRNA2_class", "sgRNA1_Approved_Symbol", "sgRNA2_Approved_Symbol"]].values]
+    plot_df["SingleKO"] = [cscore_ht29.loc[g1] if g1 in cscore_ht29.index else cscore_ht29.loc[g2] for g1, g2 in plot_df[["sgRNA1_Approved_Symbol", "sgRNA2_Approved_Symbol"]].values]
+    plot_df["ControlType"] = [g1 if g1 in ["intergenic", "non-targeting"] else g2 for g1, g2 in plot_df[["sgRNA1_class", "sgRNA2_class"]].values]
 
-        plot_df = plot_df[["Gene", "ControlType", "SingleKO", "FC_500x", "FC_100x", "FC_PCR500x"]]
-        plot_df = plot_df.groupby(["Gene", "ControlType"]).mean().reset_index()
+    plot_df = plot_df[["Gene", "ControlType", "SingleKO", "FC_500x", "FC_100x", "FC_PCR500x"]]
+    plot_df = plot_df.groupby(["Gene", "ControlType"]).mean().reset_index()
 
-        _, axs = plt.subplots(2, 3, figsize=(6, 4), sharey="all", sharex="all")
+    _, axs = plt.subplots(2, 3, figsize=(6, 4), sharey="all", sharex="all")
 
-        for irow, (ctype, ctype_df) in enumerate(plot_df.groupby("ControlType")):
-            for icol, ftype in enumerate(["FC_500x", "FC_100x", "FC_PCR500x"]):
-                ax = axs[irow][icol]
+    for irow, (ctype, ctype_df) in enumerate(plot_df.groupby("ControlType")):
+        for icol, ftype in enumerate(["FC_500x", "FC_100x", "FC_PCR500x"]):
+            ax = axs[irow][icol]
 
-                GIPlot.gi_regression_no_marginals(ftype, "SingleKO", plot_df=ctype_df, ax=ax)
+            GIPlot.gi_regression_no_marginals(ftype, "SingleKO", plot_df=ctype_df, ax=ax)
 
-                ax.set_title(ftype if irow == 0 else "")
-                ax.set_ylabel(f"Control={ctype}\nSingle KO log2 fold-change" if icol == 0 else "")
-                ax.set_xlabel(f"Dual KO\nlog2 fold-change" if irow == 1 else "")
+            ax.set_title(ftype if irow == 0 else "")
+            ax.set_ylabel(f"Control={ctype}\nSingle KO log2 fold-change" if icol == 0 else "")
+            ax.set_xlabel(f"Dual KO\nlog2 fold-change" if irow == 1 else "")
 
-        plt.subplots_adjust(wspace=0.05, hspace=0.05)
-        plt.savefig(f"{RPATH}/{lib_name}_singleko_scatter.pdf", bbox_inches="tight")
+    plt.subplots_adjust(wspace=0.05, hspace=0.05)
+    plt.savefig(f"{RPATH}/{lib_name}_singleko_scatter.pdf", bbox_inches="tight")
+    plt.close("all")
+
+    #
+    #
+    plot_df = data.query("(Notes == 'DistanceCut') & (sgRNA1_Approved_Symbol == sgRNA2_Approved_Symbol)")
+    plot_df["distance"] = (plot_df["sgRNA2_Start"] - plot_df["sgRNA1_Start"]).astype(int).abs()
+
+    for c in ["FC_500x", "FC_100x", "FC_PCR500x"]:
+        g = GIPlot.gi_regression("distance", c, plot_df)
+        g.set_axis_labels("Absolute cut distance\nsgRNA2 start - sgRNA1 start", f"Vector fold-change\n {c}")
+        plt.savefig(f"{RPATH}/{lib_name}_distance_cut_{c}.pdf", bbox_inches="tight")
         plt.close("all")
+

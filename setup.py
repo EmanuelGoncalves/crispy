@@ -54,8 +54,17 @@ included_files = {
 
         "data/model_list_20200204.csv",
         "data/GrowthRates_v1.3.0_20190222.csv",
+        "data/growth_rates_rapid_screen_1536_v1.6.3_02Jun20.csv",
         "data/SIDMvsMedia.xlsx",
         "data/crispr/CRISPR_Institute_Origin_20191108.csv.gz",
+
+        "data/pathways/c2.all.v7.1.symbols.gmt",
+        "data/pathways/c2.cp.kegg.v7.1.symbols.gmt",
+        "data/pathways/c2.cp.v7.1.symbols.gmt",
+        "data/pathways/c5.all.v7.1.symbols.gmt",
+        "data/pathways/c5.bp.v7.1.symbols.gmt",
+        "data/pathways/c6.all.v7.1.symbols.gmt",
+        "data/pathways/h.all.v7.1.symbols.gmt",
     ]
 }
 

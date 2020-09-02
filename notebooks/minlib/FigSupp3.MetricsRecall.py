@@ -20,13 +20,10 @@
 
 
 import logging
-import numpy as np
 import pandas as pd
 import pkg_resources
-import seaborn as sns
 import matplotlib.pyplot as plt
 from crispy.QCPlot import QCplot
-from scipy.interpolate import interpn
 from crispy.CrispyPlot import CrispyPlot
 from minlib.Utils import project_score_sample_map
 from crispy.CRISPRData import CRISPRDataSet, Library

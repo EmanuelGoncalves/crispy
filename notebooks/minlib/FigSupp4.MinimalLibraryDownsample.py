@@ -19,7 +19,6 @@
 # %autoreload 2
 
 import logging
-import numpy as np
 import pandas as pd
 import pkg_resources
 import matplotlib.pyplot as plt

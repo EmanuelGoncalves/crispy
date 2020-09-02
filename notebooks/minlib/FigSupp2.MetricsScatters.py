@@ -79,7 +79,7 @@ def triu_plot(x, y, color, label, **kwargs):
 
 
 def diag_plot(x, color, label, **kwargs):
-    sns.distplot(x[~np.isnan(x)], label=label, color=CrispyPlot.PAL_DBGD[0], kde=False)
+    sns.distplot(x[~np.isnan(x)], label=None, color=CrispyPlot.PAL_DBGD[0], kde=False)
 
 
 order = ["Median", "KS", "JACKS", "RuleSet2", "FORECAST"]
@@ -113,6 +113,6 @@ for dtype in genes:
     plt.title(dtype)
 
     plt.subplots_adjust(hspace=0.05, wspace=0.05)
-    plt.gcf().set_size_inches(1.5 * len(order), 1.5 * len(order))
+    plt.gcf().set_size_inches(1. * len(order), 1. * len(order))
     plt.savefig(f"{RPATH}/ky_v11_guides_metrics_scatter_{dtype}.pdf", bbox_inches="tight", transparent=True)
     plt.close("all")

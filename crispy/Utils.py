@@ -4,7 +4,7 @@
 import numpy as np
 import pandas as pd
 import pkg_resources
-from scipy.stats import gaussian_kde, rankdata, norm
+from scipy.stats import gaussian_kde, rankdata, norm, spearmanr, pearsonr
 
 
 class Utils(object):
@@ -320,6 +320,28 @@ class Utils(object):
             }
         )
         return kernel
+
+    @staticmethod
+    def two_vars_correlation(var1, var2, idx_set=None, method="pearson", verbose=0):
+        if verbose > 0:
+            print(f"Var1={var1.name}; Var2={var2.name}")
+
+        if idx_set is None:
+            idx_set = set(var1.dropna().index).intersection(var2.dropna().index)
+
+        else:
+            idx_set = set(var1.reindex(idx_set).dropna().index).intersection(
+                var2.reindex(idx_set).dropna().index
+            )
+
+        if method == "spearman":
+            r, p = spearmanr(
+                var1.reindex(index=idx_set), var2.reindex(index=idx_set), nan_policy="omit"
+            )
+        else:
+            r, p = pearsonr(var1.reindex(index=idx_set), var2.reindex(index=idx_set))
+
+        return dict(corr=r, pval=p, len=len(idx_set))
 
 
 class DotDict(dict):

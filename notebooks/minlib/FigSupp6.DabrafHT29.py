@@ -22,14 +22,11 @@ import logging
 import numpy as np
 import pandas as pd
 import pkg_resources
-import seaborn as sns
 from math import sqrt
 import matplotlib.pyplot as plt
 from scipy.stats import spearmanr
-from scipy.interpolate import interpn
 from sklearn.metrics import mean_squared_error
 from crispy.CRISPRData import CRISPRDataSet, Library
-from minlib.Utils import density_interpolate
 
 
 LOG = logging.getLogger("Crispy")

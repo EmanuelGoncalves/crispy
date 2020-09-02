@@ -175,7 +175,14 @@ class GeneExpression:
         else:
             assert False, f"Dtype {dtype} not supported"
 
-    def filter(self, dtype="voom", subset=None, iqr_range=None, normality=False, lift_gene_ids=True):
+    def filter(
+        self,
+        dtype="voom",
+        subset=None,
+        iqr_range=None,
+        normality=False,
+        lift_gene_ids=True,
+    ):
         df = self.get_data(dtype=dtype)
 
         # Subset matrices
@@ -205,7 +212,11 @@ class GeneExpression:
             df = df.reindex(normality[0])
 
         if lift_gene_ids:
-            gmap = pd.read_csv(f"{DPATH}/gexp/hgnc-symbol-check.csv").groupby("Input")["Approved symbol"].first()
+            gmap = (
+                pd.read_csv(f"{DPATH}/gexp/hgnc-symbol-check.csv")
+                .groupby("Input")["Approved symbol"]
+                .first()
+            )
             df.index = gmap.loc[df.index]
 
         return df
@@ -318,7 +329,10 @@ class BioGRID:
         etype="physical",
         stypes_exclude=None,
         homodymers_exclude=True,
+        ddir=None,
     ):
+        self.ddir = DPATH if ddir is None else ddir
+
         self.etype = etype
         self.organism = organism
         self.homodymers_exclude = homodymers_exclude
@@ -329,7 +343,7 @@ class BioGRID:
         )
 
         # Import
-        self.biogrid = pd.read_csv(f"{DPATH}/{biogrid_file}", sep="\t")
+        self.biogrid = pd.read_csv(f"{self.ddir}/{biogrid_file}", sep="\t")
 
         # Filter by organism
         self.biogrid = self.biogrid[
@@ -377,9 +391,12 @@ class PPI:
 
     def __init__(
         self,
-        string_file="ppi/9606.protein.links.full.v11.0.txt.gz",
-        string_alias_file="ppi/9606.protein.aliases.v11.0.txt.gz",
+        string_file="9606.protein.links.full.v11.0.txt.gz",
+        string_alias_file="9606.protein.aliases.v11.0.txt.gz",
+        ddir=None,
     ):
+        self.ddir = DPATH if ddir is None else ddir
+
         self.string_file = string_file
         self.string_alias_file = string_alias_file
 
@@ -387,12 +404,12 @@ class PPI:
     def ppi_annotation(
         cls, df, ppi, target_thres=5, y_var="y_id", x_var="x_id", ppi_var="x_ppi"
     ):
-        genes_source = set({g for v in df[y_var].dropna() for g in v.split(";")}).intersection(
-            set(ppi.vs["name"])
-        )
-        genes_target = set({g for v in df[x_var].dropna() for g in v.split(";")}).intersection(
-            set(ppi.vs["name"])
-        )
+        genes_source = set(
+            {g for v in df[y_var].dropna() for g in v.split(";")}
+        ).intersection(set(ppi.vs["name"]))
+        genes_target = set(
+            {g for v in df[x_var].dropna() for g in v.split(";")}
+        ).intersection(set(ppi.vs["name"]))
 
         # Calculate distance between drugs and genes in PPI
         dist_g_g = {
@@ -416,7 +433,13 @@ class PPI:
                 res = "-"
 
             else:
-                g_st_min = np.min([dist_g_g[gs][gt] for gs in g_source.split(";") for gt in g_target.split(";")])
+                g_st_min = np.min(
+                    [
+                        dist_g_g[gs][gt]
+                        for gs in g_source.split(";")
+                        for gt in g_target.split(";")
+                    ]
+                )
                 res = cls.ppi_dist_to_string(g_st_min, target_thres)
 
             return res
@@ -452,7 +475,7 @@ class PPI:
         import igraph
 
         # ENSP map to gene symbol
-        gmap = pd.read_csv(f"{DPATH}/{self.string_alias_file}", sep="\t")
+        gmap = pd.read_csv(f"{self.ddir}/{self.string_alias_file}", sep="\t")
         gmap = gmap[["BioMart_HUGO" in i.split(" ") for i in gmap["source"]]]
         gmap = (
             gmap.groupby("string_protein_id")["alias"].agg(lambda x: set(x)).to_dict()
@@ -461,7 +484,7 @@ class PPI:
         logging.getLogger("DTrace").info(f"ENSP gene map: {len(gmap)}")
 
         # Load String network
-        net = pd.read_csv(f"{DPATH}/{self.string_file}", sep=" ")
+        net = pd.read_csv(f"{self.ddir}/{self.string_file}", sep=" ")
 
         # Filter by moderate confidence
         net = net[net["combined_score"] > score_thres]
@@ -572,13 +595,16 @@ class CORUM:
         organism="Human",
         homodymers_exclude=True,
         protein_subset=None,
+        ddir=None,
     ):
+        self.ddir = DPATH if ddir is None else ddir
+
         self.organism = organism
         self.homodymers_exclude = homodymers_exclude
         self.protein_subset = protein_subset
 
         # Load CORUM DB
-        self.db = pd.read_csv(f"{DPATH}/{corum_file}", sep="\t")
+        self.db = pd.read_csv(f"{self.ddir}/{corum_file}", sep="\t")
         self.db = self.db.query(f"Organism == '{organism}'")
         self.db_name = self.db.groupby("ComplexID")["ComplexName"].first()
 
@@ -615,9 +641,8 @@ class CORUM:
         db_melt = {p: i for i, c in db_melt[[idx_id, idx_sub]].values for p in c}
         return db_melt
 
-    @staticmethod
-    def map_gene_name(index_col="Entry"):
-        idmap = pd.read_csv(f"{DPATH}/uniprot_human_idmap.tab.gz", sep="\t")
+    def map_gene_name(self, index_col="Entry"):
+        idmap = pd.read_csv(f"{self.ddir}/uniprot_human_idmap.tab.gz", sep="\t")
 
         if index_col is not None:
             idmap = idmap.dropna(subset=[index_col]).set_index(index_col)
@@ -630,14 +655,16 @@ class CORUM:
 
 
 class HuRI:
-    def __init__(self, ppi_file="HuRI.tsv", idmap_file="HuRI_biomart_idmap.tsv"):
-        self.huri = pd.read_csv(f"{DPATH}/{ppi_file}", sep="\t", header=None)
+    def __init__(self, ppi_file="HuRI.tsv", idmap_file="HuRI_biomart_idmap.tsv", ddir=None):
+        self.ddir = DPATH if ddir is None else ddir
+
+        self.huri = pd.read_csv(f"{self.ddir}/{ppi_file}", sep="\t", header=None)
 
         # Convert to a set of pairs {(p1, p2), ...}
         self.huri = {(p1, p2) for p1, p2 in self.huri.values}
 
         # Map ids
-        idmap = pd.read_csv(f"{DPATH}/{idmap_file}", sep="\t", index_col=0)[
+        idmap = pd.read_csv(f"{self.ddir}/{idmap_file}", sep="\t", index_col=0)[
             "Gene name"
         ].to_dict()
         self.huri = {

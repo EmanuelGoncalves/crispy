@@ -25,9 +25,9 @@ import pkg_resources
 import seaborn as sns
 import matplotlib.pyplot as plt
 from math import sqrt
-from sklearn.metrics import mean_squared_error
 from crispy.QCPlot import QCplot
 from scipy.stats import spearmanr
+from sklearn.metrics import mean_squared_error
 from crispy.CRISPRData import CRISPRDataSet, Library
 
 
