@@ -1,5 +1,7 @@
 Minimal human genome-wide CRISPR-Cas9 library
 =
+[![License](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause) [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.4313863.svg)](https://doi.org/10.5281/zenodo.4313863)
+
 CRISPR-Cas9 genome-wide minimal library for human cells. 
 
 Install
@@ -32,6 +34,4 @@ print(os.listdir(pkg_resources.resource_filename("crispy", "data/crispr_libs/"))
 
 
 ### Credits and License
-[![License](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause)
-
-Developed at the [Wellcome Sanger Institue](https://www.sanger.ac.uk/) (2017-2019).
+Developed at the [Wellcome Sanger Institue](https://www.sanger.ac.uk/) (2017-2020).
