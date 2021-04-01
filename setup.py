@@ -50,6 +50,9 @@ included_files = {
         "data/copy_number/Summary_segmentation_data_994_lines_picnic.csv.gz",
 
         "data/images/example_gp_fit.png",
+        "data/example_rawcounts.csv",
+        "data/example_copynumber.csv",
+
         "data/images/logo.png",
 
         "data/model_list_20200204.csv",

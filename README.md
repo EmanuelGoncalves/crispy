@@ -61,25 +61,55 @@ Copy-number correction:
 ```python
 import crispy as cy
 import matplotlib.pyplot as plt
+from CRISPRData import ReadCounts, Library
 
-# Import data
+"""
+Import sample data
+"""
 rawcounts, copynumber = cy.Utils.get_example_data()
 
-# Import CRISPR-Cas9 library
-lib = cy.Utils.get_crispr_lib()
+"""
+Import CRISPR-Cas9 library
 
-# Instantiate Crispy
+Important:
+      Library has to have the following columns: "Chr", "Start", "End", "Approved_Symbol"
+      Library and segments have to have consistent "Chr" formating: "Chr1" or "chr1" or "1"
+      Gurantee that "Start" and "End" columns are int
+"""
+lib = Library.load_library("Yusa_v1.1.csv.gz")
+
+lib = lib.rename(
+    columns=dict(start="Start", end="End", chr="Chr", Gene="Approved_Symbol")
+).dropna(subset=["Chr", "Start", "End"])
+
+lib["Chr"] = "chr" + lib["Chr"]
+
+lib["Start"] = lib["Start"].astype(int)
+lib["End"] = lib["End"].astype(int)
+
+"""
+Calculate fold-change
+"""
+plasmids = ["ERS717283"]
+rawcounts = ReadCounts(rawcounts).remove_low_counts(plasmids)
+sgrna_fc = rawcounts.norm_rpm().foldchange(plasmids)
+
+"""
+Correct CRISPR-Cas9 sgRNA fold changes
+"""
 crispy = cy.Crispy(
-    raw_counts=rawcounts, copy_number=copynumber, library=lib
+    sgrna_fc=sgrna_fc.mean(1), copy_number=copynumber, library=lib.loc[sgrna_fc.index]
 )
 
 # Fold-changes and correction integrated funciton.
 # Output is a modified/expanded BED formated data-frame with sgRNA and segments information
-bed_df = crispy.correct(x_features='ratio', y_feature='fold_change')
+#   n_sgrna: represents the minimum number of sgRNAs required per segment to consider in the fit.
+#            Recomended default values range between 4-10.
+bed_df = crispy.correct(n_sgrna=10)
 print(bed_df.head())
 
 # Gaussian Process Regression is stored
-crispy.gpr.plot(x_feature='ratio', y_feature='fold_change')
+crispy.gpr.plot(x_feature="ratio", y_feature="fold_change")
 plt.show()
 ```
 ![GPR](crispy/data/images/example_gp_fit.png)
