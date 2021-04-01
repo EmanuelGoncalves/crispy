@@ -38,6 +38,11 @@ included_files = {
         "data/crispr_manifests/Avana_DepMap19Q3_dropped_guides.csv",
         "data/crispr_manifests/KM12_coverage_samplesheet.xlsx",
         "data/crispr_manifests/project_score_all_qc_failed_samples.csv",
+        "data/crispr_manifests/Avana_DepMap20Q1_sample_map.csv.gz",
+        "data/crispr_manifests/Avana_DepMap20Q1_dropped_guides.csv",
+        "data/crispr_manifests/Avana_DepMap20Q2_dropped_guides.csv",
+        "data/crispr_manifests/Avana_DepMap20Q2_high_variance_genes.csv",
+        "data/crispr_manifests/Avana_DepMap20Q2_sample_map.csv.gz",
 
         "data/gene_sets/EssentialGenes.csv",
         "data/gene_sets/NonessentialGenes.csv",
