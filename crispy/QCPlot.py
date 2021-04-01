@@ -11,7 +11,7 @@ from natsort import natsorted
 from crispy.Utils import Utils
 from matplotlib.patches import Arc
 from collections import OrderedDict
-from sklearn.metrics.ranking import auc
+from sklearn.metrics import auc
 from crispy.CrispyPlot import CrispyPlot
 from sklearn.metrics import (
     roc_auc_score,
