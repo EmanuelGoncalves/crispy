@@ -61,7 +61,7 @@ Copy-number correction:
 ```python
 import crispy as cy
 import matplotlib.pyplot as plt
-from CRISPRData import ReadCounts, Library
+from crispy.CRISPRData import ReadCounts, Library
 
 """
 Import sample data
